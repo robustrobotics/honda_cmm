@@ -30,7 +30,7 @@ if __name__ == '__main__':
     client = p.connect(p.GUI)
     p.setAdditionalSearchPath(pybullet_data.getDataPath())
     p.setGravity(0,0,-10)
-    p.setRealTimeSimulation(-1)
+    p.setRealTimeSimulation(0)
     p.resetDebugVisualizerCamera(
         cameraDistance=2.0,
         cameraYaw=30,
