@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<relations>
+    <relation name="turn_on_light" type="light">
+        <parent_joint name="prismatic_slider"/>
+        <child_joint name="fixed_light"/>
+        <parameters lower_limit="0.0" upper_limit="0.2"/>
+    </relation>
+
+    <relation name="enable_spinner" type="enable">
+        <parent_joint name="prismatic_slider"/>
+        <child_joint name="revolute_spinner"/>
+        <parameters lower_limit="-0.2" upper_limit="0.0"/>
+    </relation>
+</relations>
