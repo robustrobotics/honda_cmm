@@ -1,7 +1,7 @@
 import pybullet as p
 import pybullet_data
 import time
-
+from loadUBBDF import loadUBBDF
 
 def turnOnLight(model):
     p.changeVisualShape(objectUniqueId=model,
@@ -25,7 +25,7 @@ def slideSlider(model):
                          flags=p.LINK_FRAME)
 
 
-if __name__ == '__main__':    
+if __name__ == '__main__':
     # Set PyBullet configuration.
     client = p.connect(p.GUI)
     p.setAdditionalSearchPath(pybullet_data.getDataPath())
@@ -42,16 +42,19 @@ if __name__ == '__main__':
     # Load models.
     plane_id = p.loadURDF("plane.urdf")
     model = p.loadURDF('models/busybox/model.urdf')
-    
+
+    joints, links, relations = loadUBBDF('models/busybox/model.urdf', \
+                                        'models/busybox/model_relations.ubbdf')
+
     # The joint motors need to be disabled before we can apply forces to them.
     maxForce = 0
-    mode = p.VELOCITY_CONTROL 
+    mode = p.VELOCITY_CONTROL
     for ix in range(0, p.getNumJoints(model)):
-        p.setJointMotorControl2(bodyUniqueId=model, 
+        p.setJointMotorControl2(bodyUniqueId=model,
                                 jointIndex=ix,
-                                controlMode=mode, 
+                                controlMode=mode,
                                 force=maxForce)
-    
+
     # Simulation loop.
     for tx in range(0, 30000):
         if timestep*tx > 5.0:
@@ -65,4 +68,3 @@ if __name__ == '__main__':
         time.sleep(timestep)
 
     p.disconnect()
-
