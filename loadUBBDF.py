@@ -1,24 +1,26 @@
+import pybullet as p
 import xml.etree.ElementTree as ET
 from ubbdf_defs import Link, Joint, Relation
 
+
 def loadUBBDF(urdf_file, ubbdf_file):
     # get links and joints from urdf
-    urdf_tree = ET.parse('models/busybox/model.urdf')
+    urdf_tree = ET.parse(urdf_file)
     urdf_root = urdf_tree.getroot()
 
-    links = []
+    links = {}
     for link in urdf_root.findall('link'):
         name = link.attrib['name']
-        links += [Link(name)]
+        links[name] = Link(name)
 
-    joints = []
+    joints = {}
     for joint in urdf_root.findall('joint'):
         name = joint.attrib['name']
         type = joint.attrib['type']
         for j_elem in joint:
             if j_elem.tag == 'child':
                 child_link = j_elem.attrib['link']
-        joints += [Joint(name, type, child_link)]
+        joints[name] = Joint(name, type, child_link)
 
     # get relations from ubbdf
     ubbdf_tree = ET.parse('models/busybox/model_relations.ubbdf')
@@ -38,4 +40,19 @@ def loadUBBDF(urdf_file, ubbdf_file):
                 params = r_elem.attrib
         relations += [Relation(name, parent_joint, child_joint, type, params)]
 
-    return links, joints, relations
+    # associate pybullet link and joint ids with each link/joint
+    model = p.loadURDF(urdf_file)
+    print('-----')
+    for ix in range(p.getNumJoints(model)):
+        info = p.getJointInfo(model, ix)
+        joint_name, link_name = info[1].decode('utf-8'), info[12].decode('utf-8')
+        print(joint_name, link_name)
+        links[link_name].pybullet_id = ix
+        joints[joint_name].pybullet_id = ix
+
+    world = {'model_id': model,
+             'links': links,
+             'joints': joints,
+             'relations': relations}
+
+    return world
