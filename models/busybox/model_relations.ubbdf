@@ -3,12 +3,17 @@
     <relation name="turn_on_light" type="light">
         <parent_joint name="prismatic_slider"/>
         <child_joint name="fixed_light"/>
-        <parameters lower_limit="0.0" upper_limit="0.2"/>
+        <parameters threshold="0.1" off_color="0.3 0.3 0 1" on_color="1 1 0 1"/>
     </relation>
 
-    <relation name="enable_spinner" type="enable">
+    <relation name="change_spinner_handle" type="light">
+        <parent_joint name="prismatic_slider"/>
+        <child_joint name="fixed_spinner_handle"/>
+        <parameters threshold="-0.1" off_color="0 1 0 1" on_color="1 0 0 1"/>
+    </relation>
+    <!--relation name="enable_spinner" type="enable">
         <parent_joint name="prismatic_slider"/>
         <child_joint name="revolute_spinner"/>
         <parameters lower_limit="-0.2" upper_limit="0.0"/>
-    </relation>
+    </relation-->
 </relations>
