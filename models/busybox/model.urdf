@@ -118,6 +118,68 @@
         </visual>
     </link>
 
+    <link name="door_handle">
+        <inertial>
+            <origin xyz="0 -0.05 0" rpy="0.0 0.0 0.0" />
+            <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001" />
+            <mass value="0.25" />
+        </inertial>
+        <collision>
+            <origin xyz="0 -0.05 0" rpy="0.0 0.0 0.0" />
+            <geometry>
+                <box size="0.025 0.1 0.025" />
+            </geometry>
+        </collision>
+        <visual>
+            <origin xyz="0 -0.05 0" rpy="0.0 0.0 0.0" />
+            <geometry>
+                <box size="0.025 0.1 0.025" />
+            </geometry>
+            <material name="purple">
+                <color rgba="1 0 1 1" />
+            </material>
+        </visual>
+    </link>
+
+    <link name="door_latch">
+        <inertial>
+            <origin xyz="0 0 0" rpy="0.0 0.0 0.0" />
+            <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001" />
+            <mass value="0.25" />
+        </inertial>
+        <collision>
+            <origin xyz="0 0 0" rpy="0.0 0.0 0.0" />
+            <geometry>
+                <box size="0.05 0.05 0.05" />
+            </geometry>
+        </collision>
+        <visual>
+            <origin xyz="0 0 0" rpy="0.0 0.0 0.0" />
+            <geometry>
+                <box size="0.05 0.05 0.05" />
+            </geometry>
+            <material name="purple">
+                <color rgba="1 0 1 1" />
+            </material>
+        </visual>
+    </link>
+
+    <joint type="prismatic" name="prismatic_door_latch">
+        <child link="door_latch" />
+        <parent link="base_link" />
+        <axis xyz="0 1 0" />
+        <origin rpy="0 0 0" xyz="0.2 -0.1 0.075" />
+        <limit lower="-0.1" upper="0" />
+    </joint>
+
+    <joint type="revolute" name="revolute_door_handle">
+        <child link="door_handle" />
+        <parent link="base_link" />
+        <axis xyz="0 0 1" />
+        <origin rpy="0 0 0" xyz="0 -0.1 0.0625" />
+        <limit lower="0" upper="1.0" />
+    </joint>
+
     <joint type="prismatic" name="prismatic_slider">
         <child link="slider" />
         <parent link="base_link" />

@@ -3,25 +3,27 @@ import pybullet_data
 import time
 from loadUBBDF import loadUBBDF
 
-def turnOnLight(model):
-    p.changeVisualShape(objectUniqueId=model,
-                        linkIndex=3,
-                        rgbaColor=[1, 1, 0, 1])
 
-
-def spinSpinner(model):
-    p.applyExternalForce(objectUniqueId=model,
-                         linkIndex=2,
+def spinSpinner(world):
+    p.applyExternalForce(objectUniqueId=world['model_id'],
+                         linkIndex=world['links']['spinner_handle'].pybullet_id,
                          forceObj=[0., -1, 0],
                          posObj=[0, 0, 0],
                          flags=p.LINK_FRAME)
 
 
-def slideSlider(model, force):
-    print(p.getJointState(model, 0))
-    p.applyExternalForce(objectUniqueId=model,
-                         linkIndex=0,
+def slideSlider(world, force):
+    p.applyExternalForce(objectUniqueId=world['model_id'],
+                         linkIndex=world['links']['slider'].pybullet_id,
                          forceObj=[0., force, 0],
+                         posObj=[0, 0, 0],
+                         flags=p.LINK_FRAME)
+
+
+def turnHandle(world, force):
+    p.applyExternalForce(objectUniqueId=world['model_id'],
+                         linkIndex=world['links']['door_handle'].pybullet_id,
+                         forceObj=[force, 0., 0],
                          posObj=[0, 0, 0],
                          flags=p.LINK_FRAME)
 
@@ -37,7 +39,7 @@ if __name__ == '__main__':
         cameraYaw=30,
         cameraPitch=-52,
         cameraTargetPosition=(0., 0., 0.))
-    timestep = 1./255.
+    timestep = 1./100.
 
     # Load models.
     plane_id = p.loadURDF("plane.urdf")
@@ -57,11 +59,13 @@ if __name__ == '__main__':
     # Simulation loop.
     for tx in range(0, 30000):
         if timestep*tx > 2.0:
-            slideSlider(world['model_id'], -1)
+            slideSlider(world, -1)
+            turnHandle(world, -1)
         elif timestep*tx > 1.0:
-            slideSlider(world['model_id'], 1)
+            slideSlider(world, 1)
+            turnHandle(world, 1)
         else:
-            spinSpinner(world['model_id'])
+            spinSpinner(world)
 
         for r in world['relations']:
             r.update(world=world,

@@ -37,6 +37,7 @@ class Relation(object):
 # discrete examples
 def update_light(world, parent_joint, child_joint, params):
     """
+    Change the color of a link when the parent joint passes a certain threshold.
     :param world: A dictionary describing the busybox model (links, joints, relations).
     :param parent_joint: The name of the joint describing the activation constraint.
     :param child_joint: The name of the joint whose color will change upon activation.
@@ -65,4 +66,24 @@ def update_sound(world, parent_joint, child_joint, params):
 
 # continuous example
 def update_door(world, parent_joint, child_joint, params):
-    return False
+    """
+    Update a joint to match the relative location of another joint.
+    :param world: A dictionary describing the busybox model (links, joints, relations).
+    :param parent_joint: The name of the joint that controls the child joint
+    :param child_joint: The name of the joint to be controlled.
+    :param params: No parameters are used for this update.
+    """
+    parent_info = p.getJointInfo(world['model_id'], parent_joint.pybullet_id)
+    child_info = p.getJointInfo(world['model_id'], child_joint.pybullet_id)
+
+    # Check where in the parent joint's range it currently is.
+    parent_range = parent_info[9] - parent_info[8]
+    relative_position = (p.getJointState(world['model_id'],
+                                        parent_joint.pybullet_id)[0] - parent_info[8])/parent_range
+    # Set the child joint to the same relative location within its own range.
+    child_range = child_info[9] - child_info[8]
+    target_position = child_info[8] + relative_position*child_range
+    p.setJointMotorControl2(bodyUniqueId=world['model_id'],
+                            jointIndex=child_joint.pybullet_id,
+                            controlMode=p.POSITION_CONTROL,
+                            targetPosition=target_position)
