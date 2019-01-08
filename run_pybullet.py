@@ -1,7 +1,7 @@
 import pybullet as p
 import pybullet_data
 import time
-from loadUBBDF import loadUBBDF
+from load_UBBDF import loadUBBDF
 
 
 def spinSpinner(world):
@@ -27,11 +27,7 @@ def turnHandle(world, force):
                          posObj=[0, 0, 0],
                          flags=p.LINK_FRAME)
 
-
-if __name__ == '__main__':
-    # Set PyBullet configuration.
-    client = p.connect(p.GUI)
-    p.setAdditionalSearchPath(pybullet_data.getDataPath())
+def setupWorld():
     p.setGravity(0, 0, -10)
     p.setRealTimeSimulation(0)
     p.resetDebugVisualizerCamera(
@@ -39,7 +35,6 @@ if __name__ == '__main__':
         cameraYaw=30,
         cameraPitch=-52,
         cameraTargetPosition=(0., 0., 0.))
-    timestep = 1./100.
 
     # Load models.
     plane_id = p.loadURDF("plane.urdf")
@@ -55,7 +50,16 @@ if __name__ == '__main__':
                                 jointIndex=ix,
                                 controlMode=mode,
                                 force=maxForce)
+    return world
 
+if __name__ == '__main__':
+    # Set PyBullet configuration.
+    client = p.connect(p.GUI)
+    p.setAdditionalSearchPath(pybullet_data.getDataPath())
+
+    world = setupWorld()
+
+    timestep = 1./100.
     # Simulation loop.
     for tx in range(0, 30000):
         if timestep*tx > 2.0:
