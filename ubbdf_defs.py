@@ -8,10 +8,12 @@ class Link(object):
 
 
 class Joint(object):
-    def __init__(self, name, type, child_link):
+    def __init__(self, name, type, child_link, lower=None, upper=None):
         self.name = name
         self.type = type
         self.child_link = child_link
+        self.lower = lower
+        self.upper = upper
 
 
 class Relation(object):
