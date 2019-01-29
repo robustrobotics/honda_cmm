@@ -46,6 +46,11 @@ if __name__ == '__main__':
 
     world = loadUBBDF(urdf_file='models/busybox/model.urdf',
                       ubbdf_file='models/busybox/model_relations.ubbdf')
+    
+    p.addUserDebugLine(lineFromXYZ=[0, 0.5, 0],
+                       lineToXYZ=[0, 0, 0.5],
+                       lineColorRGB=[1, 0, 0],
+                       lineWidth=4)
 
     # The joint motors need to be disabled before we can apply forces to them.
     maxForce = 0

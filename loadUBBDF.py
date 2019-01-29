@@ -20,10 +20,19 @@ def loadUBBDF(urdf_file, ubbdf_file):
         for j_elem in joint:
             if j_elem.tag == 'child':
                 child_link = j_elem.attrib['link']
-        joints[name] = Joint(name, type, child_link)
+
+        limits = joint.findall('limit')
+
+        if len(limits) != 0 and 'lower' in limits[0].keys():
+            lower = float(limits[0].attrib['lower'])
+            upper = float(limits[0].attrib['upper'])
+            joints[name] = Joint(name, type, child_link, lower, upper)
+        else:
+            joints[name] = Joint(name, type, child_link)
+
 
     # get relations from ubbdf
-    ubbdf_tree = ET.parse('models/busybox/model_relations.ubbdf')
+    ubbdf_tree = ET.parse(ubbdf_file)
     ubbdf_root = ubbdf_tree.getroot()
 
     relations = []
@@ -49,6 +58,9 @@ def loadUBBDF(urdf_file, ubbdf_file):
         print(joint_name, link_name)
         links[link_name].pybullet_id = ix
         joints[joint_name].pybullet_id = ix
+
+
+
 
     world = {'model_id': model,
              'links': links,
