@@ -5,7 +5,7 @@ import math
 import json
 import argparse
 from collections import defaultdict
-from loadUBBDF import loadUBBDF
+from load_UBBDF import loadUBBDF
 
 
 # TODO: Make forces work with arbitrary revolute/prismatic joints.
@@ -80,6 +80,7 @@ def get_arguments():
     parser.add_argument('--joint-name', required=True, type=str, help='[<link_name>|all]')
     parser.add_argument('--log-type', required=True, type=str, help='[json|ros]')
     parser.add_argument('--log-name', required=True, type=str, help='ROS topic name or JSON file name')
+    parser.add_argument('--duration', default=3, type=int)
     return parser.parse_args()
 
 
@@ -114,7 +115,7 @@ if __name__ == '__main__':
 
     # Simulation loop.
     log = defaultdict(list)
-    for tx in range(0, 30000):
+    for tx in range(0, args.duration*100):
         # Actuate the specified joints.
         for joint_name, joint in world['joints'].items():
             if joint_name == args.joint_name or args.joint_name == 'all':
