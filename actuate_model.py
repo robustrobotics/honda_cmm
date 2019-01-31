@@ -6,10 +6,11 @@ import math
 import json
 import argparse
 import numpy as np
+from pyquaternion import Quaternion
 from collections import defaultdict
 from load_UBBDF import loadUBBDF
 
-STRUCTURE_FILE = '/home/mnosew/tmp/honda_cmm/structure.json'
+FOLDER = '/home/mnosew/tmp/honda_cmm/'
 def draw_prismatic(model):
     line_center = np.array([model['rigid_position.x'], 
                             model['rigid_position.y'], 
@@ -26,7 +27,7 @@ def draw_prismatic(model):
                        lineToXYZ=lineTo,
                        lineColorRGB=color,
                        lineWidth=1)
-    p.addUserDebugText(text='pr',
+    p.addUserDebugText(text='pri',
                        textPosition=lineTo)
 
 def draw_rigid(model):
@@ -55,22 +56,65 @@ def draw_rigid(model):
                        lineColorRGB=color,
                        lineWidth=1)
 
-    p.addUserDebugText(text='ri',
+    p.addUserDebugText(text='rig',
                        textPosition=line1To)
 
+
+def draw_revolute(model):
+    rot_center = np.array([model['rot_center.x'],
+                           model['rot_center.y'],
+                           model['rot_center.z']])
+    rot_ax = Quaternion(model['rot_axis.w'],
+                        model['rot_axis.x'],
+                        model['rot_axis.y'],
+                        model['rot_axis.z'])
+    rot_or = Quaternion(model['rot_orientation.w'],
+                        model['rot_orientation.x'],
+                        model['rot_orientation.y'],
+                        model['rot_orientation.z'])
+    rot_axis = (rot_ax * rot_or).get_axis()
+    axisFrom = (rot_center + 0.25*rot_axis).tolist()
+    axisTo = (rot_center - 0.25*rot_axis).tolist()
+
+    color = [1, 0, 1]
+    
+    radius = model['rot_radius']
+    if radius < 0.01: 
+        radius = 0.05
+    angles = np.linspace(start=model['q_min[0]'], stop=model['q_max[0]'], num=100)
+    for ix in range(1, len(angles)):
+        lineFrom = np.array([radius * np.cos(angles[ix]-1),
+                             radius * np.sin(angles[ix]-1),
+                             0.025])
+        lineTo = np.array([radius * np.cos(angles[ix]),
+                           radius * np.sin(angles[ix]),
+                           0.025])
+        p.addUserDebugLine(lineFromXYZ=rot_center+lineFrom,
+                           lineToXYZ=rot_center+lineTo,
+                           lineColorRGB=color,
+                           lineWidth=1)
+
+    p.addUserDebugLine(lineFromXYZ=axisFrom,
+                       lineToXYZ=axisTo,
+                       lineColorRGB=color,
+                       lineWidth=1)
+    p.addUserDebugText(text='rot',
+                       textPosition=axisFrom)
+
 def draw_joints():
-    # TODO: Check if structure.json exists.
-    if not os.path.exists(STRUCTURE_FILE):
+    if not os.path.exists(FOLDER + 'structure.json'):
         return
-    with open(STRUCTURE_FILE, 'r') as handle:
+    with open(FOLDER + 'structure.json', 'r') as handle:
         models = json.load(handle)
 
-    # TODO: For each joint type, draw the correct visualization.
     for m in models:
         if m['type'] == 'prismatic':
             draw_prismatic(m)
         elif m['type'] == 'rigid':
             draw_rigid(m)
+        elif m['type'] == 'rotational':
+            draw_revolute(m)
+
 
 # TODO: Make forces work with arbitrary revolute/prismatic joints.
 def get_force_direction(world, joint_name):
@@ -115,36 +159,36 @@ def actuate_prismatic(world, joint_name):
                          flags=p.LINK_FRAME)
 
 
-def log_poses(world, joint_name, log_type, log_name, log):
+def log_poses(world, joint_name, log_name, log):
     if joint_name == 'all':
         to_log = world['links'].keys()
     else:
         to_log = [world['joints'][joint_name].child_link, 'base_link']
 
-    if log_type == 'json':
 
-        for link_name in to_log:
-            if link_name == 'base_link':
-                position, orientation = p.getBasePositionAndOrientation(bodyUniqueId=world['model_id'])
-            else:
-                position, orientation = p.getLinkState(bodyUniqueId=world['model_id'],
-                                                       linkIndex=world['links'][link_name].pybullet_id)[0:2]
-            log[link_name].append(position + orientation)
+    for link_name in to_log:
+        if link_name == 'base_link':
+            position, orientation = p.getBasePositionAndOrientation(bodyUniqueId=world['model_id'])
+        else:
+            position, orientation = p.getLinkState(bodyUniqueId=world['model_id'],
+                                                   linkIndex=world['links'][link_name].pybullet_id)[0:2]
+        log[link_name].append(position + orientation)
+    
+    if 'spinner' in log:
+        del log['spinner']
 
-        with open(log_name, 'w') as handle:
-            json.dump(log, handle)
+    with open(FOLDER + log_name, 'w') as handle:
+        json.dump(log, handle)
 
-    elif log_type == 'ros':
-        print('ROS logging not implemented.')
 
 
 def get_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model-name', required=True, type=str)
-    parser.add_argument('--joint-name', required=True, type=str, help='[<link_name>|all]')
-    parser.add_argument('--log-type', required=True, type=str, help='[json|ros]')
-    parser.add_argument('--log-name', required=True, type=str, help='ROS topic name or JSON file name')
+    parser.add_argument('--joint-name', default='all', type=str, help='[<link_name>|all]')
+    parser.add_argument('--log-name', default='', type=str, help='JSON file name')
     parser.add_argument('--duration', default=3, type=int)
+    parser.add_argument('--visualize', action='store_true')
     return parser.parse_args()
 
 
@@ -179,8 +223,9 @@ if __name__ == '__main__':
 
     # Simulation loop.
     log = defaultdict(list)
-    for tx in range(0, args.duration*100):
+    if args.visualize:
         draw_joints()
+    for tx in range(0, args.duration*100):
         # Actuate the specified joints.
         for joint_name, joint in world['joints'].items():
             if joint_name == args.joint_name or args.joint_name == 'all':
@@ -197,8 +242,8 @@ if __name__ == '__main__':
                      params=r.params)
 
         # Log poses.
-        if tx % 4 == 0:
-            log_poses(world, args.joint_name, args.log_type, args.log_name, log)
+        if tx % 5 == 0 and len(args.log_name) > 0:
+            log_poses(world, args.joint_name, args.log_name, log)
         
         p.stepSimulation()
         time.sleep(timestep)
