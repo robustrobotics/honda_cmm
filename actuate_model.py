@@ -1,12 +1,47 @@
 import pybullet as p
 import pybullet_data
+import os
 import time
 import math
 import json
 import argparse
+import numpy as np
 from collections import defaultdict
 from load_UBBDF import loadUBBDF
 
+STRUCTURE_FILE = '/home/mnosew/tmp/honda_cmm/structure.json'
+def draw_prismatic(model):
+    line_center = np.array([model['rigid_position.x'], 
+                            model['rigid_position.y'], 
+                            model['rigid_position.z']])
+    axis = np.array([model['prismatic_dir.x'],
+                     model['prismatic_dir.y'],
+                     model['prismatic_dir.z']])
+    lineFrom = (line_center + model['q_min[0]']*axis).tolist()
+    lineTo = (line_center + model['q_max[0]']*axis).tolist()
+
+    color = [1, 0, 1]
+
+    p.addUserDebugLine(lineFromXYZ=lineFrom,
+                       lineToXYZ=lineTo,
+                       lineColorRGB=color,
+                       lineWidth=1)
+
+def draw_rigid(model):
+    pass
+
+
+def draw_joints():
+    # TODO: Check if structure.json exists.
+    if not os.path.exists(STRUCTURE_FILE):
+        return
+    with open(STRUCTURE_FILE, 'r') as handle:
+        models = json.load(handle)
+
+    # TODO: For each joint type, draw the correct visualization.
+    for m in models:
+        if m['type'] == 'prismatic':
+            draw_prismatic(m)
 
 # TODO: Make forces work with arbitrary revolute/prismatic joints.
 def get_force_direction(world, joint_name):
@@ -116,6 +151,7 @@ if __name__ == '__main__':
     # Simulation loop.
     log = defaultdict(list)
     for tx in range(0, args.duration*100):
+        draw_joints()
         # Actuate the specified joints.
         for joint_name, joint in world['joints'].items():
             if joint_name == args.joint_name or args.joint_name == 'all':
@@ -132,8 +168,9 @@ if __name__ == '__main__':
                      params=r.params)
 
         # Log poses.
-        log_poses(world, args.joint_name, args.log_type, args.log_name, log)
-
+        if tx % 4 == 0:
+            log_poses(world, args.joint_name, args.log_type, args.log_name, log)
+        
         p.stepSimulation()
         time.sleep(timestep)
 
