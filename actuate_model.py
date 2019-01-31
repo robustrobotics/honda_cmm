@@ -26,10 +26,37 @@ def draw_prismatic(model):
                        lineToXYZ=lineTo,
                        lineColorRGB=color,
                        lineWidth=1)
+    p.addUserDebugText(text='pr',
+                       textPosition=lineTo)
 
 def draw_rigid(model):
-    pass
+    w = 0.025
+    h = 0.1  # You can't see the lines if you draw them in the object so draw a bit above.
+    line_center = np.array([model['rigid_position.x'], 
+                            model['rigid_position.y'], 
+                            model['rigid_position.z']])
+    line1From = (line_center + np.array([-w, -w, h])).tolist()
+    line1To = (line_center + np.array([w, w, h])).tolist()
+    
+    line2From = (line_center + np.array([-w, w, h])).tolist()
+    line2To = (line_center + np.array([w, -w, h])).tolist()
 
+    color = [1, 0, 1]
+    p.addUserDebugLine(lineFromXYZ=line1From,
+                       lineToXYZ=line1To,
+                       lineColorRGB=color,
+                       lineWidth=1)
+    p.addUserDebugLine(lineFromXYZ=line2From,
+                       lineToXYZ=line2To,
+                       lineColorRGB=color,
+                       lineWidth=1)
+    p.addUserDebugLine(lineFromXYZ=line_center.tolist(),
+                       lineToXYZ=(line_center + np.array([0, 0, h])).tolist(),
+                       lineColorRGB=color,
+                       lineWidth=1)
+
+    p.addUserDebugText(text='ri',
+                       textPosition=line1To)
 
 def draw_joints():
     # TODO: Check if structure.json exists.
@@ -42,6 +69,8 @@ def draw_joints():
     for m in models:
         if m['type'] == 'prismatic':
             draw_prismatic(m)
+        elif m['type'] == 'rigid':
+            draw_rigid(m)
 
 # TODO: Make forces work with arbitrary revolute/prismatic joints.
 def get_force_direction(world, joint_name):
