@@ -10,7 +10,7 @@ from pyquaternion import Quaternion
 from collections import defaultdict
 from load_UBBDF import loadUBBDF
 from gripper import Gripper
-
+import pdb; pdb.set_trace()
 FOLDER = '/Users/carismoses/honda_cmm/'
 def draw_prismatic(model):
     line_center = np.array([model['rigid_position.x'],
@@ -148,18 +148,13 @@ def actuate_revolute(world, joint_name):
                           flags=p.WORLD_FRAME)
 
 
-def actuate_prismatic(world, joint_name):
-    joint = world['joints'][joint_name]
-    link_name = joint.child_link
-
-    direction = get_force_direction(world, joint_name)
-
-    p.applyExternalForce(objectUniqueId=world['model_id'],
-                         linkIndex=world['links'][link_name].pybullet_id,
-                         forceObj=[0., direction*0.5, 0],
-                         posObj=[0, 0, 0],
-                         flags=p.LINK_FRAME)
-
+def actuate_prismatic(world, gripper, joint_name):
+    # TODO: need to make a function that uses the joint info to return a 3D direction
+    # (unit vector) in world frame of desired motion of the joint handle
+    #direction = get_force_direction(world, joint_name)
+    direction = [0., -.1, 0.]
+    magnitude = 1
+    gripper.apply_force(np.multiply(magnitude, direction))
 
 def log_poses(world, joint_name, log_name, log):
     if joint_name == 'all':
@@ -228,6 +223,26 @@ if __name__ == '__main__':
     log = defaultdict(list)
     if args.visualize:
         draw_joints()
+
+    # actuate each joint sequentially with the gripper
+    gripper_orn = p.getQuaternionFromEuler([np.pi, 0., 0.])
+    for joint_name, joint in world['joints'].items():
+        if joint_name == args.joint_name or args.joint_name == 'all':
+            joint = world['joints'][joint_name]
+            link_name = joint.child_link
+
+            # grasp the joint handle
+            p_link = p.getLinkState(world['model_id'], world['links'][link_name].pybullet_id)[0]
+            gripper.apply_force(finger_state='open')
+            gripper.set_tip_pose([p_link, gripper_orn])
+            gripper.apply_force(finger_state='close')
+
+            # actuate prismatic joints
+            if joint.type == 'prismatic':
+                for tx in range(0, args.duration*100):
+                    actuate_prismatic(world, gripper, joint_name)
+
+    '''
     for tx in range(0, args.duration*100):
         # Actuate the specified joints.
         for joint_name, joint in world['joints'].items():
@@ -250,5 +265,5 @@ if __name__ == '__main__':
 
         p.stepSimulation()
         time.sleep(timestep)
-
+    '''
     p.disconnect()
