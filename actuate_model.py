@@ -9,11 +9,12 @@ import numpy as np
 from pyquaternion import Quaternion
 from collections import defaultdict
 from load_UBBDF import loadUBBDF
+from gripper import Gripper
 
-FOLDER = '/home/mnosew/tmp/honda_cmm/'
+FOLDER = '/Users/carismoses/honda_cmm/'
 def draw_prismatic(model):
-    line_center = np.array([model['rigid_position.x'], 
-                            model['rigid_position.y'], 
+    line_center = np.array([model['rigid_position.x'],
+                            model['rigid_position.y'],
                             model['rigid_position.z']])
     axis = np.array([model['prismatic_dir.x'],
                      model['prismatic_dir.y'],
@@ -33,12 +34,12 @@ def draw_prismatic(model):
 def draw_rigid(model):
     w = 0.025
     h = 0.1  # You can't see the lines if you draw them in the object so draw a bit above.
-    line_center = np.array([model['rigid_position.x'], 
-                            model['rigid_position.y'], 
+    line_center = np.array([model['rigid_position.x'],
+                            model['rigid_position.y'],
                             model['rigid_position.z']])
     line1From = (line_center + np.array([-w, -w, h])).tolist()
     line1To = (line_center + np.array([w, w, h])).tolist()
-    
+
     line2From = (line_center + np.array([-w, w, h])).tolist()
     line2To = (line_center + np.array([w, -w, h])).tolist()
 
@@ -77,9 +78,9 @@ def draw_revolute(model):
     axisTo = (rot_center - 0.25*rot_axis).tolist()
 
     color = [1, 0, 1]
-    
+
     radius = model['rot_radius']
-    if radius < 0.01: 
+    if radius < 0.01:
         radius = 0.05
     angles = np.linspace(start=model['q_min[0]'], stop=model['q_max[0]'], num=100)
     for ix in range(1, len(angles)):
@@ -114,7 +115,8 @@ def draw_joints():
             draw_rigid(m)
         elif m['type'] == 'rotational':
             draw_revolute(m)
-
+        else:
+            print('cant draw type ' + m['type'] + ' yet')
 
 # TODO: Make forces work with arbitrary revolute/prismatic joints.
 def get_force_direction(world, joint_name):
@@ -173,7 +175,7 @@ def log_poses(world, joint_name, log_name, log):
             position, orientation = p.getLinkState(bodyUniqueId=world['model_id'],
                                                    linkIndex=world['links'][link_name].pybullet_id)[0:2]
         log[link_name].append(position + orientation)
-    
+
     if 'spinner' in log:
         del log['spinner']
 
@@ -211,6 +213,7 @@ if __name__ == '__main__':
     plane_id = p.loadURDF("plane.urdf")
     world = loadUBBDF(urdf_file='models/{0}/model.urdf'.format(args.model_name),
                       ubbdf_file='models/{0}/model_relations.ubbdf'.format(args.model_name))
+    gripper = Gripper()
 
     # The joint motors need to be disabled before we can apply forces to them.
     maxForce = 0
@@ -244,7 +247,7 @@ if __name__ == '__main__':
         # Log poses.
         if tx % 5 == 0 and len(args.log_name) > 0:
             log_poses(world, args.joint_name, args.log_name, log)
-        
+
         p.stepSimulation()
         time.sleep(timestep)
 
