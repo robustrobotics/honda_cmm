@@ -10,7 +10,9 @@ from pyquaternion import Quaternion
 from collections import defaultdict
 from load_UBBDF import loadUBBDF
 from gripper import Gripper
-import pdb; pdb.set_trace()
+from util import transformation, vis_frame
+import plotting
+
 FOLDER = '/Users/carismoses/honda_cmm/'
 def draw_prismatic(model):
     line_center = np.array([model['rigid_position.x'],
@@ -136,25 +138,33 @@ def get_force_direction(world, joint_name):
     return direction
 
 
-def actuate_revolute(world, joint_name):
-    joint = world['joints'][joint_name]
-    link_name = joint.child_link
-
-    direction = get_force_direction(world, joint_name)
-
-    p.applyExternalTorque(objectUniqueId=world['model_id'],
-                          linkIndex=world['links'][link_name].pybullet_id,
-                          torqueObj=[0, 0, direction*0.01],
-                          flags=p.WORLD_FRAME)
-
+def actuate_revolute(world, gripper, joint_name):
+    # TODO: need to make a function that uses the joint info to return a 3D direction
+    # (unit vector) in world frame of desired motion of the joint handle
+    #direction = get_force_direction(world, joint_name)
+    delta_theta = -.5
+    p_handle_w = p.getLinkState(world['model_id'], world['links']['spinner_handle'].pybullet_id)[0]
+    p_base_w, orn_base_w = p.getLinkState(world['model_id'], world['links']['spinner'].pybullet_id)[:2]
+    p_handle_base = np.subtract(p_handle_w, p_base_w)
+    R = np.linalg.norm(p_handle_base[:2])
+    if p_handle_base[1] > 0:
+        theta = np.arccos(p_handle_base[0]/R)
+    else:
+        theta = -np.arccos(p_handle_base[0]/R)
+    theta_new = theta + delta_theta
+    p_handle_w_des = np.add([p_base_w[0], p_base_w[1], 0], [R*np.cos(theta_new), R*np.sin(theta_new), p_handle_w[2]])
+    direction = np.subtract(p_handle_w_des, p_handle_w)
+    unit_vector = np.divide(direction, np.linalg.norm(direction))
+    magnitude = .1
+    gripper.apply_force(np.multiply(magnitude, unit_vector))
 
 def actuate_prismatic(world, gripper, joint_name):
     # TODO: need to make a function that uses the joint info to return a 3D direction
     # (unit vector) in world frame of desired motion of the joint handle
     #direction = get_force_direction(world, joint_name)
-    direction = [0., -.1, 0.]
-    magnitude = 1
-    gripper.apply_force(np.multiply(magnitude, direction))
+    unit_vector = [0., -1., 0.]
+    magnitude = .1
+    gripper.apply_force(np.multiply(magnitude, unit_vector))
 
 def log_poses(world, joint_name, log_name, log):
     if joint_name == 'all':
@@ -226,44 +236,47 @@ if __name__ == '__main__':
 
     # actuate each joint sequentially with the gripper
     gripper_orn = p.getQuaternionFromEuler([np.pi, 0., 0.])
-    for joint_name, joint in world['joints'].items():
-        if joint_name == args.joint_name or args.joint_name == 'all':
-            joint = world['joints'][joint_name]
-            link_name = joint.child_link
+    #for joint_name, joint in world['joints'].items():
+        #if joint_name == args.joint_name or args.joint_name == 'all':
 
-            # grasp the joint handle
-            p_link = p.getLinkState(world['model_id'], world['links'][link_name].pybullet_id)[0]
-            gripper.apply_force(finger_state='open')
-            gripper.set_tip_pose([p_link, gripper_orn])
-            gripper.apply_force(finger_state='close')
+    for joint_name in ['spinner_handle', 'prismatic_slider']:
+        joint = world['joints'][joint_name]
+        link_name = joint.child_link
 
-            # actuate prismatic joints
-            if joint.type == 'prismatic':
-                for tx in range(0, args.duration*100):
-                    actuate_prismatic(world, gripper, joint_name)
+        # grasp the joint handle
+        p_link = p.getLinkState(world['model_id'], world['links'][link_name].pybullet_id)[0]
+        if joint_name == 'spinner_handle':
+            p_link = np.add(p_link, [0., 0., .02])
+        gripper.apply_force(finger_state='open')
+        gripper.set_tip_pose([p_link, gripper_orn])
+        gripper.apply_force(finger_state='close')
 
-    '''
-    for tx in range(0, args.duration*100):
-        # Actuate the specified joints.
-        for joint_name, joint in world['joints'].items():
-            if joint_name == args.joint_name or args.joint_name == 'all':
-                if joint.type == 'revolute' or joint.type == 'continuous':
-                    actuate_revolute(world, joint_name)
-                elif joint.type == 'prismatic':
-                    actuate_prismatic(world, joint_name)
+        # actuate prismatic joints
+        if joint.type == 'prismatic':
+            for tx in range(0, args.duration*10):
+                actuate_prismatic(world, gripper, joint_name)
+                for r in world['relations']:
+                    r.update(world=world,
+                             parent_joint=world['joints'][r.parent_joint],
+                             child_joint=world['joints'][r.child_joint],
+                             params=r.params)
 
-        # Update causal relations.
-        for r in world['relations']:
-            r.update(world=world,
-                     parent_joint=world['joints'][r.parent_joint],
-                     child_joint=world['joints'][r.child_joint],
-                     params=r.params)
+                # Log poses.
+                if tx % 5 == 0 and len(args.log_name) > 0:
+                    log_poses(world, args.joint_name, args.log_name, log)
 
-        # Log poses.
-        if tx % 5 == 0 and len(args.log_name) > 0:
-            log_poses(world, args.joint_name, args.log_name, log)
+        # actuate revolute joints
+        elif joint.type == 'revolute' or joint.type == 'continuous':
+            for tx in range(0, args.duration*10):
+                actuate_revolute(world, gripper, joint_name)
+                for r in world['relations']:
+                    r.update(world=world,
+                             parent_joint=world['joints'][r.parent_joint],
+                             child_joint=world['joints'][r.child_joint],
+                             params=r.params)
 
-        p.stepSimulation()
-        time.sleep(timestep)
-    '''
+                # Log poses.
+                if tx % 5 == 0 and len(args.log_name) > 0:
+                    log_poses(world, args.joint_name, args.log_name, log)
+
     p.disconnect()
