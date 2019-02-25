@@ -50,6 +50,7 @@
     </link>
 
     <link name="spinner_handle">
+
         <inertial>
             <origin xyz="0 0 0" rpy="0 0 0" />
             <inertia ixx="1" ixy="0" ixz="0" iyy="1" iyz="0" izz="1" />
@@ -104,18 +105,19 @@
         <joint_properties damping="1.0" friction="1.0"/>
     </joint>
 
-    <joint type="revolute" name="revolute_spinner">
+    <joint type="continuous" name="revolute_spinner">
         <child link="spinner" />
         <parent link="base_link" />
         <axis xyz="0 0 1" />
         <origin rpy="0 0 0" xyz="0.1 0.1 0.075" />
-        <limit effort="10" velocity="10" lower="-2.0" upper="2.0" />
+        <limit effort="10" velocity="10" />
         <joint_properties damping="1.0" friction="1.0"/>
     </joint>
 
-    <joint type="fixed" name="fixed_spinner_handle">
+    <joint type="continuous" name="spinner_handle">
         <child link="spinner_handle" />
         <parent link="spinner" />
+        <axis xyz="0 0 1" />
         <origin xyz="-0.075 0 0.075" rpy="0 0 0"/>
         <limit effort="100" velocity="100" />
         <joint_properties damping="0.0" friction="0.0"/>
