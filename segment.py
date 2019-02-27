@@ -3,6 +3,7 @@ import pickle
 import numpy as np
 import time
 import sys
+import argparse
 
 hsv = np.zeros((200, 200, 3), dtype='uint8')
 
@@ -56,11 +57,23 @@ def frame_to_array(frame):
     return img[:,:,:3]
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--type', required=True, type=str, help='[optflow|color|none]')
+    args = parser.parse_args()
+
     with open('video.pkl', 'rb') as handle:
         frames = pickle.load(handle)
     print('Loaded %d frames.' % len(frames)) 
     print('Converting images...')
+    
     frames = [frame_to_array(frame) for frame in frames][::2]
     for ix in range(1, len(frames)):
-        get_optical_flow(frames[ix-1], frames[ix])
-        # get_color_segmentation(frames[ix])
+        if args.type == 'optflow':
+            get_optical_flow(frames[ix-1], frames[ix])
+        elif args.type == 'color':
+            get_color_segmentation(frames[ix])
+        elif args.type == 'none':
+            cv2.imshow('video', frames[ix])
+            cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
