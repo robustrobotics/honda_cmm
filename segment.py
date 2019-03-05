@@ -56,11 +56,11 @@ def frame_to_array(frame):
     return img[:,:,:3]
 
 if __name__ == '__main__':
-    with open('video.pkl', 'rb') as handle:
+    with open('video2.pkl', 'rb') as handle:
         frames = pickle.load(handle)
     print('Loaded %d frames.' % len(frames)) 
     print('Converting images...')
-    frames = [frame_to_array(frame) for frame in frames][::2]
+    rgb_frames = [frame_to_array(frame['rgb']) for frame in frames][::2]
     for ix in range(1, len(frames)):
         get_optical_flow(frames[ix-1], frames[ix])
         # get_color_segmentation(frames[ix])

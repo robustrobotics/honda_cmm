@@ -10,10 +10,11 @@ from pyquaternion import Quaternion
 from collections import defaultdict
 from load_UBBDF import loadUBBDF
 from gripper import Gripper
-from util import transformation, vis_frame
+from util import transformation, vis_frame, Recorder
 import plotting
 
-FOLDER = '/Users/carismoses/honda_cmm/'
+# FOLDER = '/Users/carismoses/honda_cmm/'
+FOLDER = '.'
 def draw_prismatic(model):
     line_center = np.array([model['rigid_position.x'],
                             model['rigid_position.y'],
@@ -163,7 +164,7 @@ def actuate_prismatic(world, gripper, joint_name):
     # (unit vector) in world frame of desired motion of the joint handle
     #direction = get_force_direction(world, joint_name)
     unit_vector = [0., -1., 0.]
-    magnitude = .1
+    magnitude = 1.0
     gripper.apply_force(np.multiply(magnitude, unit_vector))
 
 def log_poses(world, joint_name, log_name, log):
@@ -196,11 +197,14 @@ def get_arguments():
     parser.add_argument('--log-name', default='', type=str, help='JSON file name')
     parser.add_argument('--duration', default=3, type=int)
     parser.add_argument('--visualize', action='store_true')
+    parser.add_argument('--record', action='store_true')
     return parser.parse_args()
 
 
 if __name__ == '__main__':
     args = get_arguments()
+    
+    recorder = Recorder(200, 200)
 
     # Set PyBullet configuration.
     client = p.connect(p.GUI)
@@ -208,7 +212,7 @@ if __name__ == '__main__':
     p.setGravity(0, 0, -10)
     p.setRealTimeSimulation(0)
     p.resetDebugVisualizerCamera(
-        cameraDistance=2.0,
+        cameraDistance=0.5,
         cameraYaw=30,
         cameraPitch=-52,
         cameraTargetPosition=(0., 0., 0.))
@@ -264,6 +268,9 @@ if __name__ == '__main__':
                 # Log poses.
                 if tx % 5 == 0 and len(args.log_name) > 0:
                     log_poses(world, args.joint_name, args.log_name, log)
+                    if args.record:
+                        recorder.capture()
+                time.sleep(0.01)
 
         # actuate revolute joints
         elif joint.type == 'revolute' or joint.type == 'continuous':
@@ -278,5 +285,9 @@ if __name__ == '__main__':
                 # Log poses.
                 if tx % 5 == 0 and len(args.log_name) > 0:
                     log_poses(world, args.joint_name, args.log_name, log)
-
+                    if args.record:
+                        recorder.capture()
+                time.sleep(0.01)
+    
+    recorder.save('video2.pkl')
     p.disconnect()

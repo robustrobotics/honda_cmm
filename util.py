@@ -1,5 +1,23 @@
 import pybullet as p
 import numpy as np
+import pickle
+
+class Recorder(object):
+
+    def __init__(self, height, width):
+        self.frames = []
+        self.height = height
+        self.width = width
+    
+    def capture(self):
+        h, w, rgb, depth, seg = p.getCameraImage(self.width, self.height)
+        self.frames.append({'rgb': rgb,
+                            'depth': depth})
+
+    def save(self, fname):
+        with open(fname, 'wb') as handle:
+            pickle.dump(self.frames, handle)
+
 
 def vis_frame(pos, orn, rgb=[1,0,0], length=.2, life=.4):
     new_x = transformation([0, 0, length], pos, orn)
