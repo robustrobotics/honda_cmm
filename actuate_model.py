@@ -215,6 +215,8 @@ def log_poses(world, joint_name, log_name, log):
         else:
             position, orientation = p.getLinkState(bodyUniqueId=world['model_id'],
                                                    linkIndex=world['links'][link_name].pybullet_id)[0:2]
+            if link_name == 'spinner_handle':
+                orientation = p.getLinkState(world['model_id'], world['links']['spinner'].pybullet_id)[1]
         log[link_name].append(position + orientation)
 
     if 'spinner' in log:
@@ -282,6 +284,7 @@ if __name__ == '__main__':
     # gripper_orn = p.getQuaternionFromEuler([np.pi, 0., 0.])
     #for joint_name, joint in world['joints'].items():
         #if joint_name == args.joint_name or args.joint_name == 'all':
+<<<<<<< HEAD
 
     # for joint_name in ['spinner_handle', 'prismatic_slider']:
     for tx in range(0, args.duration*10):
