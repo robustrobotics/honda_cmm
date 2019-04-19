@@ -13,7 +13,8 @@ from gripper import Gripper
 from util import transformation, vis_frame
 import plotting
 
-FOLDER = '/Users/carismoses/honda_cmm/'
+# FOLDER = '/Users/carismoses/honda_cmm/'
+FOLDER = '/home/mnosew/workspace/honda_cmm/'
 def draw_prismatic(model):
     line_center = np.array([model['rigid_position.x'],
                             model['rigid_position.y'],
@@ -29,7 +30,7 @@ def draw_prismatic(model):
     p.addUserDebugLine(lineFromXYZ=lineFrom,
                        lineToXYZ=lineTo,
                        lineColorRGB=color,
-                       lineWidth=1)
+                       lineWidth=2)
     p.addUserDebugText(text='pri',
                        textPosition=lineTo)
 
@@ -62,6 +63,16 @@ def draw_rigid(model):
     p.addUserDebugText(text='rig',
                        textPosition=line1To)
 
+def joint_to_point(q, rot_ax, rot_center, rot_radius):
+    p0 = np.array([rot_radius, 0, 0])
+    
+    qq = Quaternion(axis=[0, 0, 1],
+                    angle=-q)
+
+    p0 = qq.rotate(p0)
+    p0 = rot_ax.rotate(p0)
+    p0 += rot_center
+    return p0
 
 def draw_revolute(model):
     rot_center = np.array([model['rot_center.x'],
@@ -75,39 +86,43 @@ def draw_revolute(model):
                         model['rot_orientation.x'],
                         model['rot_orientation.y'],
                         model['rot_orientation.z'])
-    rot_axis = (rot_ax * rot_or).get_axis()
-    axisFrom = (rot_center + 0.25*rot_axis).tolist()
-    axisTo = (rot_center - 0.25*rot_axis).tolist()
+
+    # The rotation axis is the z axis rotated by rot_ax.
+    rot_axis = rot_ax.rotate(np.array([0, 0, 1]))
+    axisFrom = (rot_center + 0.1*rot_axis).tolist()
+    axisTo = (rot_center - 0.1*rot_axis).tolist()
 
     color = [1, 0, 1]
 
     radius = model['rot_radius']
     if radius < 0.01:
         radius = 0.05
-    angles = np.linspace(start=model['q_min[0]'], stop=model['q_max[0]'], num=100)
+    angles = np.linspace(start=model['q_min[0]'], stop=model['q_max[0]'], num=100) #+1.57
     for ix in range(1, len(angles)):
-        lineFrom = np.array([radius * np.cos(angles[ix]-1),
-                             radius * np.sin(angles[ix]-1),
-                             0.025])
-        lineTo = np.array([radius * np.cos(angles[ix]),
-                           radius * np.sin(angles[ix]),
-                           0.025])
-        p.addUserDebugLine(lineFromXYZ=rot_center+lineFrom,
-                           lineToXYZ=rot_center+lineTo,
+        lineFrom = joint_to_point(angles[ix-1], rot_ax, rot_center, radius)
+        lineTo = joint_to_point(angles[ix], rot_ax, rot_center, radius)
+        #lineFrom = np.array([radius * np.cos(angles[ix]-1),
+        #                     radius * np.sin(angles[ix]-1),
+        #                     0.025])
+        #lineTo = np.array([radius * np.cos(angles[ix]),
+        #                   radius * np.sin(angles[ix]),
+        #                   0.025])
+        p.addUserDebugLine(lineFromXYZ=lineFrom,
+                           lineToXYZ=lineTo,
                            lineColorRGB=color,
                            lineWidth=1)
 
     p.addUserDebugLine(lineFromXYZ=axisFrom,
                        lineToXYZ=axisTo,
                        lineColorRGB=color,
-                       lineWidth=1)
+                       lineWidth=2)
     p.addUserDebugText(text='rot',
                        textPosition=axisFrom)
 
 def draw_joints():
-    if not os.path.exists(FOLDER + 'structure.json'):
+    if not os.path.exists(FOLDER + 'wooden_structure.json'):
         return
-    with open(FOLDER + 'structure.json', 'r') as handle:
+    with open(FOLDER + 'wooden_structure.json', 'r') as handle:
         models = json.load(handle)
 
     for m in models:
@@ -136,6 +151,28 @@ def get_force_direction(world, joint_name):
             direction = 1
 
     return direction
+
+def move_revolute(world, joint_name):
+    joint = world['joints'][joint_name]
+    link_name = joint.child_link
+
+    direction = get_force_direction(world, joint_name)
+
+    p.applyExternalTorque(objectUniqueId=world['model_id'],
+                          linkIndex=world['links'][link_name].pybullet_id,
+                          torqueObj=[0, 0, direction*0.01],
+                          flags=p.WORLD_FRAME)
+
+
+def move_prismatic(world, joint_name):
+    joint = world['joints'][joint_name]
+    link_name = joint.child_link
+    direction = get_force_direction(world, joint_name)
+    p.applyExternalForce(objectUniqueId=world['model_id'],
+                         linkIndex=world['links'][link_name].pybullet_id,
+                         forceObj=[direction*0.5, direction*0.5, 0],
+                         posObj=[0, 0, 0],
+                         flags=p.LINK_FRAME)
 
 
 def actuate_revolute(world, gripper, joint_name):
@@ -172,7 +209,6 @@ def log_poses(world, joint_name, log_name, log):
     else:
         to_log = [world['joints'][joint_name].child_link, 'base_link']
 
-
     for link_name in to_log:
         if link_name == 'base_link':
             position, orientation = p.getBasePositionAndOrientation(bodyUniqueId=world['model_id'])
@@ -183,6 +219,11 @@ def log_poses(world, joint_name, log_name, log):
 
     if 'spinner' in log:
         del log['spinner']
+    if 'back_link' in log:
+    	del log['back_link']
+    if 'door' in log:
+    	del log['door']
+
 
     with open(FOLDER + log_name, 'w') as handle:
         json.dump(log, handle)
@@ -208,8 +249,8 @@ if __name__ == '__main__':
     p.setGravity(0, 0, -10)
     p.setRealTimeSimulation(0)
     p.resetDebugVisualizerCamera(
-        cameraDistance=2.0,
-        cameraYaw=30,
+        cameraDistance=0.8,
+        cameraYaw=210,
         cameraPitch=-52,
         cameraTargetPosition=(0., 0., 0.))
     timestep = 1. / 100.
@@ -218,7 +259,8 @@ if __name__ == '__main__':
     plane_id = p.loadURDF("plane.urdf")
     world = loadUBBDF(urdf_file='models/{0}/model.urdf'.format(args.model_name),
                       ubbdf_file='models/{0}/model_relations.ubbdf'.format(args.model_name))
-    gripper = Gripper()
+
+    # gripper = Gripper()
 
     # The joint motors need to be disabled before we can apply forces to them.
     maxForce = 0
@@ -233,50 +275,52 @@ if __name__ == '__main__':
     log = defaultdict(list)
     if args.visualize:
         draw_joints()
+        time.sleep(100)
+        sys.exit(0)
 
     # actuate each joint sequentially with the gripper
-    gripper_orn = p.getQuaternionFromEuler([np.pi, 0., 0.])
+    # gripper_orn = p.getQuaternionFromEuler([np.pi, 0., 0.])
     #for joint_name, joint in world['joints'].items():
         #if joint_name == args.joint_name or args.joint_name == 'all':
 
-    for joint_name in ['spinner_handle', 'prismatic_slider']:
-        joint = world['joints'][joint_name]
-        link_name = joint.child_link
+    # for joint_name in ['spinner_handle', 'prismatic_slider']:
+    for tx in range(0, args.duration*10):
+        for joint_name in ['revolute_door', 'prismatic_slider']:
+            joint = world['joints'][joint_name]
+            link_name = joint.child_link
 
-        # grasp the joint handle
-        p_link = p.getLinkState(world['model_id'], world['links'][link_name].pybullet_id)[0]
-        if joint_name == 'spinner_handle':
-            p_link = np.add(p_link, [0., 0., .02])
-        gripper.apply_force(finger_state='open')
-        gripper.set_tip_pose([p_link, gripper_orn])
-        gripper.apply_force(finger_state='close')
+            # grasp the joint handle
+            #p_link = p.getLinkState(world['model_id'], world['links'][link_name].pybullet_id)[0]
+            #if joint_name == 'spinner_handle':
+            #    p_link = np.add(p_link, [0., 0., .02])
+            #gripper.apply_force(finger_state='open')
+            #gripper.set_tip_pose([p_link, gripper_orn])
+            #gripper.apply_force(finger_state='close')
 
-        # actuate prismatic joints
-        if joint.type == 'prismatic':
-            for tx in range(0, args.duration*10):
-                actuate_prismatic(world, gripper, joint_name)
+            # actuate prismatic joints
+            if joint.type == 'prismatic':
+                # actuate_prismatic(world, gripper, joint_name)
+                move_prismatic(world, joint_name)
                 for r in world['relations']:
                     r.update(world=world,
                              parent_joint=world['joints'][r.parent_joint],
                              child_joint=world['joints'][r.child_joint],
                              params=r.params)
 
-                # Log poses.
-                if tx % 5 == 0 and len(args.log_name) > 0:
-                    log_poses(world, args.joint_name, args.log_name, log)
-
-        # actuate revolute joints
-        elif joint.type == 'revolute' or joint.type == 'continuous':
-            for tx in range(0, args.duration*10):
-                actuate_revolute(world, gripper, joint_name)
+            # actuate revolute joints
+            elif joint.type == 'revolute' or joint.type == 'continuous':
+                # actuate_revolute(world, gripper, joint_name)
+                move_revolute(world, joint_name)
                 for r in world['relations']:
                     r.update(world=world,
                              parent_joint=world['joints'][r.parent_joint],
                              child_joint=world['joints'][r.child_joint],
                              params=r.params)
 
-                # Log poses.
-                if tx % 5 == 0 and len(args.log_name) > 0:
-                    log_poses(world, args.joint_name, args.log_name, log)
+        # Log poses.
+        if tx % 5 == 0 and len(args.log_name) > 0:
+            log_poses(world, args.joint_name, args.log_name, log)
+        time.sleep(timestep)
+        p.stepSimulation()
 
     p.disconnect()
