@@ -96,7 +96,7 @@
         </visual>
     </link>
 
-    <joint type="prismatic" name="prismatic_slider">
+    <joint type="prismatic" name="slider">
         <child link="slider" />
         <parent link="base_link" />
         <axis xyz="0 1 0" />
