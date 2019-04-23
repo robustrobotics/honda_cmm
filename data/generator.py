@@ -37,13 +37,14 @@ class Mechanism(object):
 class Slider(Mechanism):
     n_sliders = 0
 
-    def __init__(self, x_offset, z_offset, range, axis):
+    def __init__(self, x_offset, z_offset, range, axis, color):
         """
 
         :param x_offset: The offset in the x-dimension from the busybox backboard.
         :param z_offset: The offset in the z-dimension from the busybox backboard.
         :param range: The total distance spanned by the prismatic joint.
         :param axis: A 2-d unit vector with directions in the x and z directions.
+        :param color: An 3-tuple of rgb values.
         """
         super(Slider, self).__init__('Slider')
         self._links = []
@@ -69,8 +70,8 @@ class Slider(Mechanism):
                                urdf.Geometry(
                                    urdf.Cylinder(radius=0.025, length=0.1)
                                ),
-                               urdf.Material('orange',
-                                             urdf.Color(rgba=(1.0, 0.6, 0, 1.0))
+                               urdf.Material('color_{0}'.format(name),
+                                   urdf.Color(rgba=(color[0], color[1], color[2], 1.0))
                                )
                            ))
 
@@ -104,7 +105,7 @@ class Slider(Mechanism):
 
         x_min = self.origin[0] - np.abs(np.cos(a))*self.range/2.0 - self.handle_radius
         x_max = self.origin[0] + np.abs(np.cos(a))*self.range/2.0 + self.handle_radius
-        
+
         return aabb.AABB([(x_min, x_max), (z_min, z_max)])
 
 
@@ -121,8 +122,9 @@ class Slider(Mechanism):
         range = np.random.uniform(0.1, 0.5)
         angle = np.random.uniform(0, np.pi)
         axis = (np.cos(angle), np.sin(angle))
-
-        slider = Slider(x_offset, z_offset, range, axis)
+        color = (np.random.uniform(0, 1), np.random.uniform(0, 1), np.random.uniform(0, 1))
+        print(color)
+        slider = Slider(x_offset, z_offset, range, axis, color)
         return slider
 
 
@@ -261,7 +263,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     bb = BusyBox.generate_random_busybox()
-    print(bb.get_urdf())
 
     if args.viz:
         client = p.connect(p.GUI)
