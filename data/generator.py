@@ -3,6 +3,7 @@ import odio_urdf as urdf
 import argparse
 import pybullet as p
 import pybullet_data
+import aabbtree as aabb
 
 
 class Mechanism(object):
@@ -15,13 +16,22 @@ class Mechanism(object):
         self.mechanism_type = p_type
 
     def get_links(self):
-        raise NotImplementedError('get_links not implemented for mechanism: {0}'.format(self.p_type))
+        raise NotImplementedError('get_links not implemented for mechanism: {0}'.format(self.mechanism_type))
 
     def get_joints(self):
-        raise NotImplementedError('get_joints not implemented for mechanism: {0}'.format(self.p_type))
+        raise NotImplementedError('get_joints not implemented for mechanism: {0}'.format(self.mechanism_type))
 
     def get_bounding_box(self):
-        raise NotImplementedError('Collision Bounding Box not implemented for mechanism: {0}'.format(self.p_type))
+        """ This method should return a bounding box of the 2-dimensional
+        backboard in which spans all mechanism configurations. The bounding
+        box coordinates should be relative to the center of the backboard.
+        :return: aabb.AABB
+        """
+        raise NotImplementedError('Collision Bounding Box not implemented for mechanism: {0}'.format(self.mechanism_type))
+
+    @staticmethod
+    def random():
+        raise NotImplementedError('Cannot generate a random mechanism.')
 
 
 class Slider(Mechanism):
@@ -74,6 +84,10 @@ class Slider(Mechanism):
         self._links.append(handle)
         self._joints.append(joint)
 
+        self.origin = (x_offset, z_offset)
+        self.range = range
+        self.handle_radius = 0.025
+
     def get_links(self):
         return self._links
 
@@ -81,7 +95,14 @@ class Slider(Mechanism):
         return self._joints
 
     def get_bounding_box(self):
-        pass
+        z_min = self.origin[1] - self.handle_radius
+        z_max = self.origin[1] + self.handle_radius
+
+        x_min = self.origin[0] - self.range/2.0 - self.handle_radius
+        x_max = self.origin[0] + self.range/2.0 + self.handle_radius
+
+        return aabb.AABB([(x_min, x_max), (z_min, z_max)])
+
 
     @staticmethod
     def random(width, height):
@@ -179,11 +200,31 @@ class BusyBox(object):
 
 
     @staticmethod
-    def generate_random_busybox(min_mech=2, max_mech=4, mech_types=[Slider]):
+    def _check_collision(width, height, mechs, mech):
+        tree = aabb.AABBTree()
+        # Add edge bounding boxes for backboard.
+        tree.add(aabb.AABB([(-width/2.0, width/2.0), (height/2.0, height/2.0+1)]))  # top
+        tree.add(aabb.AABB([(-width/2.0, width/2.0), (-height/2.0-1, -height/2.0)]))  # bottom
+        tree.add(aabb.AABB([(-width/2.0-1, -width/2.0), (-height/2.0, height/2.0)]))  # left
+        tree.add(aabb.AABB([(width/2.0, width/2.0+1), (-height/2.0, height/2.0)]))  # right
+
+        # Get the bounding box for each existing mechanism.
+        for ix, m in enumerate(mechs):
+            tree.add(m.get_bounding_box(), str(ix))
+
+        # Get the bounding box of the current mechanism and check overlap.
+        if tree.does_overlap(mech.get_bounding_box()):
+            return True
+        else:
+            return False
+
+    @staticmethod
+    def generate_random_busybox(min_mech=2, max_mech=4, mech_types=[Slider], n_tries=3):
         """
         :param min_mech: int, The minimum number of mechanisms to be included on the busybox.
         :param max_mech: int, The maximum number of classes to be included on the busybox.
         :param mechs: list, A list of the classes of mechanisms to choose from.
+        :param n_tries: list, How many attempts to generate a mechanism that does not overlap existing mechanisms.
         :return:
         """
         # Sample busybox dimensions.
@@ -194,12 +235,14 @@ class BusyBox(object):
         mechs = []
         n_mech = np.random.randint(low=min_mech, high=max_mech+1)
         for _ in range(n_mech):
-            # TODO: For each mechanism pick the type.
+            # For each mechanism pick the type.
             mech_class = np.random.choice(mech_types)
-            mech = mech_class.random(width, height)
-
-            # TODO: Check for collisions.
-            mechs.append(mech)
+            for _ in range(n_tries):
+                mech = mech_class.random(width, height)
+                # Check for collisions.
+                if not BusyBox._check_collision(width, height, mechs, mech):
+                    mechs.append(mech)
+                    break
 
         bb = BusyBox(width, height, mechs)
         return bb
