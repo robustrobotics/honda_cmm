@@ -14,12 +14,14 @@ class Mechanism(object):
         :param p_type: The type of mechanism of the parent class.
         """
         self.mechanism_type = p_type
+        self._links = []
+        self._joints = []
 
     def get_links(self):
-        raise NotImplementedError('get_links not implemented for mechanism: {0}'.format(self.mechanism_type))
+        return self._links
 
     def get_joints(self):
-        raise NotImplementedError('get_joints not implemented for mechanism: {0}'.format(self.mechanism_type))
+        return self._joints
 
     def get_bounding_box(self):
         """ This method should return a bounding box of the 2-dimensional
@@ -47,8 +49,6 @@ class Slider(Mechanism):
         :param color: An 3-tuple of rgb values.
         """
         super(Slider, self).__init__('Slider')
-        self._links = []
-        self._joints = []
 
         name = Slider.n_sliders
         Slider.n_sliders += 1
@@ -70,7 +70,7 @@ class Slider(Mechanism):
                                urdf.Geometry(
                                    urdf.Cylinder(radius=0.025, length=0.1)
                                ),
-                               urdf.Material('color_{0}'.format(name),
+                               urdf.Material('slider_{0}_color'.format(name),
                                    urdf.Color(rgba=(color[0], color[1], color[2], 1.0))
                                )
                            ))
@@ -91,12 +91,6 @@ class Slider(Mechanism):
         self.handle_radius = 0.025
         self.axis = axis
 
-    def get_links(self):
-        return self._links
-
-    def get_joints(self):
-        return self._joints
-
     def get_bounding_box(self):
         a = np.arctan2(self.axis[1], self.axis[0])
 
@@ -107,7 +101,6 @@ class Slider(Mechanism):
         x_max = self.origin[0] + np.abs(np.cos(a))*self.range/2.0 + self.handle_radius
 
         return aabb.AABB([(x_min, x_max), (z_min, z_max)])
-
 
     @staticmethod
     def random(width, height):
@@ -122,10 +115,120 @@ class Slider(Mechanism):
         range = np.random.uniform(0.1, 0.5)
         angle = np.random.uniform(0, np.pi)
         axis = (np.cos(angle), np.sin(angle))
-        color = (np.random.uniform(0, 1), np.random.uniform(0, 1), np.random.uniform(0, 1))
-        print(color)
-        slider = Slider(x_offset, z_offset, range, axis, color)
-        return slider
+        color = (np.random.uniform(0, 1),
+                 np.random.uniform(0, 1),
+                 np.random.uniform(0, 1))
+        return Slider(x_offset, z_offset, range, axis, color)
+
+
+class Door(Mechanism):
+    n_doors = 0
+
+    def __init__(self, door_offset, door_size, handle_offset, flipped, color):
+        super(Door, self).__init__('Door')
+        name = Door.n_doors
+        Door.n_doors += 1
+
+        dir = 1.0
+        if flipped: dir = -1.0
+
+        door = urdf.Link('door_{0}'.format(name),
+                         urdf.Inertial(
+                              urdf.Origin(xyz=(0, 0, 0), rpy=(0, 0, 0)),
+                              urdf.Mass(value=0.1),
+                              urdf.Inertia(ixx=0.001, ixy=0, ixz=0, iyy=0.001, iyz=0, izz=0.001)
+                         ),
+                         urdf.Collision(
+                              urdf.Origin(xyz=(-dir*door_size[0]/2.0, 0, 0), rpy=(0, 0, 0)),
+                              urdf.Geometry(
+                                  urdf.Box(size=(door_size[0], 0.01, door_size[1]))
+                              )
+                         ),
+                         urdf.Visual(
+                             urdf.Origin(xyz=(-dir*door_size[0]/2.0, 0, 0), rpy=(0, 0, 0)),
+                             urdf.Geometry(
+                                 urdf.Box(size=(door_size[0], 0.01, door_size[1]))
+                             ),
+                             urdf.Material('door_{0}_color'.format(name),
+                                           urdf.Color(rgba=(color[0], color[1], color[2], 1.0))
+                             )
+                         ))
+
+        door_handle = urdf.Link('door_{0}_handle'.format(name),
+                         urdf.Inertial(
+                              urdf.Origin(xyz=(0, 0, 0), rpy=(0, 0, 0)),
+                              urdf.Mass(value=0.1),
+                              urdf.Inertia(ixx=0.001, ixy=0, ixz=0, iyy=0.001, iyz=0, izz=0.001)
+                         ),
+                         urdf.Collision(
+                              urdf.Origin(xyz=(0, 0, 0), rpy=(0, 0, 0)),
+                              urdf.Geometry(
+                                  urdf.Cylinder(radius=0.015, length=0.05)
+                              )
+                         ),
+                         urdf.Visual(
+                             urdf.Origin(xyz=(0, 0, 0), rpy=(0, 0, 0)),
+                             urdf.Geometry(
+                                 urdf.Cylinder(radius=0.015, length=0.05)
+                             ),
+                             urdf.Material('door_{0}_color'.format(name),
+                                           urdf.Color(rgba=(color[0], color[1], color[2], 1.0))
+                             )
+                         ))
+
+        if flipped: limit = urdf.Limit(lower=0, upper=1.57)
+        else: limit = urdf.Limit(lower=-1.57, upper=0)
+
+        door_joint = urdf.Joint('door_{0}_joint'.format(name),
+                                urdf.Child('door_{0}'.format(name)),
+                                urdf.Parent('back_link'),
+                                urdf.Axis(xyz=(0, 0, 1)),
+                                urdf.Origin(xyz=(door_offset[0], 0.03, door_offset[1]), rpy=(0, 0, 0)),
+                                limit,
+                                type='revolute')
+
+        door_handle_joint = urdf.Joint('door_{0}_handle_joint'.format(name),
+                                       urdf.Parent('door_{0}'.format(name)),
+                                       urdf.Child('door_{0}_handle'.format(name)),
+                                       urdf.Origin(xyz=(dir*(-door_size[0]+0.02), 0.025, handle_offset), rpy=(1.57, 0, 0)),
+                                       type='fixed')
+
+        self._links.append(door)
+        self._joints.append(door_joint)
+        self._links.append(door_handle)
+        self._joints.append(door_handle_joint)
+
+        self.origin = door_offset
+        self.door_size = door_size
+
+    def get_bounding_box(self):
+        """ This method should return a bounding box of the 2-dimensional
+        backboard in which spans all mechanism configurations. The bounding
+        box coordinates should be relative to the center of the backboard.
+        :return: aabb.AABB
+        """
+        z_min = self.origin[1] - self.door_size[1]/2.0
+        z_max = self.origin[1] + self.door_size[1]/2.0
+
+        x_min = self.origin[0] - self.door_size[0]
+        x_max = self.origin[0]
+        return aabb.AABB([(x_min, x_max), (z_min, z_max)])
+
+    @staticmethod
+    def random(width, height):
+        door_offset = (np.random.uniform(-width/2.0, width/2.0),
+                       np.random.uniform(-height/2.0, height/2.0))
+        door_size = (np.random.uniform(0.05, 0.15),
+                     np.random.uniform(0.05, 0.15))
+        # 0.015 is the handle radius.
+        handle_offset = np.random.uniform(-door_size[1]/2+0.015, door_size[1]/2-0.015)
+
+        flipped = np.random.binomial(n=1, p=0.5)
+        color = (np.random.uniform(0, 1),
+                 np.random.uniform(0, 1),
+                 np.random.uniform(0, 1))
+
+        return Door(door_offset, door_size, handle_offset, flipped, color)
 
 
 class BusyBox(object):
@@ -228,7 +331,7 @@ class BusyBox(object):
             return False
 
     @staticmethod
-    def generate_random_busybox(min_mech=2, max_mech=4, mech_types=[Slider], n_tries=10):
+    def generate_random_busybox(min_mech=2, max_mech=4, mech_types=[Slider, Door], n_tries=10):
         """
         :param min_mech: int, The minimum number of mechanisms to be included on the busybox.
         :param max_mech: int, The maximum number of classes to be included on the busybox.
@@ -279,6 +382,13 @@ if __name__ == '__main__':
         with open('.busybox.urdf', 'w') as handle:
             handle.write(bb.get_urdf())
         model = p.loadURDF('.busybox.urdf')
+        maxForce = 0
+        mode = p.VELOCITY_CONTROL
+        for ix in range(0, p.getNumJoints(model)):
+            p.setJointMotorControl2(bodyUniqueId=model,
+                                    jointIndex=ix,
+                                    controlMode=mode,
+                                    force=maxForce)
 
         try:
             while True:
