@@ -62,13 +62,13 @@ class Slider(Mechanism):
                            urdf.Collision(
                                urdf.Origin(xyz=(0, 0, 0), rpy=(0, 0, 0)),
                                urdf.Geometry(
-                                   urdf.Cylinder(radius=0.025, length=0.1)
+                                   urdf.Cylinder(radius=0.02, length=0.05)
                                )
                            ),
                            urdf.Visual(
                                urdf.Origin(xyz=(0, 0, 0), rpy=(0, 0, 0)),
                                urdf.Geometry(
-                                   urdf.Cylinder(radius=0.025, length=0.1)
+                                   urdf.Cylinder(radius=0.02, length=0.05)
                                ),
                                urdf.Material('slider_{0}_color'.format(name),
                                    urdf.Color(rgba=(color[0], color[1], color[2], 1.0))
@@ -81,6 +81,7 @@ class Slider(Mechanism):
                            urdf.Axis(xyz=(axis[0], axis[1], 0)),
                            urdf.Origin(xyz=(x_offset, 0.075, z_offset), rpy=(1.57, 0, 0)),
                            urdf.Limit(lower=-range/2.0, upper=range/2.0),
+                           urdf.Dynamics(friction=1.0, damping=1.0),
                            type='prismatic')
 
         self._links.append(handle)
@@ -200,6 +201,7 @@ class Door(Mechanism):
 
         self.origin = door_offset
         self.door_size = door_size
+        self.flipped = flipped
 
     def get_bounding_box(self):
         """ This method should return a bounding box of the 2-dimensional
@@ -210,8 +212,12 @@ class Door(Mechanism):
         z_min = self.origin[1] - self.door_size[1]/2.0
         z_max = self.origin[1] + self.door_size[1]/2.0
 
-        x_min = self.origin[0] - self.door_size[0]
-        x_max = self.origin[0]
+        if self.flipped:
+            x_min = self.origin[0]
+            x_max = self.origin[0] + self.door_size[0]
+        else:
+            x_min = self.origin[0] - self.door_size[0]
+            x_max = self.origin[0]
         return aabb.AABB([(x_min, x_max), (z_min, z_max)])
 
     @staticmethod
@@ -382,7 +388,7 @@ if __name__ == '__main__':
         with open('.busybox.urdf', 'w') as handle:
             handle.write(bb.get_urdf())
         model = p.loadURDF('.busybox.urdf')
-        maxForce = 0
+        maxForce = 10
         mode = p.VELOCITY_CONTROL
         for ix in range(0, p.getNumJoints(model)):
             p.setJointMotorControl2(bodyUniqueId=model,
