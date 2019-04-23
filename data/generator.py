@@ -75,17 +75,49 @@ class Slider(Mechanism):
                                )
                            ))
 
+        track = urdf.Link('slider_{0}_track'.format(name),
+                           urdf.Inertial(
+                               urdf.Origin(xyz=(0, 0, 0), rpy=(0, 0, 0)),
+                               urdf.Mass(value=0.1),
+                               urdf.Inertia(ixx=0.001, ixy=0, ixz=0, iyy=0.001, iyz=0, izz=0.001)
+                           ),
+                           urdf.Collision(
+                               urdf.Origin(xyz=(0, 0, 0), rpy=(0, 0, 0)),
+                               urdf.Geometry(
+                                   urdf.Box(size=(range, 0.005, 0.02))
+                               )
+                           ),
+                           urdf.Visual(
+                               urdf.Origin(xyz=(0, 0, 0), rpy=(0, 0, 0)),
+                               urdf.Geometry(
+                                   urdf.Box(size=(range, 0.005, 0.02))
+                               ),
+                               urdf.Material('slider_track_color'.format(name),
+                                   urdf.Color(rgba=(0.6, 0.6, 0.6, 1.0))
+                               )
+                           ))
+
         joint = urdf.Joint('slider_{0}_joint'.format(name),
                            urdf.Parent('back_link'),
                            urdf.Child('slider_{0}'.format(name)),
                            urdf.Axis(xyz=(axis[0], axis[1], 0)),
-                           urdf.Origin(xyz=(x_offset, 0.075, z_offset), rpy=(1.57, 0, 0)),
+                           urdf.Origin(xyz=(x_offset, 0.05, z_offset), rpy=(1.57, 0, 0)),
                            urdf.Limit(lower=-range/2.0, upper=range/2.0),
                            urdf.Dynamics(friction=1.0, damping=1.0),
                            type='prismatic')
 
+        angle = np.arctan2(axis[1], axis[0])
+        track_joint = urdf.Joint('slider_{0}_track_joint'.format(name),
+                                 urdf.Parent('back_link'),
+                                 urdf.Child('slider_{0}_track'.format(name)),
+                                 urdf.Origin(xyz=(x_offset, 0.025, z_offset),
+                                             rpy=(0, -angle, 0)),
+                                 type='fixed')
+
         self._links.append(handle)
         self._joints.append(joint)
+        self._links.append(track)
+        self._joints.append(track_joint)
 
         self.origin = (x_offset, z_offset)
         self.range = range
@@ -337,7 +369,7 @@ class BusyBox(object):
             return False
 
     @staticmethod
-    def generate_random_busybox(min_mech=2, max_mech=4, mech_types=[Slider, Door], n_tries=10):
+    def generate_random_busybox(min_mech=2, max_mech=6, mech_types=[Slider, Door], n_tries=25):
         """
         :param min_mech: int, The minimum number of mechanisms to be included on the busybox.
         :param max_mech: int, The maximum number of classes to be included on the busybox.
