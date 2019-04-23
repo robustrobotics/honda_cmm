@@ -37,12 +37,13 @@ class Mechanism(object):
 class Slider(Mechanism):
     n_sliders = 0
 
-    def __init__(self, x_offset, z_offset, range):
+    def __init__(self, x_offset, z_offset, range, axis):
         """
 
         :param x_offset: The offset in the x-dimension from the busybox backboard.
         :param z_offset: The offset in the z-dimension from the busybox backboard.
         :param range: The total distance spanned by the prismatic joint.
+        :param axis: A 2-d unit vector with directions in the x and z directions.
         """
         super(Slider, self).__init__('Slider')
         self._links = []
@@ -76,7 +77,7 @@ class Slider(Mechanism):
         joint = urdf.Joint('slider_{0}_joint'.format(name),
                            urdf.Parent('back_link'),
                            urdf.Child('slider_{0}'.format(name)),
-                           urdf.Axis(xyz=(1, 0, 0)),
+                           urdf.Axis(xyz=(axis[0], axis[1], 0)),
                            urdf.Origin(xyz=(x_offset, 0.075, z_offset), rpy=(1.57, 0, 0)),
                            urdf.Limit(lower=-range/2.0, upper=range/2.0),
                            type='prismatic')
@@ -87,6 +88,7 @@ class Slider(Mechanism):
         self.origin = (x_offset, z_offset)
         self.range = range
         self.handle_radius = 0.025
+        self.axis = axis
 
     def get_links(self):
         return self._links
@@ -95,12 +97,14 @@ class Slider(Mechanism):
         return self._joints
 
     def get_bounding_box(self):
-        z_min = self.origin[1] - self.handle_radius
-        z_max = self.origin[1] + self.handle_radius
+        a = np.arctan2(self.axis[1], self.axis[0])
 
-        x_min = self.origin[0] - self.range/2.0 - self.handle_radius
-        x_max = self.origin[0] + self.range/2.0 + self.handle_radius
+        z_min = self.origin[1] - np.sin(a)*self.range/2.0 - self.handle_radius
+        z_max = self.origin[1] + np.sin(a)*self.range/2.0 + self.handle_radius
 
+        x_min = self.origin[0] - np.abs(np.cos(a))*self.range/2.0 - self.handle_radius
+        x_max = self.origin[0] + np.abs(np.cos(a))*self.range/2.0 + self.handle_radius
+        
         return aabb.AABB([(x_min, x_max), (z_min, z_max)])
 
 
@@ -115,7 +119,10 @@ class Slider(Mechanism):
         x_offset = np.random.uniform(-width/2.0, width/2.0)
         z_offset = np.random.uniform(-height/2.0, height/2.0)
         range = np.random.uniform(0.1, 0.5)
-        slider = Slider(x_offset, z_offset, range)
+        angle = np.random.uniform(0, np.pi)
+        axis = (np.cos(angle), np.sin(angle))
+
+        slider = Slider(x_offset, z_offset, range, axis)
         return slider
 
 
@@ -219,7 +226,7 @@ class BusyBox(object):
             return False
 
     @staticmethod
-    def generate_random_busybox(min_mech=2, max_mech=4, mech_types=[Slider], n_tries=3):
+    def generate_random_busybox(min_mech=2, max_mech=4, mech_types=[Slider], n_tries=10):
         """
         :param min_mech: int, The minimum number of mechanisms to be included on the busybox.
         :param max_mech: int, The maximum number of classes to be included on the busybox.
