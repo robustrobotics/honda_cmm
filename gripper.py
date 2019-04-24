@@ -1,6 +1,6 @@
 import pybullet as p
 import numpy as np
-from util import transformation
+import util
 
 class Gripper:
     def __init__(self):
@@ -22,7 +22,7 @@ class Gripper:
 
     def set_tip_pose(self, pose_tip_w_des):
         p_base_tip = np.multiply(-1, self.pose_tip_base[0])
-        p_base_world_des = transformation(p_base_tip, pose_tip_w_des[0], pose_tip_w_des[1])
+        p_base_world_des = util.transformation(p_base_tip, pose_tip_w_des[0], pose_tip_w_des[1])
         p.resetBasePositionAndOrientation(self.id, p_base_world_des, pose_tip_w_des[1])
         p.stepSimulation()
 
@@ -31,7 +31,7 @@ class Gripper:
             # apply a force at the center of the gripper finger tips
             p_tip_base = self.pose_tip_base[0]
             p_base_w, orn_base_w = p.getBasePositionAndOrientation(self.id)
-            p_tip_w = transformation(p_tip_base, p_base_w, orn_base_w)
+            p_tip_w = util.transformation(p_tip_base, p_base_w, orn_base_w)
             p.applyExternalForce(self.id, -1, force, p_tip_w, p.WORLD_FRAME)
 
         if finger_state == 'open':
