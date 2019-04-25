@@ -447,8 +447,8 @@ if __name__ == '__main__':
             p.setGravity(0, 0, -10)
             p.setRealTimeSimulation(1)
             p.resetDebugVisualizerCamera(
-                cameraDistance=1.5,
-                cameraYaw=180,
+                cameraDistance=1.,
+                cameraYaw=90,
                 cameraPitch=-45,
                 cameraTargetPosition=(0., 0., 0.))
             plane_id = p.loadURDF("plane.urdf")
@@ -481,7 +481,9 @@ if __name__ == '__main__':
 
             elif args.viz:
                 if args.actuate:
-                    gripper = Gripper()
+                    gripper = Gripper(model)
+                    for mechanism in bb._mechanisms:
+                        gripper.actuate_joint(mechanism)
                 try:
                     while True:
                         pass
