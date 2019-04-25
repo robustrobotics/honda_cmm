@@ -5,6 +5,9 @@ import pybullet as p
 import pybullet_data
 import aabbtree as aabb
 import cv2
+from gripper import Gripper
+
+np.random.seed(0)
 
 class Mechanism(object):
     def __init__(self, p_type):
@@ -423,14 +426,15 @@ class BusyBox(object):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--viz', action='store_true')
+    parser.add_argument('--viz', action='store_true', default=True)
     parser.add_argument('--save', action='store_true')
     parser.add_argument('--images', action='store_true')
-    parser.add_argument('--n', type=int, required=True)
+    parser.add_argument('--n', type=int, default=1)
+    parser.add_argument('--actuate', action='store_true')
     args = parser.parse_args()
 
     for ix in range(args.n):
-        print(ix)
+        print('Busybox Number:',ix)
         bb = BusyBox.generate_random_busybox()
 
         if args.save:
@@ -443,15 +447,15 @@ if __name__ == '__main__':
             p.setGravity(0, 0, -10)
             p.setRealTimeSimulation(1)
             p.resetDebugVisualizerCamera(
-                cameraDistance=0.5,
-                cameraYaw=210,
-                cameraPitch=-52,
+                cameraDistance=1.5,
+                cameraYaw=180,
+                cameraPitch=-45,
                 cameraTargetPosition=(0., 0., 0.))
             plane_id = p.loadURDF("plane.urdf")
 
             with open('.busybox.urdf', 'w') as handle:
                 handle.write(bb.get_urdf())
-            model = p.loadURDF('.busybox.urdf')
+            model = p.loadURDF('.busybox.urdf', [0., -.3, 0.])
             bb.set_mechanism_ids(model)
             maxForce = 10
             mode = p.VELOCITY_CONTROL
@@ -476,6 +480,8 @@ if __name__ == '__main__':
                 cv2.imwrite('images/busybox_{0}.png'.format(ix), img)
 
             elif args.viz:
+                if args.actuate:
+                    gripper = Gripper()
                 try:
                     while True:
                         pass
