@@ -15,7 +15,8 @@ variable names:
 w - world frame
 b - gripper base frame
 t - tip of the gripper frame
-m - mechanism
+h - mechanism handle
+d - door frame
 '''
 class Gripper:
     def __init__(self, bb_id):
@@ -39,10 +40,8 @@ class Gripper:
         self.grasp_handle(mechanism)
         if mechanism.mechanism_type == 'Slider':
             self.actuate_prismatic(mechanism)
-        '''
         elif mechanism.mechanism_type == 'Door':
             self.actuate_revolute(mechanism)
-        '''
 
     def grasp_handle(self, mechanism):
         print('setting intial pose')
@@ -54,10 +53,10 @@ class Gripper:
         for t in range(20):
             self.apply_force(finger_state='open')
 
-        print('moving gripper to mechanism')
-        p_m_w = p.getLinkState(self.bb_id, mechanism.handle_id)[0]
+        print('moving gripper to mechanism handle')
+        p_h_w = p.getLinkState(self.bb_id, mechanism.handle_id)[0]
         for t in range(10):
-            self.set_tip_pose([p_m_w, self.q_t_w_des])
+            self.set_tip_pose([p_h_w, self.q_t_w_des])
 
         print('closing gripper')
         for t in range(200):
@@ -70,7 +69,39 @@ class Gripper:
             unit_vector = util.trans.unit_vector(axis_3d)
             magnitude = 5.
             self.apply_force(np.multiply(magnitude, unit_vector), q_t_w_des=self.q_t_w_des)
-            p.stepSimulation()
+
+    def actuate_revolute(self, door):
+        delta_theta_mag = .001
+        magnitude = 5.
+        print('moving door')
+        for t in range(500):
+            p_h_w, q_h_w = p.getLinkState(self.bb_id, door.handle_id)[:2]
+            p_d_w, q_d_w = p.getLinkState(self.bb_id, door.door_base_id)[:2]
+            p_h_d_w = np.subtract(p_h_w, p_d_w)
+            R = np.linalg.norm(p_h_d_w[:2])
+
+            # see which quadrant in, then calc theta
+            if p_h_d_w[0] > 0 and p_h_d_w[1] > 0:
+                theta = np.arcsin(p_h_d_w[1]/R)
+            elif  p_h_d_w[0] < 0 and p_h_d_w[1] > 0:
+                theta = np.pi - np.arcsin(p_h_d_w[1]/R)
+            elif p_h_d_w[0] < 0 and p_h_d_w[1] < 0:
+                theta = np.arcsin(p_h_d_w[1]/R) + np.pi
+            elif p_h_d_w[0] > 0 and p_h_d_w[1] < 0:
+                theta = 2*np.pi - np.arcsin(p_h_d_w[1]/R)
+
+            # update to desired theta
+            theta_new = theta - delta_theta_mag
+            if door.flipped:
+                theta_new = theta + delta_theta_mag
+
+            # calc new desired pose of handle
+            p_h_d_w_des = [R*np.cos(theta_new), R*np.sin(theta_new), p_h_d_w[2]]
+            p_h_w_des = np.add(p_d_w, p_h_d_w_des)
+            direction = np.subtract(p_h_w_des, p_h_w)
+            unit_vector = util.trans.unit_vector(direction)
+            force = np.multiply(magnitude, unit_vector)
+            self.apply_force(force, q_t_w_des=q_h_w)
 
     def apply_force(self, force=None, q_t_w_des=None, finger_state='close'):
         # apply a force at the center of the gripper finger tips
