@@ -26,6 +26,7 @@ class Gripper:
         self.left_finger_base_joint_id = 0
         self.right_finger_base_joint_id = 3
         self.pose_b_t = [0.0002153, -0.02399915, -0.21146379]
+        self.q_t_w_des = [0.71, 0., 0., 0.71]
         self.finger_force = 5
 
     def set_tip_pose(self, pose_t_w_des):
@@ -36,16 +37,16 @@ class Gripper:
 
     def actuate_joint(self, mechanism):
         self.grasp_handle(mechanism)
-        '''
         if mechanism.mechanism_type == 'Slider':
             self.actuate_prismatic(mechanism)
+        '''
         elif mechanism.mechanism_type == 'Door':
             self.actuate_revolute(mechanism)
         '''
 
     def grasp_handle(self, mechanism):
         print('setting intial pose')
-        pose_t_w_init = [[0., 0., .2], [0.71, 0., 0., 0.71]]
+        pose_t_w_init = [[0., 0., .2], self.q_t_w_des]
         for t in range(10):
             self.set_tip_pose(pose_t_w_init)
 
@@ -55,19 +56,27 @@ class Gripper:
 
         print('moving gripper to mechanism')
         p_m_w = p.getLinkState(self.bb_id, mechanism.handle_id)[0]
-        q_b_w = [0.71, 0., 0., 0.71]
         for t in range(10):
-            self.set_tip_pose([p_m_w, q_b_w])
+            self.set_tip_pose([p_m_w, self.q_t_w_des])
 
         print('closing gripper')
         for t in range(200):
             self.apply_force(finger_state='close')
 
+    def actuate_prismatic(self, slider):
+        print('moving slider')
+        for t in range(500):
+            axis_3d = [slider.axis[0], 0., slider.axis[1]]
+            unit_vector = util.trans.unit_vector(axis_3d)
+            magnitude = 5.
+            self.apply_force(np.multiply(magnitude, unit_vector), q_t_w_des=self.q_t_w_des)
+            p.stepSimulation()
+
     def apply_force(self, force=None, q_t_w_des=None, finger_state='close'):
         # apply a force at the center of the gripper finger tips
         if force is not None:
             p_b_w, q_b_w = p.getBasePositionAndOrientation(self.id)
-            p_t_w = util.transformation(self.pose_t_b, p_b_w, q_b_w)
+            p_t_w = util.transformation(np.multiply(-1, self.pose_b_t), p_b_w, q_b_w)
             p.applyExternalForce(self.id, -1, force, p_t_w, p.WORLD_FRAME)
 
         # move fingers
@@ -95,7 +104,7 @@ class Gripper:
 
             k = .006
             d = .001
-            tau = np.dot(k, e_g_t_err) + np.dot(d, omega_t_w_err)
+            tau = np.dot(k, e_t_w_err) + np.dot(d, omega_t_w_err)
             # there is a bug in pyBullet. the link frame and world frame are inverted
             # this should be executed in the WORLD_FRAME
             p.applyExternalTorque(self.id, -1, tau, p.LINK_FRAME)
