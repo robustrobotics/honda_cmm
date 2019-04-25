@@ -20,14 +20,14 @@ class Recorder(object):
             pickle.dump(self.frames, handle)
 
 
-def vis_frame(pos, orn, length=.2, life=.4):
+def vis_frame(pos, orn, length=.2, lifeTime=.4):
     new_x = transformation([length, 0, 0], pos, orn)
     new_y = transformation([0, length, 0], pos, orn)
     new_z = transformation([0, 0, length], pos, orn)
 
-    p.addUserDebugLine(pos, new_x, [1,0,0], lifeTime=life)
-    p.addUserDebugLine(pos, new_y, [0,1,0], lifeTime=life)
-    p.addUserDebugLine(pos, new_z, [0,0,1], lifeTime=life)
+    p.addUserDebugLine(pos, new_x, [1,0,0], lifeTime=lifeTime)
+    p.addUserDebugLine(pos, new_y, [0,1,0], lifeTime=lifeTime)
+    p.addUserDebugLine(pos, new_z, [0,0,1], lifeTime=lifeTime)
 
 def transformation(pos, translation_vec, quat):
     R = p.getMatrixFromQuaternion(quat)
