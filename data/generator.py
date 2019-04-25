@@ -360,9 +360,10 @@ class BusyBox(object):
                         mech.handle_id = joint_info[0]
             elif 'door' in link_name.decode("utf-8") and 'base' in link_name.decode("utf-8"):
                 for mech in self._mechanisms:
-                    if mech.mechanism_type == 'door':
+                    if mech.mechanism_type == 'Door':
                         if mech.door_base_name == link_name.decode("utf-8"):
                             mech.door_base_id = joint_info[0]
+                            print(mech.door_base_name, mech.door_base_id)
 
     def get_urdf(self):
         """
@@ -447,9 +448,9 @@ if __name__ == '__main__':
             #p.setGravity(0, 0, -10)
             p.setRealTimeSimulation(1)
             p.resetDebugVisualizerCamera(
-                cameraDistance=1.,
-                cameraYaw=90,
-                cameraPitch=-45,
+                cameraDistance=0.8,
+                cameraYaw=180,
+                cameraPitch=-30,
                 cameraTargetPosition=(0., 0., 0.))
             plane_id = p.loadURDF("plane.urdf")
 
