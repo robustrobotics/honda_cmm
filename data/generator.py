@@ -4,9 +4,7 @@ import argparse
 import pybullet as p
 import pybullet_data
 import aabbtree as aabb
-from gripper import Gripper
-
-np.random.seed(0)
+import cv2
 
 class Mechanism(object):
     def __init__(self, p_type):
@@ -405,7 +403,7 @@ class BusyBox(object):
         """
         # Sample busybox dimensions.
         width = np.random.uniform(0.4, 0.8)
-        height = np.random.uniform(0.2, 0.6)
+        height = np.random.uniform(0.2, 0.4)
 
         # Sample number of mechanisms.
         mechs = []
@@ -420,43 +418,68 @@ class BusyBox(object):
                     mechs.append(mech)
                     break
 
-        bb = BusyBox(width, height, mechs)
-        return bb
+        return BusyBox(width, height, mechs)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--viz', action='store_true')
+    parser.add_argument('--save', action='store_true')
+    parser.add_argument('--images', action='store_true')
+    parser.add_argument('--n', type=int, required=True)
     args = parser.parse_args()
 
-    bb = BusyBox.generate_random_busybox()
+    for ix in range(args.n):
+        print(ix)
+        bb = BusyBox.generate_random_busybox()
 
-    if args.viz:
-        client = p.connect(p.GUI)
-        p.setAdditionalSearchPath(pybullet_data.getDataPath())
-        p.setGravity(0, 0, -10)
-        p.setRealTimeSimulation(1)
-        p.resetDebugVisualizerCamera(
-            cameraDistance=0.8,
-            cameraYaw=210,
-            cameraPitch=-52,
-            cameraTargetPosition=(0., 0., 0.))
-        plane_id = p.loadURDF("plane.urdf")
+        if args.save:
+            with open('models/busybox_{0}.urdf'.format(ix), 'w') as handle:
+                handle.write(bb.get_urdf())
 
-        with open('.busybox.urdf', 'w') as handle:
-            handle.write(bb.get_urdf())
-        model = p.loadURDF('.busybox.urdf')
-        bb.set_mechanism_ids(model)
-        maxForce = 10
-        mode = p.VELOCITY_CONTROL
-        for ix in range(0, p.getNumJoints(model)):
-            p.setJointMotorControl2(bodyUniqueId=model,
-                                    jointIndex=ix,
-                                    controlMode=mode,
-                                    force=maxForce)
+        if args.viz or args.images:
+            client = p.connect(p.GUI)
+            p.setAdditionalSearchPath(pybullet_data.getDataPath())
+            p.setGravity(0, 0, -10)
+            p.setRealTimeSimulation(1)
+            p.resetDebugVisualizerCamera(
+                cameraDistance=0.5,
+                cameraYaw=210,
+                cameraPitch=-52,
+                cameraTargetPosition=(0., 0., 0.))
+            plane_id = p.loadURDF("plane.urdf")
 
-        try:
-            while True:
-                pass
-        except KeyboardInterrupt:
-            print('Exiting...')
+            with open('.busybox.urdf', 'w') as handle:
+                handle.write(bb.get_urdf())
+            model = p.loadURDF('.busybox.urdf')
+            bb.set_mechanism_ids(model)
+            maxForce = 10
+            mode = p.VELOCITY_CONTROL
+            for jx in range(0, p.getNumJoints(model)):
+                p.setJointMotorControl2(bodyUniqueId=model,
+                                        jointIndex=jx,
+                                        controlMode=mode,
+                                        force=maxForce)
+
+            if args.images:
+                view_matrix = p.computeViewMatrix(cameraEyePosition=(-0.1, 0.1, 0.1),
+                                                  cameraTargetPosition=(0, 0, 0),
+                                                  cameraUpVector=(0, 0, 1))
+                h, w, rgb, depth, seg = p.getCameraImage(200, 200, renderer=p.ER_TINY_RENDERER)
+                img = np.array(rgb, dtype='uint8').reshape(200, 200, 4)
+                # PyBullet has RGB but opencv user BGR.
+                tmp_red = img[:, :, 0].tolist()
+                img[:, :, 0] = img[:, :, 2]
+                img[:, :, 2] = np.array(tmp_red)
+                img = img[:, :, :3]
+
+                cv2.imwrite('images/busybox_{0}.png'.format(ix), img)
+
+            elif args.viz:
+                try:
+                    while True:
+                        pass
+                except KeyboardInterrupt:
+                    print('Exiting...')
+
+            p.disconnect(client)
