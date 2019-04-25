@@ -4,7 +4,9 @@ import argparse
 import pybullet as p
 import pybullet_data
 import aabbtree as aabb
+from gripper import Gripper
 
+np.random.seed(0)
 
 class Mechanism(object):
     def __init__(self, p_type):
@@ -53,7 +55,8 @@ class Slider(Mechanism):
         name = Slider.n_sliders
         Slider.n_sliders += 1
 
-        handle = urdf.Link('slider_{0}'.format(name),
+        slider_handle_name = 'slider_{0}_handle'.format(name)
+        handle = urdf.Link(slider_handle_name,
                            urdf.Inertial(
                                urdf.Origin(xyz=(0, 0, 0), rpy=(0, 0, 0)),
                                urdf.Mass(value=0.1),
@@ -99,7 +102,7 @@ class Slider(Mechanism):
 
         joint = urdf.Joint('slider_{0}_joint'.format(name),
                            urdf.Parent('back_link'),
-                           urdf.Child('slider_{0}'.format(name)),
+                           urdf.Child('slider_{0}_handle'.format(name)),
                            urdf.Axis(xyz=(axis[0], axis[1], 0)),
                            urdf.Origin(xyz=(x_offset, 0.05, z_offset), rpy=(1.57, 0, 0)),
                            urdf.Limit(lower=-range/2.0, upper=range/2.0),
@@ -119,6 +122,8 @@ class Slider(Mechanism):
         self._links.append(track)
         self._joints.append(track_joint)
 
+        self.handle_name = slider_handle_name
+        self.handle_id = None
         self.origin = (x_offset, z_offset)
         self.range = range
         self.handle_radius = 0.025
@@ -165,7 +170,8 @@ class Door(Mechanism):
         dir = 1.0
         if flipped: dir = -1.0
 
-        door = urdf.Link('door_{0}'.format(name),
+        door_base_name = 'door_{0}_base'.format(name)
+        door = urdf.Link(door_base_name,
                          urdf.Inertial(
                               urdf.Origin(xyz=(0, 0, 0), rpy=(0, 0, 0)),
                               urdf.Mass(value=0.1),
@@ -187,7 +193,8 @@ class Door(Mechanism):
                              )
                          ))
 
-        door_handle = urdf.Link('door_{0}_handle'.format(name),
+        door_handle_name = 'door_{0}_handle'.format(name)
+        door_handle = urdf.Link(door_handle_name,
                          urdf.Inertial(
                               urdf.Origin(xyz=(0, 0, 0), rpy=(0, 0, 0)),
                               urdf.Mass(value=0.1),
@@ -213,7 +220,7 @@ class Door(Mechanism):
         else: limit = urdf.Limit(lower=-1.57, upper=0)
 
         door_joint = urdf.Joint('door_{0}_joint'.format(name),
-                                urdf.Child('door_{0}'.format(name)),
+                                urdf.Child('door_{0}_base'.format(name)),
                                 urdf.Parent('back_link'),
                                 urdf.Axis(xyz=(0, 0, 1)),
                                 urdf.Origin(xyz=(door_offset[0], 0.03, door_offset[1]), rpy=(0, 0, 0)),
@@ -221,7 +228,7 @@ class Door(Mechanism):
                                 type='revolute')
 
         door_handle_joint = urdf.Joint('door_{0}_handle_joint'.format(name),
-                                       urdf.Parent('door_{0}'.format(name)),
+                                       urdf.Parent('door_{0}_base'.format(name)),
                                        urdf.Child('door_{0}_handle'.format(name)),
                                        urdf.Origin(xyz=(dir*(-door_size[0]+0.02), 0.025, handle_offset), rpy=(1.57, 0, 0)),
                                        type='fixed')
@@ -231,6 +238,10 @@ class Door(Mechanism):
         self._links.append(door_handle)
         self._joints.append(door_handle_joint)
 
+        self.handle_name = door_handle_name
+        self.handle_id = None
+        self.door_base_name = door_base_name
+        self.door_base_id = None
         self.origin = door_offset
         self.door_size = door_size
         self.flipped = flipped
@@ -337,6 +348,21 @@ class BusyBox(object):
         self._links.append(back_link)
         self._joints.append(fixed_joint)
 
+    def set_mechanism_ids(self, bb_id):
+        num_joints = p.getNumJoints(bb_id)
+        for joint_id in range(num_joints):
+            joint_info = p.getJointInfo(bb_id, joint_id)
+            link_name = joint_info[12]
+            if 'handle' in link_name.decode("utf-8"):
+                for mech in self._mechanisms:
+                    if mech.handle_name == link_name.decode("utf-8"):
+                        mech.handle_id = joint_info[0]
+            elif 'door' in link_name.decode("utf-8") and 'base' in link_name.decode("utf-8"):
+                for mech in self._mechanisms:
+                    if mech.mechanism_type == 'door':
+                        if mech.door_base_name == link_name.decode("utf-8"):
+                            mech.door_base_id = joint_info[0]
+
     def get_urdf(self):
         """
         :return: A str representation of the busybox's urdf.
@@ -420,6 +446,7 @@ if __name__ == '__main__':
         with open('.busybox.urdf', 'w') as handle:
             handle.write(bb.get_urdf())
         model = p.loadURDF('.busybox.urdf')
+        bb.set_mechanism_ids(model)
         maxForce = 10
         mode = p.VELOCITY_CONTROL
         for ix in range(0, p.getNumJoints(model)):
