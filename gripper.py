@@ -19,15 +19,18 @@ h - mechanism handle
 d - door frame
 '''
 class Gripper:
-    def __init__(self, bb_id):
-        self.id = p.loadSDF("../models/gripper/gripper.sdf")[0]
+    def __init__(self, bb_id, control_method):
+        if control_method == 'PD':
+            self.id = p.loadSDF("../models/gripper/gripper.sdf")[0]
+        elif control_method == 'traj':
+            self.id = p.loadSDF("../models/gripper/gripper_high_fric.sdf")[0]
         self.bb_id = bb_id
         self.left_finger_tip_id = 2
         self.right_finger_tip_id = 5
         self.left_finger_base_joint_id = 0
         self.right_finger_base_joint_id = 3
         self.p_b_t = [0.0002153, -0.02399915, -0.21146379]
-        self.q_t_w_des = [0.71, 0., 0., 0.71]
+        self.q_t_w_des =  [0.50019904,  0.50019904, -0.49980088, 0.49980088]
         self.finger_force = 5
 
     def set_tip_pose(self, p_t_w_des):
@@ -36,25 +39,21 @@ class Gripper:
         p.stepSimulation()
 
     def grasp_handle(self, mechanism):
-        print('setting intial pose')
         p_t_w_init = [0., 0., .2]
         for t in range(10):
             self.set_tip_pose(p_t_w_init)
 
-        print('opening gripper')
         for t in range(20):
-            self.apply_command(util.Command(finger_state='open'))
+            self.apply_command(util.Command(finger_state='open'), debug=False)
 
-        print('moving gripper to mechanism handle')
         p_h_w = p.getLinkState(self.bb_id, mechanism.handle_id)[0]
         for t in range(10):
             self.set_tip_pose(p_h_w)
 
-        print('closing gripper')
         for t in range(200):
-            self.apply_command(util.Command(finger_state='close'))
+            self.apply_command(util.Command(finger_state='close'), debug=False)
 
-    def apply_command(self, command):
+    def apply_command(self, command, debug=False):
         # always control the fingers
         if command.finger_state == 'open':
             finger_angle = 0.2
@@ -71,7 +70,11 @@ class Gripper:
         if command.force_dir is not None:
             p_b_w, q_b_w = p.getBasePositionAndOrientation(self.id)
             p_t_w = util.transformation(np.multiply(-1, self.p_b_t), p_b_w, q_b_w)
-            p.applyExternalForce(self.id, -1, np.multiply(magnitude, command.force_dir), p_t_w, p.WORLD_FRAME)
+            force = np.multiply(magnitude, command.force_dir)
+            p.applyExternalForce(self.id, -1, force, p_t_w, p.WORLD_FRAME)
+
+            if debug:
+                p.addUserDebugLine(p_t_w, np.add(p_t_w, force), lifeTime=.5)
 
         # control orientation with torque control
         if command.tip_orientation is not None:
@@ -93,7 +96,12 @@ class Gripper:
             p.applyExternalTorque(self.id, -1, tau, p.LINK_FRAME)
 
         if command.traj is not None:
-            for p_m_w_des in command.traj:
+            for (i, p_m_w_des) in enumerate(command.traj):
+                if debug:
+                    if i < len(command.traj)-1:
+                        dir = np.subtract(command.traj[i+1], p_m_w_des)
+                        end_point = np.multiply(1000., dir)
+                        p.addUserDebugLine(p_m_w_des, np.add(p_m_w_des, end_point), lifeTime=.5)
                 self.set_tip_pose(p_m_w_des)
                 p.stepSimulation()
 
