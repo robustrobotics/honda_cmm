@@ -20,7 +20,7 @@ d - door frame
 '''
 class Gripper:
     def __init__(self, bb_id, control_method):
-        if control_method == 'PD':
+        if control_method == 'force':
             self.id = p.loadSDF("../models/gripper/gripper.sdf")[0]
         elif control_method == 'traj':
             self.id = p.loadSDF("../models/gripper/gripper_high_fric.sdf")[0]
@@ -32,6 +32,11 @@ class Gripper:
         self.p_b_t = [0.0002153, -0.02399915, -0.21146379]
         self.q_t_w_des =  [0.50019904,  0.50019904, -0.49980088, 0.49980088]
         self.finger_force = 5
+
+        mass = 0
+        for link in range(p.getNumJoints(self.id)):
+            mass += p.getDynamicsInfo(self.id, link)[0]
+        self.mass = mass
 
     def set_tip_pose(self, p_t_w_des):
         p_b_w_des = util.transformation(self.p_b_t, p_t_w_des, self.q_t_w_des)
@@ -71,8 +76,10 @@ class Gripper:
             p_b_w, q_b_w = p.getBasePositionAndOrientation(self.id)
             p_t_w = util.transformation(np.multiply(-1, self.p_b_t), p_b_w, q_b_w)
             force = np.multiply(magnitude, command.force_dir)
-            force = np.add(force, [0., 10., 0.])
-            p.applyExternalForce(self.id, -1, force, p_t_w, p.WORLD_FRAME)
+            # gravity compensation
+            g_force = self.mass*10.
+            force_w_grav = np.add(force, [0., 0., g_force])
+            p.applyExternalForce(self.id, -1, force_w_grav, p_t_w, p.WORLD_FRAME)
 
             if debug:
                 p.addUserDebugLine(p_t_w, np.add(p_t_w, force), lifeTime=.5)

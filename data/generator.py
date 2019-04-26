@@ -402,7 +402,7 @@ class BusyBox(object):
     def actuate_joints(self, bb_id, gripper, control_method, debug):
         for mechanism in self._mechanisms:
             gripper.grasp_handle(mechanism)
-            if control_method == 'PD':
+            if control_method == 'force':
                 for t in range(500):
                     command = mechanism.joint_model.get_force_direction(bb_id, mechanism)
                     gripper.apply_command(command, debug)
