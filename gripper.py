@@ -71,6 +71,7 @@ class Gripper:
             p_b_w, q_b_w = p.getBasePositionAndOrientation(self.id)
             p_t_w = util.transformation(np.multiply(-1, self.p_b_t), p_b_w, q_b_w)
             force = np.multiply(magnitude, command.force_dir)
+            force = np.add(force, [0., 10., 0.])
             p.applyExternalForce(self.id, -1, force, p_t_w, p.WORLD_FRAME)
 
             if debug:
