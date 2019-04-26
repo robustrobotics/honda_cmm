@@ -5,7 +5,7 @@ import pybullet as p
 class JointModel(object):
 
     def get_pose_trajectory(self, bb_id, mechanism, delta_q):
-        n_points = 100
+        n_points = 1000
         progress = np.linspace(0,1,n_points)
         p_m_w, q_m_w = p.getLinkState(bb_id, mechanism.handle_id)[:2]
         p_m_w, q_m_w = np.array(p_m_w), np.array(q_m_w)
@@ -37,11 +37,6 @@ class Prismatic(JointModel):
         # derived
         self.origin_M = util.pose_to_matrix(self.rigid_position, self.rigid_orientation)
 
-    def get_force_direction(self, bb_id, mechanism):
-        unit_vector = util.trans.unit_vector(self.prismatic_dir)
-        command = util.Command(force_dir=unit_vector)
-        return command
-
     def forward_kinematics(self, q):
         q_dir = np.multiply(q, self.prismatic_dir)
         q_dir = np.concatenate([q_dir, [1.]])
@@ -56,21 +51,45 @@ class Prismatic(JointModel):
         trans = o_inv_z_M[:3,3]
         return np.dot(self.prismatic_dir, trans)
 
-class Revolute(object):
+    def get_force_direction(self, bb_id, mechanism):
+        unit_vector = util.trans.unit_vector(self.prismatic_dir)
+        command = util.Command(force_dir=unit_vector)
+        return command
+
+class Revolute(JointModel):
 
     def __init__(self, rot_center, rot_axis, rot_radius, rot_orientation):
         """
 
-        :param rot_center:
-        :param rot_axis:
-        :param rot_radius:
-        :param rot_orientation:
+        :param rot_center: position for the center of rotation
+        :param rot_axis: orientation for the center of rotation (fixed and assumed that
+                            object rotates about the z axis)
+        :param rot_radius: scalar representing the radius
+        :param rot_orientation: orientation of the handle relative to the rotated frame
         """
 
-        self.rot_center = None
-        self.rot_axis = None
-        self.rot_radius = None
-        self.rot_orientation = None
+        self.rot_center = np.array(rot_center)
+        self.rot_axis = np.array(rot_axis)
+        self.rot_radius = np.array(rot_radius)
+        self.rot_orientation = np.array(rot_orientation)
+
+        # derived
+        self.center = util.pose_to_matrix(self.rot_center, self.rot_axis)
+        self.radius = util.pose_to_matrix(self.rot_radius, self.rot_orientation)
+
+    def forward_kinematics(self, q):
+        rot_z = util.trans.rotation_matrix(-q,[0,0,1])
+        M = util.trans.concatenate_matrices(self.center,rot_z,self.radius)
+        p_z = M[:3,3]
+        q_z = util.quaternion_from_matrix(M)
+        return p_z, q_z
+
+    def inverse_kinematics(self, p_z, q_z):
+        z = util.pose_to_matrix(p_z, q_z)
+        z_inv_c = np.dot(np.linalg.inv(z),self.center)
+        inv_r = np.dot(np.linalg.inv(self.radius),z_inv_c)
+        angle, direction, point = util.trans.rotation_from_matrix(inv_r)
+        return angle
 
     def get_force_direction(self, bb_id, mechanism):
         delta_theta_mag = .001
@@ -101,9 +120,3 @@ class Revolute(object):
         unit_vector = util.trans.unit_vector(direction)
         command = util.Command(force_dir=unit_vector)
         return command
-
-    def forward_kinematics(self):
-        pass
-
-    def inverse_kinematics(self):
-        pass
