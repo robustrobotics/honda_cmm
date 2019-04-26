@@ -147,7 +147,7 @@ class Slider(Mechanism):
         p_handle, q_handle = p.getLinkState(bb_id, self.handle_id)[:2]
         rigid_position = [self.origin[0], p_handle[1], self.origin[1]]
         rigid_orientation = q_handle
-        prismatic_dir = self.axis
+        prismatic_dir = [self.axis[0], 0., self.axis[1]]
         self.joint_model = Prismatic(rigid_position, rigid_orientation, prismatic_dir)
 
     @staticmethod

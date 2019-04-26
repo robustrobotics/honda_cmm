@@ -18,6 +18,14 @@ class Prismatic(object):
         # derived
         self.origin_M = util.pose_to_matrix(self.rigid_position, self.rigid_orientation)
 
+    def get_command(self, control):
+        if control == 'PD':
+            unit_vector = util.trans.unit_vector(self.prismatic_dir)
+            magnitude = 5.
+            force = np.multiply(magnitude, unit_vector)
+            command = util.Command(force=force)
+            return command
+
     def forward_kinematics(self, q):
         q_dir = np.multiply(q, self.prismatic_dir)
         q_dir = np.concatenate([q_dir, [1.]])

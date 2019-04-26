@@ -36,13 +36,20 @@ class Gripper:
         p.resetBasePositionAndOrientation(self.id, p_b_w_des, q_b_w_des)
         p.stepSimulation()
 
-    def actuate_joint(self, mechanism):
+    def actuate_joint(self, mechanism, control="PD"):
         self.grasp_handle(mechanism)
+        if mechanism.mechanism_type == 'Slider':
+            for t in range(500):
+                command = mechanism.joint_model.get_command(control)
+                self.apply_command(command)
+        elif mechanism.mechanism_type == 'Door':
+            self.actuate_revolute(mechanism)
+        '''
         if mechanism.mechanism_type == 'Slider':
             self.actuate_prismatic(mechanism)
         elif mechanism.mechanism_type == 'Door':
             self.actuate_revolute(mechanism)
-
+        '''
     def grasp_handle(self, mechanism):
         print('setting intial pose')
         pose_t_w_init = [[0., 0., .2], self.q_t_w_des]
@@ -51,7 +58,7 @@ class Gripper:
 
         print('opening gripper')
         for t in range(20):
-            self.apply_force(finger_state='open')
+            self.apply_command(util.Command(finger_state='open'))
 
         print('moving gripper to mechanism handle')
         p_h_w = p.getLinkState(self.bb_id, mechanism.handle_id)[0]
@@ -60,15 +67,7 @@ class Gripper:
 
         print('closing gripper')
         for t in range(200):
-            self.apply_force(finger_state='close')
-
-    def actuate_prismatic(self, slider):
-        print('moving slider')
-        for t in range(500):
-            axis_3d = [slider.axis[0], 0., slider.axis[1]]
-            unit_vector = util.trans.unit_vector(axis_3d)
-            magnitude = 5.
-            self.apply_force(np.multiply(magnitude, unit_vector), q_t_w_des=self.q_t_w_des)
+            self.apply_command(util.Command(finger_state='close'))
 
     def actuate_revolute(self, door):
         delta_theta_mag = .001
@@ -101,19 +100,13 @@ class Gripper:
             direction = np.subtract(p_h_w_des, p_h_w)
             unit_vector = util.trans.unit_vector(direction)
             force = np.multiply(magnitude, unit_vector)
-            self.apply_force(force, q_t_w_des=q_h_w)
+            self.apply_command(util.Command(force=force, tip_orientation=q_h_w))
 
-    def apply_force(self, force=None, q_t_w_des=None, finger_state='close'):
-        # apply a force at the center of the gripper finger tips
-        if force is not None:
-            p_b_w, q_b_w = p.getBasePositionAndOrientation(self.id)
-            p_t_w = util.transformation(np.multiply(-1, self.pose_b_t), p_b_w, q_b_w)
-            p.applyExternalForce(self.id, -1, force, p_t_w, p.WORLD_FRAME)
-
-        # move fingers
-        if finger_state == 'open':
+    def apply_command(self, command):
+        # always control the fingers
+        if command.finger_state == 'open':
             finger_angle = 0.2
-        elif finger_state == 'close':
+        elif command.finger_state == 'close':
             finger_angle = 0.0
 
         p.setJointMotorControl2(self.id,self.left_finger_base_joint_id,p.POSITION_CONTROL,targetPosition=-finger_angle,force=self.finger_force)
@@ -121,14 +114,20 @@ class Gripper:
         p.setJointMotorControl2(self.id,2,p.POSITION_CONTROL,targetPosition=0,force=self.finger_force)
         p.setJointMotorControl2(self.id,5,p.POSITION_CONTROL,targetPosition=0,force=self.finger_force)
 
-        # control orientation
-        if q_t_w_des is not None:
+        # apply a force at the center of the gripper finger tips
+        if command.force is not None:
+            p_b_w, q_b_w = p.getBasePositionAndOrientation(self.id)
+            p_t_w = util.transformation(np.multiply(-1, self.pose_b_t), p_b_w, q_b_w)
+            p.applyExternalForce(self.id, -1, command.force, p_t_w, p.WORLD_FRAME)
+
+        # control orientation with torque control
+        if command.tip_orientation is not None:
             q_b_w = p.getBasePositionAndOrientation(self.id)[1]
             omega_b_w = p.getBaseVelocity(self.id)[1]
             q_t_w = q_b_w
             omega_t_w = omega_b_w
 
-            q_t_w_err, _ = util.diff_quat(q_t_w_des, q_t_w)
+            q_t_w_err, _ = util.diff_quat(command.tip_orientation, q_t_w)
             e_t_w_err = util.euler_from_quaternion(q_t_w_err)
             omega_t_w_des = np.zeros(3)
             omega_t_w_err = omega_t_w_des - omega_t_w

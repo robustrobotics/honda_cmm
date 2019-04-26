@@ -4,6 +4,15 @@ import pickle
 import transformations as trans
 import math
 
+class Command:
+    def __init__(self, force=None, torque=None, tip_position=None, tip_orientation=None, \
+                    finger_state='close'):
+        self.force = force
+        self.torque = torque
+        self.tip_position = tip_position
+        self.tip_orientation = tip_orientation
+        self.finger_state = finger_state
+
 class Recorder(object):
 
     def __init__(self, height, width):
