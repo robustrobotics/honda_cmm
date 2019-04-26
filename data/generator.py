@@ -144,8 +144,9 @@ class Slider(Mechanism):
         return aabb.AABB([(x_min, x_max), (z_min, z_max)])
 
     def set_joint_model(self, bb_id):
-        rigid_position = self.origin
-        rigid_orientation = p.getLinkState(bb_id, self.handle_id)[1]
+        p_handle, q_handle = p.getLinkState(bb_id, self.handle_id)[:2]
+        rigid_position = [self.origin[0], p_handle[1], self.origin[1]]
+        rigid_orientation = q_handle
         prismatic_dir = self.axis
         self.joint_model = Prismatic(rigid_position, rigid_orientation, prismatic_dir)
 

@@ -2,6 +2,7 @@ import pybullet as p
 import numpy as np
 import pickle
 import transformations as trans
+import math
 
 class Recorder(object):
 
@@ -66,3 +67,27 @@ def euler_from_quaternion(q):
     trans_quat = to_transquat(q)
     eul = trans.euler_from_quaternion(trans_quat)
     return eul
+
+### mostly taken from transformations.py ###
+def pose_to_matrix(point, q):
+    EPS = np.finfo(float).eps * 4.0
+    trans_q = to_transquat(q)
+    n = np.dot(q, q)
+    if n < EPS:
+        M = np.identity(4)
+        M[:3, 3] = point
+        return M
+    q *= math.sqrt(2.0 / n)
+    q = np.outer(q, q)
+    M = np.array([
+        [1.0-q[2, 2]-q[3, 3],     q[1, 2]-q[3, 0],     q[1, 3]+q[2, 0], 0.0],
+        [    q[1, 2]+q[3, 0], 1.0-q[1, 1]-q[3, 3],     q[2, 3]-q[1, 0], 0.0],
+        [    q[1, 3]-q[2, 0],     q[2, 3]+q[1, 0], 1.0-q[1, 1]-q[2, 2], 0.0],
+        [                0.0,                 0.0,                 0.0, 1.0]])
+    M[:3, 3] = point
+    return M
+
+
+def quaternion_from_matrix(matrix, isprecise=False):
+    trans_q = trans.quaternion_from_matrix(matrix)
+    return to_pyquat(trans_q)
