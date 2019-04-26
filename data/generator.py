@@ -6,6 +6,7 @@ import pybullet_data
 import aabbtree as aabb
 import cv2
 from gripper import Gripper
+from joints import Prismatic, Revolute
 
 np.random.seed(0)
 
@@ -17,6 +18,7 @@ class Mechanism(object):
         :param p_type: The type of mechanism of the parent class.
         """
         self.mechanism_type = p_type
+        self.joint_model = None
         self._links = []
         self._joints = []
 
@@ -25,6 +27,9 @@ class Mechanism(object):
 
     def get_joints(self):
         return self._joints
+
+    def set_joint_model(self, bb_id):
+        self.joint_model.set_model(self, bb_id)
 
     def get_bounding_box(self):
         """ This method should return a bounding box of the 2-dimensional
@@ -129,6 +134,7 @@ class Slider(Mechanism):
         self.range = range
         self.handle_radius = 0.025
         self.axis = axis
+        self.joint_model = Prismatic()
 
     def get_bounding_box(self):
         a = np.arctan2(self.axis[1], self.axis[0])
@@ -246,6 +252,7 @@ class Door(Mechanism):
         self.origin = door_offset
         self.door_size = door_size
         self.flipped = flipped
+        self.joint_model = Revolute()
 
     def get_bounding_box(self):
         """ This method should return a bounding box of the 2-dimensional
@@ -363,7 +370,10 @@ class BusyBox(object):
                     if mech.mechanism_type == 'Door':
                         if mech.door_base_name == link_name.decode("utf-8"):
                             mech.door_base_id = joint_info[0]
-                            print(mech.door_base_name, mech.door_base_id)
+
+    def set_joint_models(self, bb_id):
+        for mech in self._mechanisms:
+            mech.set_joint_model(bb_id)
 
     def get_urdf(self):
         """
@@ -458,6 +468,7 @@ if __name__ == '__main__':
                 handle.write(bb.get_urdf())
             model = p.loadURDF('.busybox.urdf', [0., -.3, 0.])
             bb.set_mechanism_ids(model)
+            bb.set_joint_models(model)
             maxForce = 10
             mode = p.VELOCITY_CONTROL
             for jx in range(0, p.getNumJoints(model)):
