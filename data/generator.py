@@ -7,6 +7,7 @@ import aabbtree as aabb
 import cv2
 from gripper import Gripper
 from joints import Prismatic, Revolute
+import util
 
 np.random.seed(0)
 
@@ -275,9 +276,12 @@ class Door(Mechanism):
         return aabb.AABB([(x_min, x_max), (z_min, z_max)])
 
     def set_joint_model(self, bb_id):
-        rot_center, rot_axis = p.getLinkState(bb_id, self.door_base_id)[:2]
-        p_handle_world, rot_orientation = p.getLinkState(bb_id, self.handle_id)[:2]
-        rot_radius = np.linalg.norm(np.subtract(p_handle_world, rot_center)[:2])
+        p_b_w = p.getLinkState(bb_id, self.door_base_id)[0]
+        p_h_w = p.getLinkState(bb_id, self.handle_id)[0]
+        rot_center = [p_b_w[0], p_b_w[1], p_h_w[2]]
+        rot_axis = [0., 0., 0., 1.]
+        rot_radius = np.subtract(p_h_w, rot_center)
+        rot_orientation = [0., 0., 0., 1.]
         self.joint_model = Revolute(rot_center, rot_axis, rot_radius, rot_orientation)
 
     @staticmethod
@@ -395,17 +399,22 @@ class BusyBox(object):
         robot = urdf.Robot('busybox', *elements)
         return str(robot)
 
-    def actuate_joints(self, bb_id, gripper, control_method):
+    def actuate_joints(self, bb_id, gripper, control_method, debug):
         for mechanism in self._mechanisms:
             gripper.grasp_handle(mechanism)
-            if control_method == 'PD' or mechanism.mechanism_type=='Door':
+            if control_method == 'PD':
                 for t in range(500):
                     command = mechanism.joint_model.get_force_direction(bb_id, mechanism)
-                    gripper.apply_command(command)
+                    gripper.apply_command(command, debug)
             elif control_method == 'traj':
-                delta_q = .1
+                if mechanism.mechanism_type == 'Slider':
+                    delta_q = .1
+                if mechanism.mechanism_type == 'Door':
+                    delta_q = np.pi/4
+                    if mechanism.flipped:
+                        delta_q = -np.pi/4
                 command = mechanism.joint_model.get_pose_trajectory(bb_id, mechanism, delta_q)
-                gripper.apply_command(command)
+                gripper.apply_command(command, debug)
 
     @staticmethod
     def _check_collision(width, height, mechs, mech):
@@ -456,14 +465,14 @@ class BusyBox(object):
 
 
 if __name__ == '__main__':
-    import pdb; pdb.set_trace()
     parser = argparse.ArgumentParser()
-    parser.add_argument('--viz', action='store_true', default=True)
+    parser.add_argument('--viz', action='store_true')
     parser.add_argument('--save', action='store_true')
     parser.add_argument('--images', action='store_true')
     parser.add_argument('--n', type=int, default=1)
     parser.add_argument('--actuate', action='store_true')
-    parser.add_argument('--control-method', default='PD')
+    parser.add_argument('--control-method', type=str)
+    parser.add_argument('--debug', action='store_true')
     args = parser.parse_args()
 
     for ix in range(args.n):
@@ -474,53 +483,57 @@ if __name__ == '__main__':
             with open('models/busybox_{0}.urdf'.format(ix), 'w') as handle:
                 handle.write(bb.get_urdf())
 
+        if not args.viz:
+            client = p.connect(p.DIRECT)
+
         if args.viz or args.images:
             client = p.connect(p.GUI)
-            p.setAdditionalSearchPath(pybullet_data.getDataPath())
-            #p.setGravity(0, 0, -10)
-            p.setRealTimeSimulation(1)
-            p.resetDebugVisualizerCamera(
-                cameraDistance=0.8,
-                cameraYaw=180,
-                cameraPitch=-30,
-                cameraTargetPosition=(0., 0., 0.))
-            plane_id = p.loadURDF("plane.urdf")
 
-            with open('.busybox.urdf', 'w') as handle:
-                handle.write(bb.get_urdf())
-            model = p.loadURDF('.busybox.urdf', [0., -.3, 0.])
-            bb.set_mechanism_ids(model)
-            bb.set_joint_models(model)
-            maxForce = 10
-            mode = p.VELOCITY_CONTROL
-            for jx in range(0, p.getNumJoints(model)):
-                p.setJointMotorControl2(bodyUniqueId=model,
-                                        jointIndex=jx,
-                                        controlMode=mode,
-                                        force=maxForce)
+        p.setAdditionalSearchPath(pybullet_data.getDataPath())
+        #p.setGravity(0, 0, -10)
+        p.setRealTimeSimulation(1)
+        p.resetDebugVisualizerCamera(
+            cameraDistance=0.8,
+            cameraYaw=180,
+            cameraPitch=-30,
+            cameraTargetPosition=(0., 0., 0.))
+        plane_id = p.loadURDF("plane.urdf")
 
-            if args.images:
-                view_matrix = p.computeViewMatrix(cameraEyePosition=(-0.1, 0.1, 0.1),
-                                                  cameraTargetPosition=(0, 0, 0),
-                                                  cameraUpVector=(0, 0, 1))
-                h, w, rgb, depth, seg = p.getCameraImage(200, 200, renderer=p.ER_TINY_RENDERER)
-                img = np.array(rgb, dtype='uint8').reshape(200, 200, 4)
-                # PyBullet has RGB but opencv user BGR.
-                tmp_red = img[:, :, 0].tolist()
-                img[:, :, 0] = img[:, :, 2]
-                img[:, :, 2] = np.array(tmp_red)
-                img = img[:, :, :3]
+        with open('.busybox.urdf', 'w') as handle:
+            handle.write(bb.get_urdf())
+        model = p.loadURDF('.busybox.urdf', [0., -.3, 0.])
+        bb.set_mechanism_ids(model)
+        bb.set_joint_models(model)
+        maxForce = 10
+        mode = p.VELOCITY_CONTROL
+        for jx in range(0, p.getNumJoints(model)):
+            p.setJointMotorControl2(bodyUniqueId=model,
+                                    jointIndex=jx,
+                                    controlMode=mode,
+                                    force=maxForce)
 
-                cv2.imwrite('images/busybox_{0}.png'.format(ix), img)
+        if args.images:
+            view_matrix = p.computeViewMatrix(cameraEyePosition=(-0.1, 0.1, 0.1),
+                                              cameraTargetPosition=(0, 0, 0),
+                                              cameraUpVector=(0, 0, 1))
+            h, w, rgb, depth, seg = p.getCameraImage(200, 200, renderer=p.ER_TINY_RENDERER)
+            img = np.array(rgb, dtype='uint8').reshape(200, 200, 4)
+            # PyBullet has RGB but opencv user BGR.
+            tmp_red = img[:, :, 0].tolist()
+            img[:, :, 0] = img[:, :, 2]
+            img[:, :, 2] = np.array(tmp_red)
+            img = img[:, :, :3]
 
-            elif args.viz:
-                if args.actuate:
-                    gripper = Gripper(model)
-                    bb.actuate_joints(model, gripper, args.control_method)
-                try:
-                    while True:
-                        pass
-                except KeyboardInterrupt:
-                    print('Exiting...')
+            cv2.imwrite('images/busybox_{0}.png'.format(ix), img)
 
-            p.disconnect(client)
+        if args.actuate:
+            gripper = Gripper(model, args.control_method)
+            bb.actuate_joints(model, gripper, args.control_method, args.debug)
+            print('done actuating')
+        try:
+            while True:
+                pass
+        except KeyboardInterrupt:
+            print('Exiting...')
+
+        p.disconnect(client)
