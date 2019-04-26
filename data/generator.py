@@ -18,7 +18,6 @@ class Mechanism(object):
         :param p_type: The type of mechanism of the parent class.
         """
         self.mechanism_type = p_type
-        self.joint_model = None
         self._links = []
         self._joints = []
 
@@ -27,9 +26,6 @@ class Mechanism(object):
 
     def get_joints(self):
         return self._joints
-
-    def set_joint_model(self, bb_id):
-        self.joint_model.set_model(self, bb_id)
 
     def get_bounding_box(self):
         """ This method should return a bounding box of the 2-dimensional
@@ -134,7 +130,7 @@ class Slider(Mechanism):
         self.range = range
         self.handle_radius = 0.025
         self.axis = axis
-        self.joint_model = Prismatic()
+        self.joint_model = None
 
     def get_bounding_box(self):
         a = np.arctan2(self.axis[1], self.axis[0])
@@ -146,6 +142,12 @@ class Slider(Mechanism):
         x_max = self.origin[0] + np.abs(np.cos(a))*self.range/2.0 + self.handle_radius
 
         return aabb.AABB([(x_min, x_max), (z_min, z_max)])
+
+    def set_joint_model(self, bb_id):
+        rigid_position = self.origin
+        rigid_orientation = p.getLinkState(bb_id, self.handle_id)[1]
+        prismatic_dir = self.axis
+        self.joint_model = Prismatic(rigid_position, rigid_orientation, prismatic_dir)
 
     @staticmethod
     def random(width, height):
@@ -252,7 +254,7 @@ class Door(Mechanism):
         self.origin = door_offset
         self.door_size = door_size
         self.flipped = flipped
-        self.joint_model = Revolute()
+        self.joint_model = None
 
     def get_bounding_box(self):
         """ This method should return a bounding box of the 2-dimensional
@@ -270,6 +272,12 @@ class Door(Mechanism):
             x_min = self.origin[0] - self.door_size[0]
             x_max = self.origin[0]
         return aabb.AABB([(x_min, x_max), (z_min, z_max)])
+
+    def set_joint_model(self, bb_id):
+        rot_center, rot_axis = p.getLinkState(bb_id, self.door_base_id)[:2]
+        p_handle_world, rot_orientation = p.getLinkState(bb_id, self.handle_id)[:2]
+        rot_radius = np.linalg.norm(np.subtract(p_handle_world, rot_center)[:2])
+        self.joint_model = Revolute(rot_center, rot_axis, rot_radius, rot_orientation)
 
     @staticmethod
     def random(width, height):

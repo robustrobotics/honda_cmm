@@ -1,6 +1,6 @@
 class Prismatic(object):
 
-    def __init__(self):
+    def __init__(self, rigid_position, rigid_orientation, prismatic_dir):
         """
 
         :param rigid_position: A position along the prismatic joint.
@@ -8,9 +8,9 @@ class Prismatic(object):
         :param direction: A unit vector representing the direction of motion (in the world frame?).
         """
 
-        self.rigid_position = None
-        self.rigid_orientation = None
-        self.prismatic_dir = None
+        self.rigid_position = rigid_position
+        self.rigid_orientation = rigid_orientation
+        self.prismatic_dir = prismatic_dir
 
     def set_model(self, mechanism, bb_id):
         pass
@@ -23,7 +23,7 @@ class Prismatic(object):
 
 class Revolute(object):
 
-    def __init__(self):
+    def __init__(self, rot_center, rot_axis, rot_radius, rot_orientation):
         """
 
         :param rot_center:
