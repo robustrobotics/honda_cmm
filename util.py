@@ -78,7 +78,7 @@ def euler_from_quaternion(q):
 ### mostly taken from transformations.py ###
 def pose_to_matrix(point, q):
     EPS = np.finfo(float).eps * 4.0
-    trans_q = to_transquat(q)
+    q = to_transquat(q)
     n = np.dot(q, q)
     if n < EPS:
         M = np.identity(4)
