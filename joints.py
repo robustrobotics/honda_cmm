@@ -1,5 +1,6 @@
 import numpy as np
 import util
+import pybullet as p
 
 class Prismatic(object):
 
@@ -18,13 +19,13 @@ class Prismatic(object):
         # derived
         self.origin_M = util.pose_to_matrix(self.rigid_position, self.rigid_orientation)
 
-    def get_command(self, control):
-        if control == 'PD':
-            unit_vector = util.trans.unit_vector(self.prismatic_dir)
-            magnitude = 5.
-            force = np.multiply(magnitude, unit_vector)
-            command = util.Command(force=force)
-            return command
+    def get_force_direction(self, bb_id, mechanism):
+        unit_vector = util.trans.unit_vector(self.prismatic_dir)
+        command = util.Command(force_dir=unit_vector)
+        return command
+
+    def get_pose_trajectory(self, bb_id, mechanism):
+        pass
 
     def forward_kinematics(self, q):
         q_dir = np.multiply(q, self.prismatic_dir)
@@ -55,6 +56,39 @@ class Revolute(object):
         self.rot_axis = None
         self.rot_radius = None
         self.rot_orientation = None
+
+    def get_force_direction(self, bb_id, mechanism):
+        delta_theta_mag = .001
+        p_h_w, q_h_w = p.getLinkState(bb_id, mechanism.handle_id)[:2]
+        p_d_w, q_d_w = p.getLinkState(bb_id, mechanism.door_base_id)[:2]
+        p_h_d_w = np.subtract(p_h_w, p_d_w)
+        R = np.linalg.norm(p_h_d_w[:2])
+
+        # see which quadrant in, then calc theta
+        if p_h_d_w[0] > 0 and p_h_d_w[1] > 0:
+            theta = np.arcsin(p_h_d_w[1]/R)
+        elif  p_h_d_w[0] < 0 and p_h_d_w[1] > 0:
+            theta = np.pi - np.arcsin(p_h_d_w[1]/R)
+        elif p_h_d_w[0] < 0 and p_h_d_w[1] < 0:
+            theta = np.arcsin(p_h_d_w[1]/R) + np.pi
+        elif p_h_d_w[0] > 0 and p_h_d_w[1] < 0:
+            theta = 2*np.pi - np.arcsin(p_h_d_w[1]/R)
+
+        # update to desired theta
+        theta_new = theta - delta_theta_mag
+        if mechanism.flipped:
+            theta_new = theta + delta_theta_mag
+
+        # calc new desired pose of handle
+        p_h_d_w_des = [R*np.cos(theta_new), R*np.sin(theta_new), p_h_d_w[2]]
+        p_h_w_des = np.add(p_d_w, p_h_d_w_des)
+        direction = np.subtract(p_h_w_des, p_h_w)
+        unit_vector = util.trans.unit_vector(direction)
+        command = util.Command(force_dir=unit_vector)
+        return command
+
+    def get_pose_trajectory(self, bb_id, mechanism):
+        pass
 
     def forward_kinematics(self):
         pass

@@ -36,20 +36,6 @@ class Gripper:
         p.resetBasePositionAndOrientation(self.id, p_b_w_des, q_b_w_des)
         p.stepSimulation()
 
-    def actuate_joint(self, mechanism, control="PD"):
-        self.grasp_handle(mechanism)
-        if mechanism.mechanism_type == 'Slider':
-            for t in range(500):
-                command = mechanism.joint_model.get_command(control)
-                self.apply_command(command)
-        elif mechanism.mechanism_type == 'Door':
-            self.actuate_revolute(mechanism)
-        '''
-        if mechanism.mechanism_type == 'Slider':
-            self.actuate_prismatic(mechanism)
-        elif mechanism.mechanism_type == 'Door':
-            self.actuate_revolute(mechanism)
-        '''
     def grasp_handle(self, mechanism):
         print('setting intial pose')
         pose_t_w_init = [[0., 0., .2], self.q_t_w_des]
@@ -69,39 +55,6 @@ class Gripper:
         for t in range(200):
             self.apply_command(util.Command(finger_state='close'))
 
-    def actuate_revolute(self, door):
-        delta_theta_mag = .001
-        magnitude = 5.
-        print('moving door')
-        for t in range(500):
-            p_h_w, q_h_w = p.getLinkState(self.bb_id, door.handle_id)[:2]
-            p_d_w, q_d_w = p.getLinkState(self.bb_id, door.door_base_id)[:2]
-            p_h_d_w = np.subtract(p_h_w, p_d_w)
-            R = np.linalg.norm(p_h_d_w[:2])
-
-            # see which quadrant in, then calc theta
-            if p_h_d_w[0] > 0 and p_h_d_w[1] > 0:
-                theta = np.arcsin(p_h_d_w[1]/R)
-            elif  p_h_d_w[0] < 0 and p_h_d_w[1] > 0:
-                theta = np.pi - np.arcsin(p_h_d_w[1]/R)
-            elif p_h_d_w[0] < 0 and p_h_d_w[1] < 0:
-                theta = np.arcsin(p_h_d_w[1]/R) + np.pi
-            elif p_h_d_w[0] > 0 and p_h_d_w[1] < 0:
-                theta = 2*np.pi - np.arcsin(p_h_d_w[1]/R)
-
-            # update to desired theta
-            theta_new = theta - delta_theta_mag
-            if door.flipped:
-                theta_new = theta + delta_theta_mag
-
-            # calc new desired pose of handle
-            p_h_d_w_des = [R*np.cos(theta_new), R*np.sin(theta_new), p_h_d_w[2]]
-            p_h_w_des = np.add(p_d_w, p_h_d_w_des)
-            direction = np.subtract(p_h_w_des, p_h_w)
-            unit_vector = util.trans.unit_vector(direction)
-            force = np.multiply(magnitude, unit_vector)
-            self.apply_command(util.Command(force=force, tip_orientation=q_h_w))
-
     def apply_command(self, command):
         # always control the fingers
         if command.finger_state == 'open':
@@ -115,10 +68,11 @@ class Gripper:
         p.setJointMotorControl2(self.id,5,p.POSITION_CONTROL,targetPosition=0,force=self.finger_force)
 
         # apply a force at the center of the gripper finger tips
-        if command.force is not None:
+        magnitude = 5.
+        if command.force_dir is not None:
             p_b_w, q_b_w = p.getBasePositionAndOrientation(self.id)
             p_t_w = util.transformation(np.multiply(-1, self.pose_b_t), p_b_w, q_b_w)
-            p.applyExternalForce(self.id, -1, command.force, p_t_w, p.WORLD_FRAME)
+            p.applyExternalForce(self.id, -1, np.multiply(magnitude, command.force_dir), p_t_w, p.WORLD_FRAME)
 
         # control orientation with torque control
         if command.tip_orientation is not None:
@@ -138,5 +92,8 @@ class Gripper:
             # there is a bug in pyBullet. the link frame and world frame are inverted
             # this should be executed in the WORLD_FRAME
             p.applyExternalTorque(self.id, -1, tau, p.LINK_FRAME)
+
+        if command.traj is not None:
+            pass
 
         p.stepSimulation()

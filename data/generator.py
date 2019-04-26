@@ -395,6 +395,16 @@ class BusyBox(object):
         robot = urdf.Robot('busybox', *elements)
         return str(robot)
 
+    def actuate_joints(self, bb_id, gripper, control_method):
+        for mechanism in self._mechanisms:
+            gripper.grasp_handle(mechanism)
+            if control_method == 'PD':
+                for t in range(500):
+                    command = mechanism.joint_model.get_force_direction(bb_id, mechanism)
+                    gripper.apply_command(command)
+            elif control_method == 'traj':
+                command = mechanism.joint_model.get_pose_trajectory(bb_id, mechanism)
+                gripper.apply_command(command)
 
     @staticmethod
     def _check_collision(width, height, mechs, mech):
@@ -451,6 +461,7 @@ if __name__ == '__main__':
     parser.add_argument('--images', action='store_true')
     parser.add_argument('--n', type=int, default=1)
     parser.add_argument('--actuate', action='store_true')
+    parser.add_argument('--control-method', default='PD')
     args = parser.parse_args()
 
     for ix in range(args.n):
@@ -503,8 +514,7 @@ if __name__ == '__main__':
             elif args.viz:
                 if args.actuate:
                     gripper = Gripper(model)
-                    for mechanism in bb._mechanisms:
-                        gripper.actuate_joint(mechanism)
+                    bb.actuate_joints(model, gripper, args.control_method)
                 try:
                     while True:
                         pass
