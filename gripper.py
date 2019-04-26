@@ -26,21 +26,20 @@ class Gripper:
         self.right_finger_tip_id = 5
         self.left_finger_base_joint_id = 0
         self.right_finger_base_joint_id = 3
-        self.pose_b_t = [0.0002153, -0.02399915, -0.21146379]
+        self.p_b_t = [0.0002153, -0.02399915, -0.21146379]
         self.q_t_w_des = [0.71, 0., 0., 0.71]
         self.finger_force = 5
 
-    def set_tip_pose(self, pose_t_w_des):
-        p_b_w_des = util.transformation(self.pose_b_t, pose_t_w_des[0], pose_t_w_des[1])
-        q_b_w_des = pose_t_w_des[1]
-        p.resetBasePositionAndOrientation(self.id, p_b_w_des, q_b_w_des)
+    def set_tip_pose(self, p_t_w_des):
+        p_b_w_des = util.transformation(self.p_b_t, p_t_w_des, self.q_t_w_des)
+        p.resetBasePositionAndOrientation(self.id, p_b_w_des, self.q_t_w_des)
         p.stepSimulation()
 
     def grasp_handle(self, mechanism):
         print('setting intial pose')
-        pose_t_w_init = [[0., 0., .2], self.q_t_w_des]
+        p_t_w_init = [0., 0., .2]
         for t in range(10):
-            self.set_tip_pose(pose_t_w_init)
+            self.set_tip_pose(p_t_w_init)
 
         print('opening gripper')
         for t in range(20):
@@ -49,7 +48,7 @@ class Gripper:
         print('moving gripper to mechanism handle')
         p_h_w = p.getLinkState(self.bb_id, mechanism.handle_id)[0]
         for t in range(10):
-            self.set_tip_pose([p_h_w, self.q_t_w_des])
+            self.set_tip_pose(p_h_w)
 
         print('closing gripper')
         for t in range(200):
@@ -71,7 +70,7 @@ class Gripper:
         magnitude = 5.
         if command.force_dir is not None:
             p_b_w, q_b_w = p.getBasePositionAndOrientation(self.id)
-            p_t_w = util.transformation(np.multiply(-1, self.pose_b_t), p_b_w, q_b_w)
+            p_t_w = util.transformation(np.multiply(-1, self.p_b_t), p_b_w, q_b_w)
             p.applyExternalForce(self.id, -1, np.multiply(magnitude, command.force_dir), p_t_w, p.WORLD_FRAME)
 
         # control orientation with torque control
@@ -94,6 +93,8 @@ class Gripper:
             p.applyExternalTorque(self.id, -1, tau, p.LINK_FRAME)
 
         if command.traj is not None:
-            pass
+            for p_m_w_des in command.traj:
+                self.set_tip_pose(p_m_w_des)
+                p.stepSimulation()
 
         p.stepSimulation()
