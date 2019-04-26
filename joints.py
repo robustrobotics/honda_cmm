@@ -2,14 +2,32 @@ import numpy as np
 import util
 import pybullet as p
 
-class Prismatic(object):
+class JointModel(object):
+
+    def get_pose_trajectory(self, bb_id, mechanism, delta_q):
+        n_points = 100
+        progress = np.linspace(0,1,n_points)
+        p_m_w, q_m_w = p.getLinkState(bb_id, mechanism.handle_id)[:2]
+        p_m_w, q_m_w = np.array(p_m_w), np.array(q_m_w)
+        start_config = self.inverse_kinematics(p_m_w, np.array([0., 0., 0., 1.]))
+        goal_config = start_config + delta_q
+
+        positions = []
+        for i in progress:
+            config_new = start_config + delta_q * i
+            next_pose_m_w = self.forward_kinematics(config_new)
+            positions += [next_pose_m_w[0]]
+
+        return util.Command(traj=positions)
+
+class Prismatic(JointModel):
 
     def __init__(self, rigid_position, rigid_orientation, prismatic_dir):
         """
 
         :param rigid_position: A position along the prismatic joint.
         :param rigid_orientation: The orientation of the object.
-        :param direction: A unit vector representing the direction of motion (in the world frame?).
+        :param direction: A unit vector representing the direction of motion in the rigid frame.
         """
 
         self.rigid_position = np.array(rigid_position)
@@ -23,9 +41,6 @@ class Prismatic(object):
         unit_vector = util.trans.unit_vector(self.prismatic_dir)
         command = util.Command(force_dir=unit_vector)
         return command
-
-    def get_pose_trajectory(self, bb_id, mechanism):
-        pass
 
     def forward_kinematics(self, q):
         q_dir = np.multiply(q, self.prismatic_dir)
@@ -86,9 +101,6 @@ class Revolute(object):
         unit_vector = util.trans.unit_vector(direction)
         command = util.Command(force_dir=unit_vector)
         return command
-
-    def get_pose_trajectory(self, bb_id, mechanism):
-        pass
 
     def forward_kinematics(self):
         pass
