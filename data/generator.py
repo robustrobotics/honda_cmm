@@ -9,7 +9,7 @@ from gripper import Gripper
 from joints import Prismatic, Revolute
 import util
 
-np.random.seed(0)
+#np.random.seed(0)
 
 class Mechanism(object):
     def __init__(self, p_type):
@@ -476,13 +476,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     for ix in range(args.n):
-        print('Busybox Number:',ix)
-        bb = BusyBox.generate_random_busybox()
-
-        if args.save:
-            with open('models/busybox_{0}.urdf'.format(ix), 'w') as handle:
-                handle.write(bb.get_urdf())
-
         if not args.viz:
             client = p.connect(p.DIRECT)
 
@@ -490,7 +483,6 @@ if __name__ == '__main__':
             client = p.connect(p.GUI)
 
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
-        #p.setGravity(0, 0, -10)
         p.setRealTimeSimulation(1)
         p.resetDebugVisualizerCamera(
             cameraDistance=0.8,
@@ -499,9 +491,19 @@ if __name__ == '__main__':
             cameraTargetPosition=(0., 0., 0.))
         plane_id = p.loadURDF("plane.urdf")
 
-        with open('.busybox.urdf', 'w') as handle:
+        print('Busybox Number:',ix)
+        bb = BusyBox.generate_random_busybox()
+
+        bb_file = 'models/busybox_{0}.urdf'.format(ix)
+        if args.save:
+            with open(bb_file, 'w') as handle:
+                handle.write(bb.get_urdf())
+
+        p.setGravity(0, 0, -10)
+
+        with open(bb_file, 'w') as handle:
             handle.write(bb.get_urdf())
-        model = p.loadURDF('.busybox.urdf', [0., -.3, 0.])
+        model = p.loadURDF(bb_file, [0., -.3, 0.])
         bb.set_mechanism_ids(model)
         bb.set_joint_models(model)
         maxForce = 10
@@ -530,10 +532,11 @@ if __name__ == '__main__':
             gripper = Gripper(model, args.control_method)
             bb.actuate_joints(model, gripper, args.control_method, args.debug)
             print('done actuating')
-        try:
-            while True:
-                pass
-        except KeyboardInterrupt:
-            print('Exiting...')
 
         p.disconnect(client)
+
+    try:
+        while True:
+            pass
+    except KeyboardInterrupt:
+        print('Exiting...')
