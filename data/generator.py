@@ -144,9 +144,9 @@ class Slider(Mechanism):
         return aabb.AABB([(x_min, x_max), (z_min, z_max)])
 
     def set_joint_model(self, bb_id):
-        p_handle, q_handle = p.getLinkState(bb_id, self.handle_id)[:2]
-        rigid_position = [self.origin[0], p_handle[1], self.origin[1]]
-        rigid_orientation = q_handle
+        p_back_w = p.getLinkState(bb_id, 0)[0]
+        rigid_position = np.add(p_back_w, [self.origin[0], .05, self.origin[1]])
+        rigid_orientation = [0., 0., 0., 1.]
         prismatic_dir = [self.axis[0], 0., self.axis[1]]
         self.joint_model = Prismatic(rigid_position, rigid_orientation, prismatic_dir)
 
@@ -398,12 +398,13 @@ class BusyBox(object):
     def actuate_joints(self, bb_id, gripper, control_method):
         for mechanism in self._mechanisms:
             gripper.grasp_handle(mechanism)
-            if control_method == 'PD':
+            if control_method == 'PD' or mechanism.mechanism_type=='Door':
                 for t in range(500):
                     command = mechanism.joint_model.get_force_direction(bb_id, mechanism)
                     gripper.apply_command(command)
             elif control_method == 'traj':
-                command = mechanism.joint_model.get_pose_trajectory(bb_id, mechanism)
+                delta_q = .1
+                command = mechanism.joint_model.get_pose_trajectory(bb_id, mechanism, delta_q)
                 gripper.apply_command(command)
 
     @staticmethod
@@ -455,6 +456,7 @@ class BusyBox(object):
 
 
 if __name__ == '__main__':
+    import pdb; pdb.set_trace()
     parser = argparse.ArgumentParser()
     parser.add_argument('--viz', action='store_true', default=True)
     parser.add_argument('--save', action='store_true')
