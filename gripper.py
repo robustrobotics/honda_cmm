@@ -31,31 +31,40 @@ class Gripper:
         self.right_finger_base_joint_id = 3
         self.p_b_t = [0.0002153, -0.02399915, -0.21146379]
         self.q_t_w_des =  [0.50019904,  0.50019904, -0.49980088, 0.49980088]
-        self.finger_force = 5
+        self.finger_force = 20
 
+        # get mass of gripper
         mass = 0
         for link in range(p.getNumJoints(self.id)):
             mass += p.getDynamicsInfo(self.id, link)[0]
         self.mass = mass
 
-    def set_tip_pose(self, p_t_w_des):
+    def set_tip_pose(self, p_t_w_des, reset=False, constraint_id=-1):
         p_b_w_des = util.transformation(self.p_b_t, p_t_w_des, self.q_t_w_des)
-        p.resetBasePositionAndOrientation(self.id, p_b_w_des, self.q_t_w_des)
+
+        # move back just a little bit
+        p_b_w_des[1] += .005
+        if reset:
+            p.resetBasePositionAndOrientation(self.id, p_b_w_des, self.q_t_w_des)
+        elif constraint_id > -1:
+            p.changeConstraint(constraint_id, jointChildPivot=p_b_w_des, jointChildFrameOrientation=self.q_t_w_des)
+        else:
+            print('Must either reset base position or supply constraint id to satisfy')
         p.stepSimulation()
 
     def grasp_handle(self, mechanism):
         p_t_w_init = [0., 0., .2]
         for t in range(10):
-            self.set_tip_pose(p_t_w_init)
+            self.set_tip_pose(p_t_w_init, reset=True)
 
-        for t in range(20):
+        for t in range(10):
             self.apply_command(util.Command(finger_state='open'), debug=False)
 
         p_h_w = p.getLinkState(self.bb_id, mechanism.handle_id)[0]
         for t in range(10):
-            self.set_tip_pose(p_h_w)
+            self.set_tip_pose(p_h_w, reset=True)
 
-        for t in range(200):
+        for t in range(10):
             self.apply_command(util.Command(finger_state='close'), debug=False)
 
     def apply_command(self, command, debug=False):
@@ -104,14 +113,19 @@ class Gripper:
             p.applyExternalTorque(self.id, -1, tau, p.LINK_FRAME)
 
         if command.traj is not None:
+
+            # create constraint to move gripper
+            cid = p.createConstraint(self.id, -1, -1, -1, p.JOINT_FIXED, [0,0,0], [0,0,0], [0,0,0])
+
             for (i, p_m_w_des) in enumerate(command.traj):
                 if debug:
                     if i < len(command.traj)-1:
                         dir = np.subtract(command.traj[i+1], p_m_w_des)
                         end_point = np.multiply(1000., dir)
                         p.addUserDebugLine(p_m_w_des, np.add(p_m_w_des, end_point), lifeTime=.5)
-                self.set_tip_pose(p_m_w_des)
-                p.stepSimulation()
+                self.set_tip_pose(p_m_w_des, constraint_id=cid)
+
+            p.removeConstraint(cid)
 
         p.stepSimulation()
         time.sleep(1./100.)
