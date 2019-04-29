@@ -403,7 +403,7 @@ class BusyBox(object):
         for mechanism in self._mechanisms:
             gripper.grasp_handle(mechanism)
             if control_method == 'force':
-                for t in range(500):
+                for t in range(700):
                     command = mechanism.joint_model.get_force_direction(bb_id, mechanism)
                     gripper.apply_command(command, debug)
             elif control_method == 'traj':
@@ -465,6 +465,7 @@ class BusyBox(object):
 
 
 if __name__ == '__main__':
+    import pdb; pdb.set_trace()
     parser = argparse.ArgumentParser()
     parser.add_argument('--viz', action='store_true')
     parser.add_argument('--save', action='store_true')

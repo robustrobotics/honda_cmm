@@ -31,7 +31,7 @@ class Gripper:
         self.right_finger_base_joint_id = 3
         self.p_b_t = [0.0002153, -0.02399915, -0.21146379]
         self.q_t_w_des =  [0.50019904,  0.50019904, -0.49980088, 0.49980088]
-        self.finger_force = 50
+        self.finger_force = 20
 
         # get mass of gripper
         mass = 0
@@ -43,7 +43,7 @@ class Gripper:
         p_b_w_des = util.transformation(self.p_b_t, p_t_w_des, self.q_t_w_des)
 
         # move back just a little bit
-        p_b_w_des[1] += .01
+        p_b_w_des[1] += .005
         if reset:
             p.resetBasePositionAndOrientation(self.id, p_b_w_des, self.q_t_w_des)
         elif constraint_id > -1:
@@ -57,14 +57,14 @@ class Gripper:
         for t in range(10):
             self.set_tip_pose(p_t_w_init, reset=True)
 
-        for t in range(20):
+        for t in range(10):
             self.apply_command(util.Command(finger_state='open'), debug=False)
 
         p_h_w = p.getLinkState(self.bb_id, mechanism.handle_id)[0]
         for t in range(10):
             self.set_tip_pose(p_h_w, reset=True)
 
-        for t in range(20):
+        for t in range(10):
             self.apply_command(util.Command(finger_state='close'), debug=False)
 
     def apply_command(self, command, debug=False):
