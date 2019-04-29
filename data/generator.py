@@ -506,7 +506,7 @@ if __name__ == '__main__':
         model = p.loadURDF(bb_file, [0., -.3, 0.])
         bb.set_mechanism_ids(model)
         bb.set_joint_models(model)
-        maxForce = 10
+        maxForce = 1
         mode = p.VELOCITY_CONTROL
         for jx in range(0, p.getNumJoints(model)):
             p.setJointMotorControl2(bodyUniqueId=model,
