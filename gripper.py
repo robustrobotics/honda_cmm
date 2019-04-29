@@ -1,7 +1,7 @@
 import pybullet as p
 import numpy as np
 import util
-
+import time
 '''
 # Naming convention
 pose_ is a vector of length 7 representing a position + quaternion
@@ -114,3 +114,4 @@ class Gripper:
                 p.stepSimulation()
 
         p.stepSimulation()
+        time.sleep(1./100.)

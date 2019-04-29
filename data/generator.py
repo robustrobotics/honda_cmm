@@ -483,7 +483,7 @@ if __name__ == '__main__':
             client = p.connect(p.GUI)
 
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
-        p.setRealTimeSimulation(1)
+        p.setRealTimeSimulation(0)
         p.resetDebugVisualizerCamera(
             cameraDistance=0.8,
             cameraYaw=180,
@@ -506,7 +506,7 @@ if __name__ == '__main__':
         model = p.loadURDF(bb_file, [0., -.3, 0.])
         bb.set_mechanism_ids(model)
         bb.set_joint_models(model)
-        maxForce = 10
+        maxForce = 0
         mode = p.VELOCITY_CONTROL
         for jx in range(0, p.getNumJoints(model)):
             p.setJointMotorControl2(bodyUniqueId=model,
@@ -533,10 +533,10 @@ if __name__ == '__main__':
             bb.actuate_joints(model, gripper, args.control_method, args.debug)
             print('done actuating')
 
-        p.disconnect(client)
 
     try:
         while True:
             pass
     except KeyboardInterrupt:
         print('Exiting...')
+    p.disconnect(client)
