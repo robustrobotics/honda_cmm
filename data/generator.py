@@ -471,7 +471,7 @@ if __name__ == '__main__':
     parser.add_argument('--images', action='store_true')
     parser.add_argument('--n', type=int, default=1)
     parser.add_argument('--actuate', action='store_true')
-    parser.add_argument('--control-method', type=str)
+    parser.add_argument('--control-method', type=str, required=True)
     parser.add_argument('--debug', action='store_true')
     args = parser.parse_args()
 
