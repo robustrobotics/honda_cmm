@@ -436,7 +436,7 @@ class BusyBox(object):
             return False
 
     @staticmethod
-    def generate_random_busybox(min_mech=2, max_mech=6, mech_types=[Slider, Door], n_tries=25):
+    def generate_random_busybox(min_mech=1, max_mech=6, mech_types=[Slider, Door], n_tries=25):
         """
         :param min_mech: int, The minimum number of mechanisms to be included on the busybox.
         :param max_mech: int, The maximum number of classes to be included on the busybox.
@@ -465,7 +465,6 @@ class BusyBox(object):
 
 
 if __name__ == '__main__':
-    import pdb; pdb.set_trace()
     parser = argparse.ArgumentParser()
     parser.add_argument('--viz', action='store_true')
     parser.add_argument('--save', action='store_true')
@@ -474,6 +473,7 @@ if __name__ == '__main__':
     parser.add_argument('--actuate', action='store_true')
     parser.add_argument('--control-method', type=str, required=True)
     parser.add_argument('--debug', action='store_true')
+    parser.add_argument('--max-mech', type=int, default=6)
     args = parser.parse_args()
 
     for ix in range(args.n):
@@ -493,7 +493,7 @@ if __name__ == '__main__':
         plane_id = p.loadURDF("plane.urdf")
 
         print('Busybox Number:',ix)
-        bb = BusyBox.generate_random_busybox()
+        bb = BusyBox.generate_random_busybox(max_mech=args.max_mech)
 
         bb_file = 'models/busybox_{0}.urdf'.format(ix)
         if args.save:
@@ -534,10 +534,10 @@ if __name__ == '__main__':
             bb.actuate_joints(model, gripper, args.control_method, args.debug)
             print('done actuating')
 
+        p.disconnect(client)
 
     try:
         while True:
             pass
     except KeyboardInterrupt:
         print('Exiting...')
-    p.disconnect(client)
