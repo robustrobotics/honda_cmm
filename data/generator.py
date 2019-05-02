@@ -227,8 +227,8 @@ class Door(Mechanism):
                              )
                          ))
 
-        if flipped: limit = urdf.Limit(lower=0, upper=1.57)
-        else: limit = urdf.Limit(lower=-1.57, upper=0)
+        if flipped: limit = urdf.Limit(lower=0, upper=2.355)
+        else: limit = urdf.Limit(lower=-2.355, upper=0)
 
         door_joint = urdf.Joint('door_{0}_joint'.format(name),
                                 urdf.Child('door_{0}_base'.format(name)),
@@ -383,6 +383,7 @@ class BusyBox(object):
                     if mech.mechanism_type == 'Door':
                         if mech.door_base_name == link_name.decode("utf-8"):
                             mech.door_base_id = joint_info[0]
+        self.bb_id = bb_id
 
     def set_joint_models(self, bb_id):
         for mech in self._mechanisms:
@@ -399,22 +400,22 @@ class BusyBox(object):
         robot = urdf.Robot('busybox', *elements)
         return str(robot)
 
-    def actuate_joints(self, bb_id, gripper, control_method, debug):
+    def actuate_joints(self, bb_id, gripper, control_method, debug, viz, callback=None):
         for mechanism in self._mechanisms:
-            gripper.grasp_handle(mechanism)
+            gripper.grasp_handle(mechanism, viz)
             if control_method == 'force':
                 for t in range(700):
                     command = mechanism.joint_model.get_force_direction(bb_id, mechanism)
-                    gripper.apply_command(command, debug)
+                    gripper.apply_command(command, debug, viz)
             elif control_method == 'traj':
                 if mechanism.mechanism_type == 'Slider':
-                    delta_q = .1
+                    delta_q = .2
                 if mechanism.mechanism_type == 'Door':
-                    delta_q = np.pi/4
+                    delta_q = np.pi/2
                     if mechanism.flipped:
-                        delta_q = -np.pi/4
+                        delta_q = -np.pi/2
                 command = mechanism.joint_model.get_pose_trajectory(bb_id, mechanism, delta_q)
-                gripper.apply_command(command, debug)
+                gripper.apply_command(command, debug, viz, callback, self)
 
     @staticmethod
     def _check_collision(width, height, mechs, mech):
@@ -507,7 +508,7 @@ if __name__ == '__main__':
         model = p.loadURDF(bb_file, [0., -.3, 0.])
         bb.set_mechanism_ids(model)
         bb.set_joint_models(model)
-        maxForce = 0
+        maxForce = 10
         mode = p.VELOCITY_CONTROL
         for jx in range(0, p.getNumJoints(model)):
             p.setJointMotorControl2(bodyUniqueId=model,
@@ -531,7 +532,7 @@ if __name__ == '__main__':
 
         if args.actuate:
             gripper = Gripper(model, args.control_method)
-            bb.actuate_joints(model, gripper, args.control_method, args.debug)
+            bb.actuate_joints(model, gripper, args.control_method, args.debug, args.viz)
             print('done actuating')
 
         p.disconnect(client)

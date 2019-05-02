@@ -52,22 +52,22 @@ class Gripper:
             print('Must either reset base position or supply constraint id to satisfy')
         p.stepSimulation()
 
-    def grasp_handle(self, mechanism):
+    def grasp_handle(self, mechanism, viz=False):
         p_t_w_init = [0., 0., .2]
         for t in range(10):
             self.set_tip_pose(p_t_w_init, reset=True)
 
         for t in range(10):
-            self.apply_command(util.Command(finger_state='open'), debug=False)
+            self.apply_command(util.Command(finger_state='open'), debug=False, viz=viz)
 
         p_h_w = p.getLinkState(self.bb_id, mechanism.handle_id)[0]
         for t in range(10):
             self.set_tip_pose(p_h_w, reset=True)
 
         for t in range(10):
-            self.apply_command(util.Command(finger_state='close'), debug=False)
+            self.apply_command(util.Command(finger_state='close'), debug=False, viz=viz)
 
-    def apply_command(self, command, debug=False):
+    def apply_command(self, command, debug=False, viz=False, callback=None, bb=None):
         # always control the fingers
         if command.finger_state == 'open':
             finger_angle = 0.2
@@ -124,8 +124,13 @@ class Gripper:
                         end_point = np.multiply(1000., dir)
                         p.addUserDebugLine(p_m_w_des, np.add(p_m_w_des, end_point), lifeTime=.5)
                 self.set_tip_pose(p_m_w_des, constraint_id=cid)
+                if viz:
+                    time.sleep(1./100.)
+                if not callback is None:
+                    callback(bb)
 
             p.removeConstraint(cid)
 
         p.stepSimulation()
-        time.sleep(1./100.)
+        if viz:
+            time.sleep(1./100.)
