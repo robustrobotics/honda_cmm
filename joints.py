@@ -5,7 +5,7 @@ import pybullet as p
 class JointModel(object):
 
     def get_pose_trajectory(self, bb_id, mechanism, delta_q):
-        n_points = 100
+        n_points = 20
         progress = np.linspace(0,1,n_points)
         p_m_w, q_m_w = p.getLinkState(bb_id, mechanism.handle_id)[:2]
         p_m_w, q_m_w = np.array(p_m_w), np.array(q_m_w)
