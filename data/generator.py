@@ -132,6 +132,7 @@ class Slider(Mechanism):
         self.handle_radius = 0.025
         self.axis = axis
         self.joint_model = None
+        self.color = color
 
     def get_bounding_box(self):
         a = np.arctan2(self.axis[1], self.axis[0])
@@ -164,9 +165,7 @@ class Slider(Mechanism):
         range = np.random.uniform(0.1, 0.5)
         angle = np.random.uniform(0, np.pi)
         axis = (np.cos(angle), np.sin(angle))
-        color = (np.random.uniform(0, 1),
-                 np.random.uniform(0, 1),
-                 np.random.uniform(0, 1))
+        color = (1,0,0)
         return Slider(x_offset, z_offset, range, axis, color)
 
 
@@ -257,6 +256,7 @@ class Door(Mechanism):
         self.door_size = door_size
         self.flipped = flipped
         self.joint_model = None
+        self.color = color
 
     def get_bounding_box(self):
         """ This method should return a bounding box of the 2-dimensional
@@ -294,9 +294,7 @@ class Door(Mechanism):
         handle_offset = np.random.uniform(-door_size[1]/2+0.015, door_size[1]/2-0.015)
 
         flipped = np.random.binomial(n=1, p=0.5)
-        color = (np.random.uniform(0, 1),
-                 np.random.uniform(0, 1),
-                 np.random.uniform(0, 1))
+        color = (0,1,0)
 
         return Door(door_offset, door_size, handle_offset, flipped, color)
 
@@ -400,13 +398,13 @@ class BusyBox(object):
         robot = urdf.Robot('busybox', *elements)
         return str(robot)
 
-    def actuate_joints(self, bb_id, gripper, control_method, debug, viz, callback=None):
+    def actuate_joints(self, bb_id, gripper, control_method, debug, viz, bb_learner=None):
         for mechanism in self._mechanisms:
             gripper.grasp_handle(mechanism, viz)
             if control_method == 'force':
                 for t in range(700):
                     command = mechanism.joint_model.get_force_direction(bb_id, mechanism)
-                    gripper.apply_command(command, debug, viz)
+                    gripper.apply_command(command, mechanism.handle_id, mechanism.handle_name, debug, viz, bb_learner=bb_learner)
             elif control_method == 'traj':
                 if mechanism.mechanism_type == 'Slider':
                     delta_q = .2
@@ -415,7 +413,7 @@ class BusyBox(object):
                     if mechanism.flipped:
                         delta_q = -np.pi/2
                 command = mechanism.joint_model.get_pose_trajectory(bb_id, mechanism, delta_q)
-                gripper.apply_command(command, debug, viz, callback, self)
+                gripper.apply_command(command, mechanism.handle_id, mechanism.handle_name, debug, viz, bb_learner=bb_learner)
 
     @staticmethod
     def _check_collision(width, height, mechs, mech):

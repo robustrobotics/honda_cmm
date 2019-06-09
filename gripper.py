@@ -67,7 +67,7 @@ class Gripper:
         for t in range(10):
             self.apply_command(util.Command(finger_state='close'), debug=False, viz=viz)
 
-    def apply_command(self, command, debug=False, viz=False, callback=None, bb=None):
+    def apply_command(self, command, handle_id=None, handle_name=None, debug=False, viz=False, bb_learner=None):
         # always control the fingers
         if command.finger_state == 'open':
             finger_angle = 0.2
@@ -89,6 +89,9 @@ class Gripper:
             g_force = self.mass*10.
             force_w_grav = np.add(force, [0., 0., g_force])
             p.applyExternalForce(self.id, -1, force_w_grav, p_t_w, p.WORLD_FRAME)
+
+            if bb_learner:
+                bb_learner.publish_poses(handle_id, handle_name)
 
             if debug:
                 p.addUserDebugLine(p_t_w, np.add(p_t_w, force), lifeTime=.5)
@@ -126,8 +129,8 @@ class Gripper:
                 self.set_tip_pose(p_m_w_des, constraint_id=cid)
                 if viz:
                     time.sleep(1./100.)
-                if not callback is None:
-                    callback(bb)
+                if bb_learner:
+                    bb_learner.publish_poses(handle_id, handle_name)
 
             p.removeConstraint(cid)
 
