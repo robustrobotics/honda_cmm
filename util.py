@@ -40,7 +40,25 @@ def vis_frame(pos, orn, length=.2, lifeTime=.4):
     p.addUserDebugLine(pos, new_y, [0,1,0], lifeTime=lifeTime)
     p.addUserDebugLine(pos, new_z, [0,0,1], lifeTime=lifeTime)
 
-def transformation(pos, translation_vec, quat):
+def skew_symmetric(vec):
+    i, j, k = vec
+    return np.array([[0, -k, j], [k, 0, -i], [-j, i, 0]])
+
+def adjoint_transformation(vel, translation_vec, quat, inverse=False):
+    if inverse:
+        translation_vec, quat = p.invertTransform(translation_vec, quat)
+
+    R = p.getMatrixFromQuaternion(quat)
+    R = np.reshape(R, (3,3))
+    T = np.zeros((6,6))
+    T[:3,:3] = R
+    T[:3,3:] = skew_symmetric(translation_vec).dot(R)
+    T[3:,3:] = R
+    return np.dot(T, vel)
+
+def transformation(pos, translation_vec, quat, inverse=False):
+    if inverse:
+        translation_vec, quat = p.invertTransform(translation_vec, quat)
     R = p.getMatrixFromQuaternion(quat)
     R = np.reshape(R, (3,3))
     T = np.zeros((4,4))
