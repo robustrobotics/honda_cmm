@@ -83,7 +83,6 @@ class Gripper:
             tau = np.dot(k[1], e_com_w_err) #+ np.dot(d[1], v_t_w_err[3:])
 
             p_com_w, _ = self.calc_COM('world')
-            f = np.add(f, [0.,10.,0.])
             p.applyExternalForce(self.id, -1, f, p_com_w, p.WORLD_FRAME)
             # there is a bug in pyBullet. the link frame and world frame are inverted
             # this should be executed in the WORLD_FRAME
