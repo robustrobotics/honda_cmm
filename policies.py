@@ -10,6 +10,9 @@ PrismParams = namedtuple('PrismParams', 'grasp_pose pos orn dir goal_q')
 RevParams = namedtuple('RevParams', 'grasp_pose center axis radius orn goal_q')
 #PathParams = namedtuple('PathParams', '...')
 
+# max distance between waypoints in trajectory
+delta_pos = .001
+
 # all primitive parameterized policies take in parameters and output trajectories
 # of poses for the gripper to follow
 def poke(params):
@@ -19,11 +22,11 @@ def slide(params):
     pass
 
 def prism(params):
-    delta_q_mag = .01
+    delta_q_mag = delta_pos
     return from_model('prismatic', params, delta_q_mag=delta_q_mag)
 
 def rev(params):
-    delta_q_mag = np.pi/100
+    delta_q_mag = delta_pos/np.linalg.norm(params.radius)
     return from_model('revolute', params, delta_q_mag=delta_q_mag)
 
 def path(params):
@@ -49,7 +52,6 @@ def from_model(model_type, params, delta_q_mag):
         # for prism, orn should remain constant
         # for now remain constant for both
         poses += [util.Pose(curr_joint_pose.pos, start_pose.orn)]
-    print(len(poses))
     return poses
 
 def q_dir(curr_q, goal_q):
