@@ -3,6 +3,9 @@ import numpy as np
 import pickle
 import transformations as trans
 import math
+from collections import namedtuple
+
+Pose = namedtuple('Pose', 'pos orn')
 
 class Command:
     def __init__(self, finger_state='close', force_dir=None, tip_orientation=None, traj=None):
