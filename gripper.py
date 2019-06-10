@@ -4,7 +4,7 @@ import util
 import time
 '''
 # Naming convention
-pose_ is a vector of length 7 representing a position + quaternion
+pose_ is a util.Pose()
 p_ is a vector of length 3 representing a position
 q_ is a vector of length 4 representing a quaternion
 e_ is a vector of length 3 representing euler angles
@@ -17,6 +17,7 @@ b - gripper base frame
 t - tip of the gripper frame
 h - mechanism handle
 d - door frame
+com - center of mass of the entire gripper body
 '''
 class Gripper:
     def __init__(self, bb_id, control_method):
@@ -51,6 +52,42 @@ class Gripper:
         else:
             print('Must either reset base position or supply constraint id to satisfy')
         p.stepSimulation()
+
+    def get_pose_error(self, pose_t_w_des):
+        p_com_w, q_com_w, p_com_t = self.calc_COM('task')
+        p_com_w_des = util.transformation(p_com_t, pose_t_w_des.pos, pose_t_w_des.orn)
+        p_com_w_err = np.subtract(p_com_w_des, p_com_w)
+
+        q_com_w_err, _ = util.diff_quat(pose_t_w_des.orn, q_com_w)
+        e_com_w_err = util.euler_from_quaternion(q_com_w_err)
+        return p_com_w_err, e_com_w_err
+
+    def at_des_pose(self, pose_t_w_des):
+        p_err_eps = .01
+        e_err_eps = .001
+        p_com_w_err, e_com_w_err = self.get_pose_error(pose_t_w_des)
+        return all(p < p_err_eps for p in p_com_w_err) and all(e < e_err_eps for e in e_com_w_err)
+
+    def move_PD(self, pose_t_w_des):
+        k=[20, 2]
+        d=[800., .9]
+        while not self.at_des_pose(pose_t_w_des):
+            p_com_w_err, e_com_w_err = self.get_pose_error(pose_t_w_des)
+            '''
+            v_b_w = np.concatenate(p.getBaseVelocity(self.id))
+            v_t_w = util.adjoint_transformation(v_b_w, self.p_b_t, [0., 0., 0., 1.])
+            v_t_w_err = -1*v_t_w
+            '''
+            f = np.dot(k[0], p_com_w_err) #+ np.dot(d[0], v_t_w_err[:3])
+            tau = np.dot(k[1], e_com_w_err) #+ np.dot(d[1], v_t_w_err[3:])
+
+            p_com_w, _ = self.calc_COM('world')
+            f = np.add(f, [0.,10.,0.])
+            p.applyExternalForce(self.id, -1, f, p_com_w, p.WORLD_FRAME)
+            # there is a bug in pyBullet. the link frame and world frame are inverted
+            # this should be executed in the WORLD_FRAME
+            p.applyExternalTorque(self.id, -1, tau, p.LINK_FRAME)
+            p.stepSimulation()
 
     def grasp_handle(self, pose_t_w_des, viz=False):
         # default values for moving the gripper to a pose before grasping handle
@@ -115,23 +152,27 @@ class Gripper:
             p.applyExternalTorque(self.id, -1, tau, p.LINK_FRAME)
 
         if command.traj is not None:
-            # create constraint to move gripper
-            cid = p.createConstraint(self.id, -1, -1, -1, p.JOINT_FIXED, [0,0,0], [0,0,0], [0,0,0])
-
             for (i, pose_t_w_des) in enumerate(command.traj):
-                if debug:
-                    if i < len(command.traj)-1:
-                        dir = np.subtract(command.traj[i+1], p_m_w_des)
-                        end_point = np.multiply(1000., dir)
-                        p.addUserDebugLine(p_m_w_des, np.add(p_m_w_des, end_point), lifeTime=.5)
-                self.set_tip_pose(pose_t_w_des, constraint_id=cid)
-                if viz:
-                    time.sleep(1./100.)
+                self.move_PD(pose_t_w_des)
                 if not callback is None:
                     callback(bb)
 
-            p.removeConstraint(cid)
-
         p.stepSimulation()
-        if viz:
-            time.sleep(1./100.)
+
+    def calc_COM(self, mode='world'):
+        com_num = np.array([0., 0., 0.])
+        for link_index in range(p.getNumJoints(self.id)):
+            link_com = p.getLinkState(self.id, link_index)[0]
+            link_mass = p.getDynamicsInfo(self.id, link_index)[0]
+            com_num = np.add(com_num, np.multiply(link_mass,link_com))
+        p_com_w = np.divide(com_num, self.mass)
+
+        p_b_w, q_b_w = p.getBasePositionAndOrientation(self.id)
+        q_com_w = q_b_w
+
+        if mode == 'world':
+            return p_com_w, q_com_w
+        elif mode == 'task':
+            p_t_w = util.transformation(np.multiply(-1, self.p_b_t),  p_b_w, q_b_w)
+            p_com_t = util.transformation(p_com_w, p_t_w, q_b_w, inverse=True)
+            return p_com_w, q_com_w, p_com_t
