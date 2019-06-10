@@ -68,6 +68,7 @@ class Gripper:
         p_com_w_err, e_com_w_err = self.get_pose_error(pose_t_w_des)
         return all(p < p_err_eps for p in p_com_w_err) and all(e < e_err_eps for e in e_com_w_err)
 
+    # TODO: actually just P control at the moment. need to add D control
     def move_PD(self, pose_t_w_des):
         k=[20, 2]
         d=[800., .9]
