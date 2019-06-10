@@ -34,7 +34,7 @@ plane_id = p.loadURDF("plane.urdf")
 
 bb = BusyBox.generate_random_busybox(max_mech=args.max_mech)
 
-p.setGravity(0, 0, -10)
+#p.setGravity(0, 0, -10)
 
 bb_file = 'models/busybox.urdf'
 with open(bb_file, 'w') as handle:
@@ -76,10 +76,24 @@ for mech in bb._mechanisms:
                                 .1)
         traj = policies.prism(params)
 
+    # testing PD control
+    p_t_w_init = [0., 0., .2]
+    q_t_w_init = [0.50019904,  0.50019904, -0.49980088, 0.49980088]
+    pose_t_w_init = util.Pose(p_t_w_init, q_t_w_init)
+    for t in range(10):
+        gripper.set_tip_pose(pose_t_w_init, reset=True)
+
+    traj_x = np.arange(0., 1., .01)
+    traj = [util.Pose([x, 0., .2], q_t_w_init) for x in traj_x]
+    command = util.Command(traj=traj)
+    gripper.apply_command(command, viz=args.viz)
+
+    '''
     # execute traj
     command = util.Command(traj=traj)
     gripper.grasp_handle(traj[0], args.viz)
     gripper.apply_command(command, viz=args.viz)
+    '''
 
 p.disconnect(client)
 
