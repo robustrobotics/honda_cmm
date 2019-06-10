@@ -5,6 +5,9 @@ import pybullet as p
 class JointModel(object):
 
     def get_pose_trajectory(self, bb_id, mechanism, delta_q):
+        # default orientation of the tip of the gripper when grasping
+        q_t_w_des =  [0.50019904,  0.50019904, -0.49980088, 0.49980088]
+
         n_points = 100
         progress = np.linspace(0,1,n_points)
         p_m_w, q_m_w = p.getLinkState(bb_id, mechanism.handle_id)[:2]
@@ -12,13 +15,13 @@ class JointModel(object):
         start_config = self.inverse_kinematics(p_m_w, np.array([0., 0., 0., 1.]))
         goal_config = start_config + delta_q
 
-        positions = []
+        poses = []
         for i in progress:
             config_new = start_config + delta_q * i
             next_pose_m_w = self.forward_kinematics(config_new)
-            positions += [next_pose_m_w[0]]
+            poses += [util.Pose(next_pose_m_w.pos, q_t_w_des)]
 
-        return util.Command(traj=positions)
+        return poses
 
 class Prismatic(JointModel):
 
@@ -42,7 +45,7 @@ class Prismatic(JointModel):
         q_dir = np.concatenate([q_dir, [1.]])
         p_z = np.dot(self.origin_M, q_dir)[:3]
         q_z = util.quaternion_from_matrix(self.origin_M)
-        return p_z, q_z
+        return util.Pose(p_z, q_z)
 
     def inverse_kinematics(self, p_z, q_z):
         z_M = util.pose_to_matrix(p_z, q_z)
@@ -82,7 +85,7 @@ class Revolute(JointModel):
         M = util.trans.concatenate_matrices(self.center,rot_z,self.radius)
         p_z = M[:3,3]
         q_z = util.quaternion_from_matrix(M)
-        return p_z, q_z
+        return util.Pose(p_z, q_z)
 
     def inverse_kinematics(self, p_z, q_z):
         z = util.pose_to_matrix(p_z, q_z)

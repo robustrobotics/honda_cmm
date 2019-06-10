@@ -401,8 +401,12 @@ class BusyBox(object):
         return str(robot)
 
     def actuate_joints(self, bb_id, gripper, control_method, debug, viz, callback=None):
+        # default orientation of the tip of the gripper when grasping
+        q_t_w_des =  [0.50019904,  0.50019904, -0.49980088, 0.49980088]
         for mechanism in self._mechanisms:
-            gripper.grasp_handle(mechanism, viz)
+            p_t_w_des = p.getLinkState(bb_id, mechanism.handle_id)[0]
+            pose_t_w_des = util.Pose(p_t_w_des, q_t_w_des)
+            gripper.grasp_handle(pose_t_w_des, viz)
             if control_method == 'force':
                 for t in range(700):
                     command = mechanism.joint_model.get_force_direction(bb_id, mechanism)
@@ -414,7 +418,8 @@ class BusyBox(object):
                     delta_q = np.pi/2
                     if mechanism.flipped:
                         delta_q = -np.pi/2
-                command = mechanism.joint_model.get_pose_trajectory(bb_id, mechanism, delta_q)
+                traj = mechanism.joint_model.get_pose_trajectory(bb_id, mechanism, delta_q)
+                command = util.Command(traj=traj)
                 gripper.apply_command(command, debug, viz, callback, self)
 
     @staticmethod
