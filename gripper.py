@@ -30,7 +30,6 @@ class Gripper:
         self.right_finger_tip_id = 5
         self.left_finger_base_joint_id = 0
         self.right_finger_base_joint_id = 3
-        self.p_b_t = [0.0002153, -0.02399915, -0.21146379]
         self.q_t_w_des =  [0.50019904,  0.50019904, -0.49980088, 0.49980088]
         self.finger_force = 20
 
@@ -40,10 +39,23 @@ class Gripper:
             mass += p.getDynamicsInfo(self.id, link)[0]
         self.mass = mass
 
+    def get_p_tip_world(self):
+        p_l_w = p.getLinkState(self.id, self.left_finger_tip_id)[0]
+        p_r_w = p.getLinkState(self.id, self.right_finger_tip_id)[0]
+        p_tip_w = np.mean([p_l_w, p_r_w], axis=0)
+        return p_tip_w
+
+    def get_p_tip_base(self):
+        p_base_w, q_base_w = p.getBasePositionAndOrientation(self.id)
+        p_tip_w = self.get_p_tip_world()
+        p_tip_base = util.transformation(p_tip_w, p_base_w, q_base_w, inverse=True)
+        return p_tip_base
+
     def set_tip_pose(self, pose_t_w_des, reset=False):
-        p_b_w_des = util.transformation(self.p_b_t, pose_t_w_des.pos, pose_t_w_des.orn)
+        p_b_t = np.multiply(-1, self.get_p_tip_base())
+        p_b_w_des = util.transformation(p_b_t, pose_t_w_des.pos, pose_t_w_des.orn)
         # move back just a little bit
-        p_b_w_des[1] += .005
+        p_b_w_des[1] += .01
         p.resetBasePositionAndOrientation(self.id, p_b_w_des, pose_t_w_des.orn)
         p.stepSimulation()
 
@@ -66,11 +78,15 @@ class Gripper:
     def move_PD(self, pose_t_w_des):
         k=[20, 2]
         d=[800., .9]
+
         while not self.at_des_pose(pose_t_w_des):
+            #p.addUserDebugLine(pose_t_w_des.pos, np.add(pose_t_w_des.pos,[0,100,0]), lifeTime=1.)
             p_com_w_err, e_com_w_err = self.get_pose_error(pose_t_w_des)
+
             '''
             v_b_w = np.concatenate(p.getBaseVelocity(self.id))
-            v_t_w = util.adjoint_transformation(v_b_w, self.p_b_t, [0., 0., 0., 1.])
+            p_b_t = np.multiply(-1,self.get_p_tip_base())
+            v_t_w = util.adjoint_transformation(v_b_w, p_b_t, [0., 0., 0., 1.])
             v_t_w_err = -1*v_t_w
             '''
             f = np.dot(k[0], p_com_w_err) #+ np.dot(d[0], v_t_w_err[:3])
@@ -78,6 +94,7 @@ class Gripper:
 
             p_com_w, _ = self.calc_COM('world')
             p.applyExternalForce(self.id, -1, f, p_com_w, p.WORLD_FRAME)
+            #p.addUserDebugLine(p_com_w, np.add(p_com_w,1000*f),[0,0,1], lifeTime=.5)
             # there is a bug in pyBullet. the link frame and world frame are inverted
             # this should be executed in the WORLD_FRAME
             p.applyExternalTorque(self.id, -1, tau, p.LINK_FRAME)
@@ -115,16 +132,12 @@ class Gripper:
         # apply a force at the center of the gripper finger tips
         magnitude = 5.
         if command.force_dir is not None:
-            p_b_w, q_b_w = p.getBasePositionAndOrientation(self.id)
-            p_t_w = util.transformation(np.multiply(-1, self.p_b_t), p_b_w, q_b_w)
+            p_t_w = self.get_p_tip_world()
             force = np.multiply(magnitude, command.force_dir)
             # gravity compensation
             g_force = self.mass*10.
             force_w_grav = np.add(force, [0., 0., g_force])
             p.applyExternalForce(self.id, -1, force_w_grav, p_t_w, p.WORLD_FRAME)
-
-            if debug:
-                p.addUserDebugLine(p_t_w, np.add(p_t_w, force), lifeTime=.5)
 
         # control orientation with torque control
         if command.tip_orientation is not None:
@@ -167,6 +180,6 @@ class Gripper:
         if mode == 'world':
             return p_com_w, q_com_w
         elif mode == 'task':
-            p_t_w = util.transformation(np.multiply(-1, self.p_b_t),  p_b_w, q_b_w)
+            p_t_w = self.get_p_tip_world()
             p_com_t = util.transformation(p_com_w, p_t_w, q_b_w, inverse=True)
             return p_com_w, q_com_w, p_com_t
