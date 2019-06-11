@@ -40,17 +40,11 @@ class Gripper:
             mass += p.getDynamicsInfo(self.id, link)[0]
         self.mass = mass
 
-    def set_tip_pose(self, pose_t_w_des, reset=False, constraint_id=-1):
+    def set_tip_pose(self, pose_t_w_des, reset=False):
         p_b_w_des = util.transformation(self.p_b_t, pose_t_w_des.pos, pose_t_w_des.orn)
-
         # move back just a little bit
         p_b_w_des[1] += .005
-        if reset:
-            p.resetBasePositionAndOrientation(self.id, p_b_w_des, pose_t_w_des.orn)
-        elif constraint_id > -1:
-            p.changeConstraint(constraint_id, jointChildPivot=p_b_w_des, jointChildFrameOrientation=pose_t_w_des.orn)
-        else:
-            print('Must either reset base position or supply constraint id to satisfy')
+        p.resetBasePositionAndOrientation(self.id, p_b_w_des, pose_t_w_des.orn)
         p.stepSimulation()
 
     def get_pose_error(self, pose_t_w_des):
