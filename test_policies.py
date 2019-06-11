@@ -54,14 +54,15 @@ control_method = 'traj'
 gripper = Gripper(model, control_method)
 for mech in bb._mechanisms:
     # Good grasping parameters for testing
-    p_t_w = p.getLinkState(bb.bb_id, mech.handle_id)[0]
+    pose_m_w = util.Pose(*p.getLinkState(bb.bb_id, mech.handle_id)[:2])
     q_t_w =  [0.50019904,  0.50019904, -0.49980088, 0.49980088]
-    pose_t_w_des = util.Pose(p_t_w, q_t_w)
+    pose_t_w_des = util.Pose(pose_m_w.pos, q_t_w)
 
     # try correct policy on each
     if mech.mechanism_type == 'Door':
         goal_q = -np.pi/2 if mech.flipped else np.pi/2
         params = policies.RevParams(pose_t_w_des,
+                            pose_m_w,
                             mech.joint_model.rot_center,
                             mech.joint_model.rot_axis,
                             mech.joint_model.rot_radius,
@@ -70,30 +71,17 @@ for mech in bb._mechanisms:
         traj = policies.rev(params)
     elif mech.mechanism_type == 'Slider':
         params = policies.PrismParams(pose_t_w_des,
+                                pose_m_w,
                                 mech.joint_model.rigid_position,
                                 mech.joint_model.rigid_orientation,
                                 mech.joint_model.prismatic_dir,
                                 .1)
         traj = policies.prism(params)
 
-    # testing PD control
-    p_t_w_init = [0., 0., .2]
-    q_t_w_init = [0.50019904,  0.50019904, -0.49980088, 0.49980088]
-    pose_t_w_init = util.Pose(p_t_w_init, q_t_w_init)
-    for t in range(10):
-        gripper.set_tip_pose(pose_t_w_init, reset=True)
-
-    traj_x = np.arange(0., 1., .01)
-    traj = [util.Pose([x, 0., .2], q_t_w_init) for x in traj_x]
-    command = util.Command(traj=traj)
-    gripper.apply_command(command, viz=args.viz)
-
-    '''
     # execute traj
     command = util.Command(traj=traj)
     gripper.grasp_handle(traj[0], args.viz)
     gripper.apply_command(command, viz=args.viz)
-    '''
 
 p.disconnect(client)
 
