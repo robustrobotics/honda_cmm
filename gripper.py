@@ -59,16 +59,14 @@ class Gripper:
         p.resetBasePositionAndOrientation(self.id, p_b_w_des, pose_t_w_des.orn)
         p.stepSimulation()
 
+    # control COM but monitor error in the task frame
     def get_pose_error(self, pose_t_w_des):
-        p_com_w, q_com_w = self.calc_COM('world')
-        p_com_t, q_com_t = self.calc_COM('task')
-
-        p_com_w_des = util.transformation(p_com_t, pose_t_w_des.pos, pose_t_w_des.orn)
-        p_com_w_err = np.subtract(p_com_w_des, p_com_w)
-
-        q_com_w_err, _ = util.diff_quat(pose_t_w_des.orn, q_com_w)
-        e_com_w_err = util.euler_from_quaternion(q_com_w_err)
-        return p_com_w_err, e_com_w_err
+        p_t_w = self.get_p_tip_world()
+        q_t_w = p.getBasePositionAndOrientation(self.id)[1]
+        p_t_w_err = np.subtract(pose_t_w_des.pos, p_t_w)
+        q_t_w_err, _ = util.diff_quat(pose_t_w_des.orn, q_t_w)
+        e_t_w_err = util.euler_from_quaternion(q_t_w_err)
+        return p_t_w_err, e_t_w_err
 
     def get_velocity_error(self, v_t_w_des):
         p_com_t, q_com_t = self.calc_COM('task')
@@ -82,8 +80,8 @@ class Gripper:
         return v_com_w_err[:3], v_com_w_err[3:]
 
     def at_des_pose(self, pose_t_w_des):
-        p_err_eps = .001
-        e_err_eps = .001
+        p_err_eps = .005
+        e_err_eps = .005
         p_com_w_err, e_com_w_err = self.get_pose_error(pose_t_w_des)
         return all(p < p_err_eps for p in p_com_w_err) and all(e < e_err_eps for e in e_com_w_err)
 
