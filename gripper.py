@@ -60,7 +60,9 @@ class Gripper:
         p.stepSimulation()
 
     def get_pose_error(self, pose_t_w_des):
-        p_com_w, q_com_w, p_com_t = self.calc_COM('task')
+        p_com_w, q_com_w = self.calc_COM('world')
+        p_com_t, q_com_t = self.calc_COM('task')
+
         p_com_w_des = util.transformation(p_com_t, pose_t_w_des.pos, pose_t_w_des.orn)
         p_com_w_err = np.subtract(p_com_w_des, p_com_w)
 
@@ -68,33 +70,37 @@ class Gripper:
         e_com_w_err = util.euler_from_quaternion(q_com_w_err)
         return p_com_w_err, e_com_w_err
 
+    def get_velocity_error(self, v_t_w_des):
+        p_com_t, q_com_t = self.calc_COM('task')
+        v_com_w_des = util.adjoint_transformation(v_t_w_des, p_com_t, q_com_t, inverse=True)
+
+        v_b_w = np.concatenate(p.getBaseVelocity(self.id))
+        p_com_b, q_com_b = self.calc_COM('base')
+        v_com_w = util.adjoint_transformation(v_b_w, p_com_b, q_com_b, inverse=True)
+
+        v_com_w_err = np.subtract(v_com_w_des, v_com_w)
+        return v_com_w_err[:3], v_com_w_err[3:]
+
     def at_des_pose(self, pose_t_w_des):
-        p_err_eps = .01
+        p_err_eps = .001
         e_err_eps = .001
         p_com_w_err, e_com_w_err = self.get_pose_error(pose_t_w_des)
         return all(p < p_err_eps for p in p_com_w_err) and all(e < e_err_eps for e in e_com_w_err)
 
-    # TODO: actually just P control at the moment. need to add D control
     def move_PD(self, pose_t_w_des):
-        k=[20, 2]
-        d=[800., .9]
+        k=[200, 20]
+        d=[80., .9]
 
         while not self.at_des_pose(pose_t_w_des):
-            #p.addUserDebugLine(pose_t_w_des.pos, np.add(pose_t_w_des.pos,[0,100,0]), lifeTime=1.)
             p_com_w_err, e_com_w_err = self.get_pose_error(pose_t_w_des)
+            v_t_w_des = [0., 0., 0., 0., 0., 0.]
+            lin_v_com_w_err, omega_com_w_err = self.get_velocity_error(v_t_w_des)
 
-            '''
-            v_b_w = np.concatenate(p.getBaseVelocity(self.id))
-            p_b_t = np.multiply(-1,self.get_p_tip_base())
-            v_t_w = util.adjoint_transformation(v_b_w, p_b_t, [0., 0., 0., 1.])
-            v_t_w_err = -1*v_t_w
-            '''
-            f = np.dot(k[0], p_com_w_err) #+ np.dot(d[0], v_t_w_err[:3])
-            tau = np.dot(k[1], e_com_w_err) #+ np.dot(d[1], v_t_w_err[3:])
+            f = np.dot(k[0], p_com_w_err) + np.dot(d[0], lin_v_com_w_err)
+            tau = np.dot(k[1], e_com_w_err) + np.dot(d[1], omega_com_w_err)
 
-            p_com_w, _ = self.calc_COM('world')
+            p_com_w, q_com_t = self.calc_COM('world')
             p.applyExternalForce(self.id, -1, f, p_com_w, p.WORLD_FRAME)
-            #p.addUserDebugLine(p_com_w, np.add(p_com_w,1000*f),[0,0,1], lifeTime=.5)
             # there is a bug in pyBullet. the link frame and world frame are inverted
             # this should be executed in the WORLD_FRAME
             p.applyExternalTorque(self.id, -1, tau, p.LINK_FRAME)
@@ -166,7 +172,7 @@ class Gripper:
 
         p.stepSimulation()
 
-    def calc_COM(self, mode='world'):
+    def calc_COM(self, mode):
         com_num = np.array([0., 0., 0.])
         for link_index in range(p.getNumJoints(self.id)):
             link_com = p.getLinkState(self.id, link_index)[0]
@@ -182,4 +188,9 @@ class Gripper:
         elif mode == 'task':
             p_t_w = self.get_p_tip_world()
             p_com_t = util.transformation(p_com_w, p_t_w, q_b_w, inverse=True)
-            return p_com_w, q_com_w, p_com_t
+            q_com_t = np.array([0.,0.,0.,1.])
+            return p_com_t, q_com_t
+        elif mode == 'base':
+            p_com_b = util.transformation(p_com_w, p_b_w, q_b_w, inverse=True)
+            q_com_b = np.array([0.,0.,0.,1.])
+            return p_com_b, q_com_b
