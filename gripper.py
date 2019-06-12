@@ -2,6 +2,8 @@ import pybullet as p
 import numpy as np
 import util
 import time
+from collections import namedtuple
+import itertools
 '''
 # Naming convention
 pose_ is a util.Pose()
@@ -19,8 +21,9 @@ h - mechanism handle
 d - door frame
 com - center of mass of the entire gripper body
 '''
+
 class Gripper:
-    def __init__(self, bb_id, control_method):
+    def __init__(self, bb_id, control_method, k=[200, 20], d=[80., .9]):
         if control_method == 'force':
             self.id = p.loadSDF("../models/gripper/gripper.sdf")[0]
         elif control_method == 'traj':
@@ -32,6 +35,8 @@ class Gripper:
         self.right_finger_base_joint_id = 3
         self.q_t_w_des =  [0.50019904,  0.50019904, -0.49980088, 0.49980088]
         self.finger_force = 20
+        self.k = k
+        self.d = d
 
         # get mass of gripper
         mass = 0
@@ -85,17 +90,22 @@ class Gripper:
         p_com_w_err, e_com_w_err = self.get_pose_error(pose_t_w_des)
         return all(p < p_err_eps for p in p_com_w_err) and all(e < e_err_eps for e in e_com_w_err)
 
-    def move_PD(self, pose_t_w_des):
-        k=[200, 20]
-        d=[80., .9]
-
-        while not self.at_des_pose(pose_t_w_des):
+    def move_PD(self, pose_t_w_des, debug=False, timeout=1000):
+        finished = False
+        for i in itertools.count():
+            if self.at_des_pose(pose_t_w_des):
+                finished = True
+                break
+            if i>timeout:
+                if debug:
+                    print('timeout limit reached. moving the next joint')
+                break
             p_com_w_err, e_com_w_err = self.get_pose_error(pose_t_w_des)
             v_t_w_des = [0., 0., 0., 0., 0., 0.]
             lin_v_com_w_err, omega_com_w_err = self.get_velocity_error(v_t_w_des)
 
-            f = np.dot(k[0], p_com_w_err) + np.dot(d[0], lin_v_com_w_err)
-            tau = np.dot(k[1], e_com_w_err) + np.dot(d[1], omega_com_w_err)
+            f = np.multiply(self.k[0], p_com_w_err) + np.multiply(self.d[0], lin_v_com_w_err)
+            tau = np.multiply(self.k[1], e_com_w_err) + np.multiply(self.d[1], omega_com_w_err)
 
             p_com_w, q_com_t = self.calc_COM('world')
             p.applyExternalForce(self.id, -1, f, p_com_w, p.WORLD_FRAME)
@@ -103,6 +113,7 @@ class Gripper:
             # this should be executed in the WORLD_FRAME
             p.applyExternalTorque(self.id, -1, tau, p.LINK_FRAME)
             p.stepSimulation()
+        return finished
 
     def grasp_handle(self, pose_t_w_des, viz=False):
         # default values for moving the gripper to a pose before grasping handle
@@ -157,17 +168,21 @@ class Gripper:
 
             k = .006
             d = .001
-            tau = np.dot(k, e_t_w_err) + np.dot(d, omega_t_w_err)
+            tau = np.multiply(k, e_t_w_err) + np.multiply(d, omega_t_w_err)
             # there is a bug in pyBullet. the link frame and world frame are inverted
             # this should be executed in the WORLD_FRAME
             p.applyExternalTorque(self.id, -1, tau, p.LINK_FRAME)
 
         if command.traj is not None:
+            start_time = time.time()
             for (i, pose_t_w_des) in enumerate(command.traj):
-                self.move_PD(pose_t_w_des)
+                finished = self.move_PD(pose_t_w_des, debug)
+                if not finished:
+                    break
                 if not callback is None:
                     callback(bb)
-
+            duration = time.time() - start_time
+            return i/len(command.traj), duration
         p.stepSimulation()
 
     def calc_COM(self, mode):
