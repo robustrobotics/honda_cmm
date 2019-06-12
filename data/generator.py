@@ -307,6 +307,8 @@ class BusyBox(object):
         self._links = []
         self._joints = []
         self._create_skeleton(width, height)
+        self.width = width
+        self.height = height
 
     def _create_skeleton(self, width, height):
         """
