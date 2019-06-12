@@ -2,6 +2,8 @@ from collections import namedtuple
 from joints import JointModel, Prismatic, Revolute
 import numpy as np
 import util
+import itertools
+import pybullet as p
 
 # named tuples for all policy params
 #PokeParams = namedtuple('PokeParams', '...')
@@ -15,25 +17,25 @@ delta_pos = .01
 
 # all primitive parameterized policies take in parameters and output trajectories
 # of poses for the gripper to follow
-def poke(params):
+def poke(params, debug=False):
     pass
 
-def slide(params):
+def slide(params, debug=False):
     pass
 
-def prism(params):
+def prism(params, debug=False):
     delta_q_mag = delta_pos
-    return from_model('prismatic', params, delta_q_mag=delta_q_mag)
+    return from_model('prismatic', params, delta_q_mag=delta_q_mag, debug=False)
 
-def rev(params):
+def rev(params, debug=False):
     delta_q_mag = delta_pos/np.linalg.norm(params.radius)
-    return from_model('revolute', params, delta_q_mag=delta_q_mag)
+    return from_model('revolute', params, delta_q_mag=delta_q_mag, debug=False)
 
-def path(params):
+def path(params, debug=False):
     pass
 
 ## Helper Functions
-def from_model(model_type, params, delta_q_mag):
+def from_model(model_type, params, delta_q_mag, debug=False):
     if model_type == 'prismatic':
         joint = Prismatic(params.pos, params.orn, params.dir)
     else:
@@ -44,13 +46,18 @@ def from_model(model_type, params, delta_q_mag):
     delta_q = delta_q_mag*q_dir_unit
 
     poses = []
-    while not near(curr_q, params.goal_q, q_dir_unit):
+    for i in itertools.count():
+        if near(curr_q, params.goal_q, q_dir_unit):
+            break
         curr_joint_pose = joint.forward_kinematics(curr_q)
         # for rev, orn should change with q
         # for prism, orn should remain constant
         # for now remain constant for both
         poses += [util.Pose(curr_joint_pose.pos, params.grasp_pose.orn)]
         curr_q += delta_q
+        if debug:
+            if i>0:
+                p.addUserDebugLine(poses[i-1].pos, poses[i].pos)
     return poses
 
 def q_dir(curr_q, goal_q):
