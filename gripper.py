@@ -4,6 +4,7 @@ import util
 import time
 from collections import namedtuple
 import itertools
+import sys
 '''
 # Naming convention
 pose_ is a util.Pose()
@@ -85,16 +86,22 @@ class Gripper:
         return v_com_w_err[:3], v_com_w_err[3:]
 
     def at_des_pose(self, pose_t_w_des):
-        p_err_eps = .005
-        e_err_eps = .005
+        p_err_eps = .02
+        #e_err_eps = .4
         p_com_w_err, e_com_w_err = self.get_pose_error(pose_t_w_des)
-        return all(p < p_err_eps for p in p_com_w_err) and all(e < e_err_eps for e in e_com_w_err)
+        return np.linalg.norm(p_com_w_err) < p_err_eps# and np.linalg.norm(e_com_w_err) < e_err_eps
 
-    def move_PD(self, pose_t_w_des, debug=False, timeout=1000):
+    def move_PD(self, pose_t_w_des, debug=False, timeout=5000):
         finished = False
         for i in itertools.count():
+            if debug:
+                p.addUserDebugLine(pose_t_w_des.pos, np.add(pose_t_w_des.pos,[0,0,10]), lifeTime=.5)
+                err = self.get_pose_error(pose_t_w_des)
+                sys.stdout.write("\r%.3f %.3f" % (np.linalg.norm(err[0]), np.linalg.norm(err[1])))
             if self.at_des_pose(pose_t_w_des):
                 finished = True
+                if debug:
+                    print(' made it to waypoint')
                 break
             if i>timeout:
                 if debug:
