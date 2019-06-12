@@ -24,7 +24,7 @@ com - center of mass of the entire gripper body
 '''
 
 class Gripper:
-    def __init__(self, bb_id, control_method, k=[200, 20], d=[80., .9]):
+    def __init__(self, bb_id, control_method, k=[200.,5.], d=[45.,1.]):
         if control_method == 'force':
             self.id = p.loadSDF("../models/gripper/gripper.sdf")[0]
         elif control_method == 'traj':
