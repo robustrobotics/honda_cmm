@@ -25,11 +25,11 @@ def slide(params, debug=False):
 
 def prism(params, debug=False):
     delta_q_mag = delta_pos
-    return from_model('prismatic', params, delta_q_mag=delta_q_mag, debug=False)
+    return from_model('prismatic', params, delta_q_mag=delta_q_mag, debug=debug)
 
 def rev(params, debug=False):
     delta_q_mag = delta_pos/np.linalg.norm(params.radius)
-    return from_model('revolute', params, delta_q_mag=delta_q_mag, debug=False)
+    return from_model('revolute', params, delta_q_mag=delta_q_mag, debug=debug)
 
 def path(params, debug=False):
     pass
