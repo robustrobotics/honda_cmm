@@ -144,9 +144,13 @@ class Slider(Mechanism):
 
         return aabb.AABB([(x_min, x_max), (z_min, z_max)])
 
-    def set_joint_model(self, bb_id):
+    def set_joint_model(self, bb_id, offset=None):
         p_back_w = p.getLinkState(bb_id, 0)[0]
         rigid_position = np.add(p_back_w, [self.origin[0], .05, self.origin[1]])
+
+        if offset is not None:
+            # add offset so that handle center aligns with a graspable point
+            rigid_position = np.add(rigid_position,offset)
         rigid_orientation = [0., 0., 0., 1.]
         prismatic_dir = [self.axis[0], 0., self.axis[1]]
         self.joint_model = Prismatic(rigid_position, rigid_orientation, prismatic_dir)
@@ -275,9 +279,13 @@ class Door(Mechanism):
             x_max = self.origin[0]
         return aabb.AABB([(x_min, x_max), (z_min, z_max)])
 
-    def set_joint_model(self, bb_id):
+    def set_joint_model(self, bb_id, offset=None):
         p_b_w = p.getLinkState(bb_id, self.door_base_id)[0]
         p_h_w = p.getLinkState(bb_id, self.handle_id)[0]
+
+        if offset is not None:
+            # add offset so that handle center aligns with a graspable point
+            p_h_w = np.add(p_h_w,offset)
         rot_center = [p_b_w[0], p_b_w[1], p_h_w[2]]
         rot_axis = [0., 0., 0., 1.]
         rot_radius = np.subtract(p_h_w, rot_center)
@@ -387,9 +395,9 @@ class BusyBox(object):
                             mech.door_base_id = joint_info[0]
         self.bb_id = bb_id
 
-    def set_joint_models(self, bb_id):
+    def set_joint_models(self, bb_id, offset=None):
         for mech in self._mechanisms:
-            mech.set_joint_model(bb_id)
+            mech.set_joint_model(bb_id, offset=None)
 
     def get_urdf(self):
         """
