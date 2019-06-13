@@ -8,8 +8,8 @@ import pybullet as p
 # named tuples for all policy params
 #PokeParams = namedtuple('PokeParams', '...')
 #SlideParams = namedtuple('SlideParams', '...')
-PrismParams = namedtuple('PrismParams', 'grasp_pose joint_pose pos orn dir goal_q')
-RevParams = namedtuple('RevParams', 'grasp_pose joint_pose center axis radius orn goal_q')
+PrismParams = namedtuple('PrismParams', 'grasp_orn joint_pose pos orn dir goal_q')
+RevParams = namedtuple('RevParams', 'grasp_orn joint_pose center axis radius orn goal_q')
 #PathParams = namedtuple('PathParams', '...')
 
 # max distance between waypoints in trajectory
@@ -53,7 +53,7 @@ def from_model(model_type, params, delta_q_mag, debug=False):
         # for rev, orn should change with q
         # for prism, orn should remain constant
         # for now remain constant for both
-        poses += [util.Pose(curr_joint_pose.pos, params.grasp_pose.orn)]
+        poses += [util.Pose(curr_joint_pose.pos, params.grasp_orn)]
         curr_q += delta_q
         if debug:
             if i>0:
