@@ -397,7 +397,7 @@ class BusyBox(object):
 
     def set_joint_models(self, bb_id, offset=None):
         for mech in self._mechanisms:
-            mech.set_joint_model(bb_id, offset=None)
+            mech.set_joint_model(bb_id, offset=offset)
 
     def get_urdf(self):
         """
