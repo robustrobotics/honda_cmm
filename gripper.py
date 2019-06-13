@@ -24,11 +24,8 @@ com - center of mass of the entire gripper body
 '''
 
 class Gripper:
-    def __init__(self, bb_id, control_method, k=[200.,5.], d=[45.,1.]):
-        if control_method == 'force':
-            self.id = p.loadSDF("../models/gripper/gripper.sdf")[0]
-        elif control_method == 'traj':
-            self.id = p.loadSDF("../models/gripper/gripper_high_fric.sdf")[0]
+    def __init__(self, bb_id, k=[200.,5.], d=[45.,1.]):
+        self.id = p.loadSDF("../models/gripper/gripper_high_fric.sdf")[0]
         self.bb_id = bb_id
         self.left_finger_tip_id = 2
         self.right_finger_tip_id = 5
@@ -92,8 +89,10 @@ class Gripper:
     def move_PD(self, pose_t_w_des, debug=False, timeout=5000):
         finished = False
         for i in itertools.count():
+            # keep fingers closed
+            #self.control_fingers('close', debug=debug)
             if debug:
-                p.addUserDebugLine(pose_t_w_des.pos, np.add(pose_t_w_des.pos,[0,0,10]), lifeTime=.5)
+                p.addUserDebugLine(pose_t_w_des.pos, np.add(pose_t_w_des.pos,[0,0,10]))#, lifeTime=.5)
                 p_t_w = self.get_p_tip_world()
                 p.addUserDebugLine(p_t_w, np.add(p_t_w,[0,0,10]), [0,1,0], lifeTime=.5)
                 err = self.get_pose_error(pose_t_w_des)
@@ -122,53 +121,54 @@ class Gripper:
             p.stepSimulation()
         return finished
 
-    def grasp_handle(self, pose_t_w_des, viz=False):
-        # default values for moving the gripper to a pose before grasping handle
+    def grasp_handle(self, pose_t_w_des, debug=False):
+        # move to default start pose
         p_t_w_init = [0., 0., .2]
         q_t_w_init = [0.50019904,  0.50019904, -0.49980088, 0.49980088]
         pose_t_w_init = util.Pose(p_t_w_init, q_t_w_init)
         for t in range(10):
             self.set_tip_pose(pose_t_w_init, reset=True)
 
+        # open fingers
         for t in range(10):
-            self.apply_command(util.Command(finger_state='open'), debug=False, viz=viz)
+            self.control_fingers('open', debug=debug)
 
+        # move to desired pose
         for t in range(10):
             self.set_tip_pose(pose_t_w_des, reset=True)
 
+        # close fingers
         for t in range(10):
-            self.apply_command(util.Command(finger_state='close'), debug=False, viz=viz)
+            self.control_fingers('close', debug=debug)
 
-    def apply_command(self, command, debug=False, viz=False, callback=None, bb=None, mech=None):
-
-        # always control the fingers
-        if command.finger_state == 'open':
+    def control_fingers(self, finger_state, debug=False):
+        if finger_state == 'open':
             finger_angle = 0.2
-        elif command.finger_state == 'close':
+        elif finger_state == 'close':
             finger_angle = 0.0
         p.setJointMotorControl2(self.id,self.left_finger_base_joint_id,p.POSITION_CONTROL,targetPosition=-finger_angle,force=self.finger_force)
         p.setJointMotorControl2(self.id,self.right_finger_base_joint_id,p.POSITION_CONTROL,targetPosition=finger_angle,force=self.finger_force)
         p.setJointMotorControl2(self.id,2,p.POSITION_CONTROL,targetPosition=0,force=self.finger_force)
         p.setJointMotorControl2(self.id,5,p.POSITION_CONTROL,targetPosition=0,force=self.finger_force)
-
-        # command the gripper to follow a trajectory if one is supplied
-        if command.traj is not None:
-            start_time = time.time()
-            motion = 0
-            for (i, pose_t_w_des) in enumerate(command.traj):
-                if mech:
-                    start_mech_pose = p.getLinkState(self.bb_id, mech.handle_id)[0]
-                finished = self.move_PD(pose_t_w_des, debug)
-                if mech:
-                    final_mech_pose = p.getLinkState(self.id, mech.handle_id)[0]
-                    motion += np.linalg.norm(np.subtract(final_mech_pose,start_mech_pose))
-                if not finished:
-                    break
-                if not callback is None:
-                    callback(bb)
-            duration = time.time() - start_time
-            return i/len(command.traj), duration, motion
         p.stepSimulation()
+
+    def execute_trajectory(self, traj, debug=False, callback=None, bb=None, mech=None):
+        self.grasp_handle(traj[0], debug)
+        start_time = time.time()
+        motion = 0
+        for (i, pose_t_w_des) in enumerate(traj):
+            if mech:
+                start_mech_pose = p.getLinkState(self.bb_id, mech.handle_id)[0]
+            finished = self.move_PD(pose_t_w_des, debug)
+            if mech:
+                final_mech_pose = p.getLinkState(self.id, mech.handle_id)[0]
+                motion += np.linalg.norm(np.subtract(final_mech_pose,start_mech_pose))
+            if not finished:
+                break
+            if not callback is None:
+                callback(bb)
+        duration = time.time() - start_time
+        return i/len(traj), duration, motion
 
     def calc_COM(self, mode):
         com_num = np.array([0., 0., 0.])

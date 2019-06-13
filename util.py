@@ -7,13 +7,6 @@ from collections import namedtuple
 
 Pose = namedtuple('Pose', 'pos orn')
 
-class Command:
-    def __init__(self, finger_state='close', force_dir=None, tip_orientation=None, traj=None):
-        self.finger_state = finger_state
-        self.force_dir = force_dir
-        self.tip_orientation = tip_orientation
-        self.traj = traj
-
 class Recorder(object):
 
     def __init__(self, height, width):
