@@ -9,8 +9,6 @@ from gripper import Gripper
 from joints import Prismatic, Revolute
 import util
 
-#np.random.seed(0)
-
 class Mechanism(object):
     def __init__(self, p_type):
         """
@@ -395,7 +393,7 @@ class BusyBox(object):
                             mech.door_base_id = joint_info[0]
         self.bb_id = bb_id
 
-    def set_joint_models(self, bb_id, offset=None):
+    def set_joint_models(self, bb_id, offset=[0., .015, 0.]):
         for mech in self._mechanisms:
             mech.set_joint_model(bb_id, offset=offset)
 
