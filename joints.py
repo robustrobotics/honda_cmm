@@ -67,7 +67,7 @@ class Revolute(JointModel):
         :param rot_center: position for the center of rotation
         :param rot_axis: orientation for the center of rotation (fixed and assumed that
                             object rotates about the z axis)
-        :param rot_radius: scalar representing the radius
+        :param rot_radius: position of the handle in the center frame representing the radius
         :param rot_orientation: orientation of the handle relative to the rotated frame
         """
 
