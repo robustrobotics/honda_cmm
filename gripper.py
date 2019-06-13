@@ -60,8 +60,6 @@ class Gripper:
     def set_tip_pose(self, pose_t_w_des, reset=False):
         p_b_t = np.multiply(-1, self.get_p_tip_base())
         p_b_w_des = util.transformation(p_b_t, pose_t_w_des.pos, pose_t_w_des.orn)
-        # move back just a little bit
-        p_b_w_des[1] += .01
         p.resetBasePositionAndOrientation(self.id, p_b_w_des, pose_t_w_des.orn)
         p.stepSimulation()
 
@@ -96,6 +94,8 @@ class Gripper:
         for i in itertools.count():
             if debug:
                 p.addUserDebugLine(pose_t_w_des.pos, np.add(pose_t_w_des.pos,[0,0,10]), lifeTime=.5)
+                p_t_w = self.get_p_tip_world()
+                p.addUserDebugLine(p_t_w, np.add(p_t_w,[0,0,10]), [0,1,0], lifeTime=.5)
                 err = self.get_pose_error(pose_t_w_des)
                 sys.stdout.write("\r%.3f %.3f" % (np.linalg.norm(err[0]), np.linalg.norm(err[1])))
             if self.at_des_pose(pose_t_w_des):
@@ -139,57 +139,35 @@ class Gripper:
         for t in range(10):
             self.apply_command(util.Command(finger_state='close'), debug=False, viz=viz)
 
-    def apply_command(self, command, debug=False, viz=False, callback=None, bb=None):
+    def apply_command(self, command, debug=False, viz=False, callback=None, bb=None, mech=None):
+
         # always control the fingers
         if command.finger_state == 'open':
             finger_angle = 0.2
         elif command.finger_state == 'close':
             finger_angle = 0.0
-
         p.setJointMotorControl2(self.id,self.left_finger_base_joint_id,p.POSITION_CONTROL,targetPosition=-finger_angle,force=self.finger_force)
         p.setJointMotorControl2(self.id,self.right_finger_base_joint_id,p.POSITION_CONTROL,targetPosition=finger_angle,force=self.finger_force)
         p.setJointMotorControl2(self.id,2,p.POSITION_CONTROL,targetPosition=0,force=self.finger_force)
         p.setJointMotorControl2(self.id,5,p.POSITION_CONTROL,targetPosition=0,force=self.finger_force)
 
-        # apply a force at the center of the gripper finger tips
-        magnitude = 5.
-        if command.force_dir is not None:
-            p_t_w = self.get_p_tip_world()
-            force = np.multiply(magnitude, command.force_dir)
-            # gravity compensation
-            g_force = self.mass*10.
-            force_w_grav = np.add(force, [0., 0., g_force])
-            p.applyExternalForce(self.id, -1, force_w_grav, p_t_w, p.WORLD_FRAME)
-
-        # control orientation with torque control
-        if command.tip_orientation is not None:
-            q_b_w = p.getBasePositionAndOrientation(self.id)[1]
-            omega_b_w = p.getBaseVelocity(self.id)[1]
-            q_t_w = q_b_w
-            omega_t_w = omega_b_w
-
-            q_t_w_err, _ = util.diff_quat(command.tip_orientation, q_t_w)
-            e_t_w_err = util.euler_from_quaternion(q_t_w_err)
-            omega_t_w_des = np.zeros(3)
-            omega_t_w_err = omega_t_w_des - omega_t_w
-
-            k = .006
-            d = .001
-            tau = np.multiply(k, e_t_w_err) + np.multiply(d, omega_t_w_err)
-            # there is a bug in pyBullet. the link frame and world frame are inverted
-            # this should be executed in the WORLD_FRAME
-            p.applyExternalTorque(self.id, -1, tau, p.LINK_FRAME)
-
+        # command the gripper to follow a trajectory if one is supplied
         if command.traj is not None:
             start_time = time.time()
+            motion = 0
             for (i, pose_t_w_des) in enumerate(command.traj):
+                if mech:
+                    start_mech_pose = p.getLinkState(self.bb_id, mech.handle_id)[0]
                 finished = self.move_PD(pose_t_w_des, debug)
+                if mech:
+                    final_mech_pose = p.getLinkState(self.id, mech.handle_id)[0]
+                    motion += np.linalg.norm(np.subtract(final_mech_pose,start_mech_pose))
                 if not finished:
                     break
                 if not callback is None:
                     callback(bb)
             duration = time.time() - start_time
-            return i/len(command.traj), duration
+            return i/len(command.traj), duration, motion
         p.stepSimulation()
 
     def calc_COM(self, mode):
