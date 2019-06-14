@@ -62,21 +62,21 @@ def transformation(pos, translation_vec, quat, inverse=False):
     new_pos = np.dot(T, pos)
     return new_pos[:3]
 
-def diff_quat(q0, q1, step_size=None, add=False):
+def quat_math(q0, q1, inv0, inv1):
+    if not isinstance(q0, np.ndarray):
+        q0 = np.array(q0)
+    if not isinstance(q1, np.ndarray):
+        q1 = np.array(q1)
     q0 = to_transquat(q0)
     q0 = trans.unit_vector(q0)
     q1 = to_transquat(q1)
     q1 = trans.unit_vector(q1)
-    if add:
+    if inv0:
+        q0 = trans.quaternion_conjugate(q0)
+    if inv1:
         q1 = trans.quaternion_conjugate(q1)
-    orn_err = trans.quaternion_multiply(q0, trans.quaternion_conjugate(q1))
-    orn_err = to_pyquat(orn_err)
-
-    orn_des = None
-    if step_size is not None:
-        orn_des = trans.quaternion_slerp(q1, q0, step_size)
-        orn_des = to_pyquat(orn_des)
-    return orn_err, orn_des
+    res = trans.quaternion_multiply(q0,q1)
+    return to_pyquat(res)
 
 def to_transquat(pybullet_quat):
     return np.concatenate([[pybullet_quat[3]], pybullet_quat[:3]])
