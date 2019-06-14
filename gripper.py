@@ -65,7 +65,7 @@ class Gripper:
         p_t_w = self.get_p_tip_world()
         q_t_w = p.getBasePositionAndOrientation(self.id)[1]
         p_t_w_err = np.subtract(pose_t_w_des.pos, p_t_w)
-        q_t_w_err, _ = util.diff_quat(pose_t_w_des.orn, q_t_w)
+        q_t_w_err = util.quat_math(pose_t_w_des.orn, q_t_w, False, True)
         e_t_w_err = util.euler_from_quaternion(q_t_w_err)
         return p_t_w_err, e_t_w_err
 
@@ -81,18 +81,28 @@ class Gripper:
         return v_com_w_err[:3], v_com_w_err[3:]
 
     def at_des_pose(self, pose_t_w_des):
-        p_err_eps = .02
+        p_err_eps = .005
         #e_err_eps = .4
         p_com_w_err, e_com_w_err = self.get_pose_error(pose_t_w_des)
         return np.linalg.norm(p_com_w_err) < p_err_eps# and np.linalg.norm(e_com_w_err) < e_err_eps
 
-    def move_PD(self, pose_t_w_des, debug=False, timeout=5000):
+    def move_PD(self, pose_t_w_des, debug=False, timeout=500):
+        # move setpoint further away in a straight line between curr pose and goal pose
+        add_dist = 0.1
+        dir = np.subtract(pose_t_w_des.pos, self.get_p_tip_world())
+        mag = np.linalg.norm([dir])
+        unit_dir = np.divide(dir,mag)
+        p_t_w_des_far = np.add(pose_t_w_des.pos,np.multiply(add_dist,unit_dir))
+        pose_t_w_des_far = util.Pose(p_t_w_des_far, pose_t_w_des.orn)
+
         finished = False
         for i in itertools.count():
-            # keep fingers closed
-            #self.control_fingers('close', debug=debug)
+            # keep fingers closed (doesn't seem to make a difference but should
+            # probably continually close fingers)
+            self.control_fingers('close', debug=debug)
             if debug:
-                p.addUserDebugLine(pose_t_w_des.pos, np.add(pose_t_w_des.pos,[0,0,10]))#, lifeTime=.5)
+                p.addUserDebugLine(pose_t_w_des_far.pos, np.add(pose_t_w_des_far.pos,[0,0,10]), lifeTime=.5)
+                p.addUserDebugLine(pose_t_w_des.pos, np.add(pose_t_w_des.pos,[0,0,10]), [1,0,0], lifeTime=.5)
                 p_t_w = self.get_p_tip_world()
                 p.addUserDebugLine(p_t_w, np.add(p_t_w,[0,0,10]), [0,1,0], lifeTime=.5)
                 err = self.get_pose_error(pose_t_w_des)
@@ -106,7 +116,7 @@ class Gripper:
                 if debug:
                     print('timeout limit reached. moving the next joint')
                 break
-            p_com_w_err, e_com_w_err = self.get_pose_error(pose_t_w_des)
+            p_com_w_err, e_com_w_err = self.get_pose_error(pose_t_w_des_far)
             v_t_w_des = [0., 0., 0., 0., 0., 0.]
             lin_v_com_w_err, omega_com_w_err = self.get_velocity_error(v_t_w_des)
 
