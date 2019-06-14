@@ -8,12 +8,12 @@ import pybullet as p
 # named tuples for all policy params
 #PokeParams = namedtuple('PokeParams', '...')
 #SlideParams = namedtuple('SlideParams', '...')
-PrismParams = namedtuple('PrismParams', 'grasp_orn joint_pose pos orn dir goal_q')
-RevParams = namedtuple('RevParams', 'grasp_orn joint_pose center axis radius orn goal_q')
+PrismParams = namedtuple('PrismParams', 'grasp_orn joint_pos pos orn dir goal_q')
+RevParams = namedtuple('RevParams', 'grasp_orn joint_pos center axis radius orn goal_q')
 #PathParams = namedtuple('PathParams', '...')
 
 # max distance between waypoints in trajectory
-delta_pos = .01
+delta_pos = .001
 
 # all primitive parameterized policies take in parameters and output trajectories
 # of poses for the gripper to follow
@@ -41,9 +41,14 @@ def from_model(model_type, params, delta_q_mag, debug=False):
     else:
         joint = Revolute(params.center, params.axis, params.radius, params.orn)
 
-    curr_q = joint.inverse_kinematics(params.joint_pose.pos, np.array([0., 0., 0., 1.]))
+    joint_orn = np.array([0., 0., 0., 1.])
+    curr_q = joint.inverse_kinematics(params.joint_pos, joint_orn)
     q_dir_unit = q_dir(curr_q, params.goal_q)
     delta_q = delta_q_mag*q_dir_unit
+
+    # initial offset between joint pose orn and gripper orn
+    # assume that we want to keep this offset constant throughout the traj
+    init_delta_q = util.quat_math(joint_orn, params.grasp_orn, True, False)
 
     poses = []
     for i in itertools.count():
@@ -53,7 +58,8 @@ def from_model(model_type, params, delta_q_mag, debug=False):
         # for rev, orn should change with q
         # for prism, orn should remain constant
         # for now remain constant for both
-        poses += [util.Pose(curr_joint_pose.pos, params.grasp_orn)]
+        grasp_orn = util.quat_math(curr_joint_pose.orn, init_delta_q, False, False)
+        poses += [util.Pose(curr_joint_pose.pos, grasp_orn)]
         curr_q += delta_q
         if debug:
             if i>0:
