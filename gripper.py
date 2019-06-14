@@ -107,6 +107,7 @@ class Gripper:
                 p.addUserDebugLine(p_t_w, np.add(p_t_w,[0,0,10]), [0,1,0], lifeTime=.5)
                 err = self.get_pose_error(pose_t_w_des)
                 sys.stdout.write("\r%.3f %.3f" % (np.linalg.norm(err[0]), np.linalg.norm(err[1])))
+                util.vis_frame(*pose_t_w_des)
             if self.at_des_pose(pose_t_w_des):
                 finished = True
                 if debug:
@@ -179,6 +180,12 @@ class Gripper:
                 callback(bb)
         duration = time.time() - start_time
         return i/len(traj), duration, motion
+
+    def in_contact(self, mech):
+        points = p.getContactPoints(self.id, self.bb_id, linkIndexB=mech.handle_id)
+        if len(points)>0:
+            return True
+        return False
 
     def calc_COM(self, mode):
         com_num = np.array([0., 0., 0.])
