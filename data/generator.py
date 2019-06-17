@@ -57,6 +57,7 @@ class Slider(Mechanism):
         Slider.n_sliders += 1
 
         slider_handle_name = 'slider_{0}_handle'.format(name)
+        slider_track_name = 'slider_{0}_track'.format(name)
         handle = urdf.Link(slider_handle_name,
                            urdf.Inertial(
                                urdf.Origin(xyz=(0, 0, 0), rpy=(0, 0, 0)),
@@ -79,7 +80,7 @@ class Slider(Mechanism):
                                )
                            ))
 
-        track = urdf.Link('slider_{0}_track'.format(name),
+        track = urdf.Link(slider_track_name.format(name),
                            urdf.Inertial(
                                urdf.Origin(xyz=(0, 0, 0), rpy=(0, 0, 0)),
                                urdf.Mass(value=0.1),
@@ -124,7 +125,9 @@ class Slider(Mechanism):
         self._joints.append(track_joint)
 
         self.handle_name = slider_handle_name
+        self.track_name = slider_track_name
         self.handle_id = None
+        self.track_id = None
         self.origin = (x_offset, z_offset)
         self.range = range
         self.handle_radius = 0.025
@@ -142,13 +145,9 @@ class Slider(Mechanism):
 
         return aabb.AABB([(x_min, x_max), (z_min, z_max)])
 
-    def set_joint_model(self, bb_id, offset=None):
-        p_back_w = p.getLinkState(bb_id, 0)[0]
-        rigid_position = np.add(p_back_w, [self.origin[0], .05, self.origin[1]])
-
-        if offset is not None:
-            # add offset so that handle center aligns with a graspable point
-            rigid_position = np.add(rigid_position,offset)
+    def set_joint_model(self, bb):
+        p_track_w = p.getLinkState(bb.bb_id,self.track_id)[0]
+        rigid_position = bb.project_onto_backboard(p_track_w)
         rigid_orientation = [0., 0., 0., 1.]
         prismatic_dir = [self.axis[0], 0., self.axis[1]]
         self.joint_model = Prismatic(rigid_position, rigid_orientation, prismatic_dir)
@@ -277,16 +276,12 @@ class Door(Mechanism):
             x_max = self.origin[0]
         return aabb.AABB([(x_min, x_max), (z_min, z_max)])
 
-    def set_joint_model(self, bb_id, offset=None):
-        p_b_w = p.getLinkState(bb_id, self.door_base_id)[0]
-        p_h_w = p.getLinkState(bb_id, self.handle_id)[0]
-
-        if offset is not None:
-            # add offset so that handle center aligns with a graspable point
-            p_h_w = np.add(p_h_w,offset)
-        rot_center = [p_b_w[0], p_b_w[1], p_h_w[2]]
+    def set_joint_model(self, bb):
+        p_door_base_w = p.getLinkState(bb.bb_id, self.door_base_id)[0]
+        p_handle_w = p.getLinkState(bb.bb_id, self.handle_id)[0]
+        rot_center = bb.project_onto_backboard([p_door_base_w[0], p_door_base_w[1], p_handle_w[2]])
         rot_axis = [0., 0., 0., 1.]
-        rot_radius = np.subtract(p_h_w, rot_center)
+        rot_radius = np.subtract([p_handle_w[0],rot_center[1],p_handle_w[2]],rot_center)
         rot_orientation = [0., 0., 0., 1.]
         self.joint_model = Revolute(rot_center, rot_axis, rot_radius, rot_orientation)
 
@@ -391,11 +386,21 @@ class BusyBox(object):
                     if mech.mechanism_type == 'Door':
                         if mech.door_base_name == link_name.decode("utf-8"):
                             mech.door_base_id = joint_info[0]
+            elif 'track' in link_name.decode("utf-8"):
+                for mech in self._mechanisms:
+                    if mech.mechanism_type == "Slider":
+                        if mech.track_name == link_name.decode("utf-8"):
+                            mech.track_id = joint_info[0]
         self.bb_id = bb_id
 
-    def set_joint_models(self, bb_id, offset=[0., .015, 0.]):
+    def set_joint_models(self, bb_id):
         for mech in self._mechanisms:
-            mech.set_joint_model(bb_id, offset=offset)
+            mech.set_joint_model(self)
+
+    def project_onto_backboard(self, pos):
+        bb_thickness = 0.05
+        p_bb_base_w = p.getLinkState(self.bb_id,0)[0]
+        return [pos[0], p_bb_base_w[1]+bb_thickness/2, pos[2]]
 
     def get_urdf(self):
         """
@@ -407,28 +412,6 @@ class BusyBox(object):
             elements += m.get_joints()
         robot = urdf.Robot('busybox', *elements)
         return str(robot)
-
-    def actuate_joints(self, bb_id, gripper, control_method, debug, viz, callback=None):
-        # default orientation of the tip of the gripper when grasping
-        q_t_w_des =  [0.50019904,  0.50019904, -0.49980088, 0.49980088]
-        for mechanism in self._mechanisms:
-            p_t_w_des = p.getLinkState(bb_id, mechanism.handle_id)[0]
-            pose_t_w_des = util.Pose(p_t_w_des, q_t_w_des)
-            gripper.grasp_handle(pose_t_w_des, viz)
-            if control_method == 'force':
-                for t in range(700):
-                    command = mechanism.joint_model.get_force_direction(bb_id, mechanism)
-                    gripper.apply_command(command, debug, viz)
-            elif control_method == 'traj':
-                if mechanism.mechanism_type == 'Slider':
-                    delta_q = .2
-                if mechanism.mechanism_type == 'Door':
-                    delta_q = np.pi/2
-                    if mechanism.flipped:
-                        delta_q = -np.pi/2
-                traj = mechanism.joint_model.get_pose_trajectory(bb_id, mechanism, delta_q)
-                command = util.Command(traj=traj)
-                gripper.apply_command(command, debug, viz, callback, self)
 
     @staticmethod
     def _check_collision(width, height, mechs, mech):
