@@ -5,7 +5,6 @@ import pybullet as p
 import pybullet_data
 import aabbtree as aabb
 from gripper import Gripper
-from joints import Prismatic, Revolute
 import util
 from data.generator import BusyBox
 
@@ -17,7 +16,7 @@ class JointLogger(object):
 
     def start_dataset(self):
         self.dataset = []
-        
+
     def end_dataset(self):
         self.datasets.append(self.dataset)
         self.ix += 1
@@ -88,7 +87,7 @@ if __name__ == '__main__':
         p.disconnect(client)
 
         logger.end_dataset()
-    
+
     for d in logger.datasets:
         print(len(d))
     print(logger.datasets[0][0:100:30])

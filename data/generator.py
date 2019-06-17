@@ -6,7 +6,6 @@ import pybullet_data
 import aabbtree as aabb
 import cv2
 from gripper import Gripper
-from joints import Prismatic, Revolute
 import util
 
 class Mechanism(object):
@@ -145,13 +144,6 @@ class Slider(Mechanism):
 
         return aabb.AABB([(x_min, x_max), (z_min, z_max)])
 
-    def set_joint_model(self, bb):
-        p_track_w = p.getLinkState(bb.bb_id,self.track_id)[0]
-        rigid_position = bb.project_onto_backboard(p_track_w)
-        rigid_orientation = [0., 0., 0., 1.]
-        prismatic_dir = [self.axis[0], 0., self.axis[1]]
-        self.joint_model = Prismatic(rigid_position, rigid_orientation, prismatic_dir)
-
     @staticmethod
     def random(width, height):
         """
@@ -276,15 +268,6 @@ class Door(Mechanism):
             x_max = self.origin[0]
         return aabb.AABB([(x_min, x_max), (z_min, z_max)])
 
-    def set_joint_model(self, bb):
-        p_door_base_w = p.getLinkState(bb.bb_id, self.door_base_id)[0]
-        p_handle_w = p.getLinkState(bb.bb_id, self.handle_id)[0]
-        rot_center = bb.project_onto_backboard([p_door_base_w[0], p_door_base_w[1], p_handle_w[2]])
-        rot_axis = [0., 0., 0., 1.]
-        rot_radius = np.subtract([p_handle_w[0],rot_center[1],p_handle_w[2]],rot_center)
-        rot_orientation = [0., 0., 0., 1.]
-        self.joint_model = Revolute(rot_center, rot_axis, rot_radius, rot_orientation)
-
     @staticmethod
     def random(width, height):
         door_offset = (np.random.uniform(-width/2.0, width/2.0),
@@ -393,10 +376,6 @@ class BusyBox(object):
                             mech.track_id = joint_info[0]
         self.bb_id = bb_id
 
-    def set_joint_models(self, bb_id):
-        for mech in self._mechanisms:
-            mech.set_joint_model(self)
-
     def project_onto_backboard(self, pos):
         bb_thickness = 0.05
         p_bb_base_w = p.getLinkState(self.bb_id,0)[0]
@@ -503,7 +482,6 @@ if __name__ == '__main__':
             handle.write(bb.get_urdf())
         model = p.loadURDF(bb_file, [0., -.3, 0.])
         bb.set_mechanism_ids(model)
-        bb.set_joint_models(model)
         maxForce = 10
         mode = p.VELOCITY_CONTROL
         for jx in range(0, p.getNumJoints(model)):
