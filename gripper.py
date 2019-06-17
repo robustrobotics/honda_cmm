@@ -110,8 +110,6 @@ class Gripper:
                 util.vis_frame(*pose_t_w_des)
             if self.at_des_pose(pose_t_w_des):
                 finished = True
-                if debug:
-                    print(' made it to waypoint')
                 break
             if i>timeout:
                 if debug:
@@ -163,8 +161,8 @@ class Gripper:
         p.setJointMotorControl2(self.id,5,p.POSITION_CONTROL,targetPosition=0,force=self.finger_force)
         p.stepSimulation()
 
-    def execute_trajectory(self, traj, debug=False, callback=None, bb=None, mech=None):
-        self.grasp_handle(traj[0], debug)
+    def execute_trajectory(self, grasp_pose, traj, debug=False, callback=None, bb=None, mech=None):
+        self.grasp_handle(grasp_pose, debug)
         start_time = time.time()
         motion = 0
         for (i, pose_t_w_des) in enumerate(traj):
