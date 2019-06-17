@@ -6,13 +6,14 @@ import pybullet_data
 from gripper import Gripper
 from joints import Prismatic, Revolute
 from data.generator import BusyBox, Slider, Door
-from policies import Rev, Prism
+from policies import Rev, Prism, generate_random_policy
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--viz', action='store_true')
 parser.add_argument('--n', type=int, default=1)
 parser.add_argument('--debug', action='store_true')
 parser.add_argument('--max-mech', type=int, default=6)
+parser.add_argument('--random', action='store_true')
 args = parser.parse_args()
 
 if args.debug:
@@ -61,18 +62,21 @@ for mech in bb._mechanisms:
     q_t_w_des = np.array([0.50019904,  0.50019904, -0.49980088, 0.49980088])
 
     # try correct policy on each
-    if mech.mechanism_type == 'Door':
-        goal_q = -np.pi/2 if mech.flipped else np.pi/2
-        policy = Rev(mech.joint_model.rot_center,
-                        mech.joint_model.rot_axis,
-                        mech.joint_model.rot_radius,
-                        mech.joint_model.rot_orientation,
-                        goal_q)
-    elif mech.mechanism_type == 'Slider':
-        policy = Prism(mech.joint_model.rigid_position,
-                        mech.joint_model.rigid_orientation,
-                        mech.joint_model.prismatic_dir,
-                        .1)
+    if not args.random:
+        if mech.mechanism_type == 'Door':
+            goal_q = -np.pi/2 if mech.flipped else np.pi/2
+            policy = Rev(mech.joint_model.rot_center,
+                            mech.joint_model.rot_axis,
+                            mech.joint_model.rot_radius,
+                            mech.joint_model.rot_orientation,
+                            goal_q)
+        elif mech.mechanism_type == 'Slider':
+            policy = Prism(mech.joint_model.rigid_position,
+                            mech.joint_model.rigid_orientation,
+                            mech.joint_model.prismatic_dir,
+                            .1)
+    else:
+        policy = generate_random_policy(bb)
     init_joint_pos = bb.project_onto_backboard(p_mech_w)
     grasp_pos = np.add(p_mech_w, [0., .015, 0.])
     grasp_pose = util.Pose(grasp_pos, q_t_w_des)

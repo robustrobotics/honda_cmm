@@ -88,11 +88,12 @@ class Prism(Policy):
         return np.dot(self.prismatic_dir, trans)
 
     @staticmethod
-    def random(bb_center, width, height):
-        pos = random_pos(bb_center, width, height)
-        orn = np.array([0.,0.,0.,1.]) # this is hard coded in the joint models aswell
-        dir = random_unit_vector()
-        goal_q = random_configuration()
+    def random(bb):
+        pos = random_pos(bb)
+        orn = np.array([0.,0.,0.,1.]) # this is hard coded in the joint models as well
+        angle = np.random.uniform(0, np.pi)
+        dir = np.array([np.cos(angle), 0., np.sin(angle)])
+        goal_q = np.random.uniform(-0.5,0.5)
         return Prism(pos, orn, dir, goal_q)
 
 class Rev(Policy):
@@ -125,12 +126,12 @@ class Rev(Policy):
         return angle
 
     @staticmethod
-    def random(bb_center, width, height):
-        center = random_pos(bb_center, width, height)
-        axis = np.array(0.,0.,0.,1.)
-        radius = random_radius(bb_center, width, height)
-        orn = np.array(0.,0.,0.,1.)
-        goal_q = random_angle()
+    def random(bb):
+        center = random_pos(bb)
+        axis = np.array([0.,0.,0.,1.]) # this is hard coded in the joint models as well
+        radius = random_radius()
+        orn = np.array([0.,0.,0.,1.]) # this is hard coded in the joint models as well
+        goal_q = np.random.uniform(-2*np.pi,2*np.pi)
         return Rev(center, axis, radius, orn, goal_q)
 
 class Path(Policy):
@@ -146,32 +147,23 @@ class Path(Policy):
 
 # couldn't make staticmethod of Policy because needed child class types first
 # TODO: add back other policy types as they're made
-def generate_random_policy(bb_center, width, height, policy_types=[Rev, Prism]):
+def generate_random_policy(bb, policy_types=[Rev, Prism]):
     policy_type = np.random.choice(policy_types)
-    return policy_type.random(bb_center, width, height)
+    return policy_type.random(bb)
 
 ## Helper Functions
-def random_pos(bb_center, width, height):
-    x_limits = np.add(bb_center[0], [-width/2,width/2])
-    y_limits = np.random.uniform([.23,.27])
-    z_limits = np.add(bb_center[2], [-height/2,height/2])
+def random_pos(bb):
+    bb_center = p.getLinkState(bb.bb_id,0)[0]
+    x_limits = np.add(bb_center[0], [-bb.width/2,bb.width/2])
+    z_limits = np.add(bb_center[2], [-bb.height/2,bb.height/2])
     x = np.random.uniform(*x_limits)
-    y = np.random.uniform(*y_limits)
+    y = bb.project_onto_backboard([0., 0., 0.,])[1]
     z = np.random.uniform(*z_limits)
     return (x, y, z)
 
-def random_orn():
-    orn_M = util.trans.random_rotation_matrix()
-    orn_q = util.quaternion_from_matrix(orn_M)
-    return orn_q
-
-def random_unit_vector():
-    orn_M = util.trans.random_rotation_matrix()
-    unit_vector = np.multiply(orn_M,[1,0,0])
-    return unit_vector
-
-def random_configuration():
-    return np.random.uniform(-10.,10.)
+def random_radius():
+    r = np.random.uniform(0.05,0.15)
+    return np.array([r, 0., 0.])
 
 def q_dir(curr_q, goal_q):
     return 1 if (goal_q > curr_q) else -1
