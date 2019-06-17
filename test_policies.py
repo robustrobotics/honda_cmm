@@ -4,9 +4,8 @@ import argparse
 import pybullet as p
 import pybullet_data
 from gripper import Gripper
-from joints import Prismatic, Revolute
 from data.generator import BusyBox, Slider, Door
-from policies import Rev, Prism, generate_random_policy
+from policies import generate_random_policy, Prismatic, Revolute
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--viz', action='store_true')
@@ -46,7 +45,6 @@ with open(bb_file, 'w') as handle:
     handle.write(bb.get_urdf())
 model = p.loadURDF(bb_file, [0., -.3, 0.])
 bb.set_mechanism_ids(model)
-bb.set_joint_models(model)
 maxForce = 10
 mode = p.VELOCITY_CONTROL
 for jx in range(0, p.getNumJoints(model)):
@@ -57,30 +55,26 @@ for jx in range(0, p.getNumJoints(model)):
 
 gripper = Gripper(model)
 for mech in bb._mechanisms:
-    # Good grasping parameters for testing
+    # parameters for grasping
     p_mech_w = p.getLinkState(bb.bb_id, mech.handle_id)[0]
     q_t_w_des = np.array([0.50019904,  0.50019904, -0.49980088, 0.49980088])
 
     # try correct policy on each
     if not args.random:
         if mech.mechanism_type == 'Door':
+            policy = Revolute.model(bb, mech)
             goal_q = -np.pi/2 if mech.flipped else np.pi/2
-            policy = Rev(mech.joint_model.rot_center,
-                            mech.joint_model.rot_axis,
-                            mech.joint_model.rot_radius,
-                            mech.joint_model.rot_orientation,
-                            goal_q)
         elif mech.mechanism_type == 'Slider':
-            policy = Prism(mech.joint_model.rigid_position,
-                            mech.joint_model.rigid_orientation,
-                            mech.joint_model.prismatic_dir,
-                            .1)
+            policy = Prismatic.model(bb,mech)
+            goal_q = .1
+    # else generate a radom policy and goal config
     else:
         policy = generate_random_policy(bb)
+        goal_q = policy.generate_random_config()
     init_joint_pos = bb.project_onto_backboard(p_mech_w)
     grasp_pos = np.add(p_mech_w, [0., .015, 0.])
     grasp_pose = util.Pose(grasp_pos, q_t_w_des)
-    traj = policy.generate_trajectory(grasp_pose, init_joint_pos, args.debug)
+    traj = policy.generate_trajectory(grasp_pose, init_joint_pos, goal_q, args.debug)
 
     # execute trajectory
     gripper.execute_trajectory(grasp_pose, traj, debug=args.debug)
