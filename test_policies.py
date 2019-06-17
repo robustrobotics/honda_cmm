@@ -5,8 +5,8 @@ import pybullet as p
 import pybullet_data
 from gripper import Gripper
 from joints import Prismatic, Revolute
-from data.generator import BusyBox
-import policies
+from data.generator import BusyBox, Slider, Door
+from policies import Rev, Prism
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--viz', action='store_true')
@@ -54,7 +54,7 @@ for jx in range(0, p.getNumJoints(model)):
                             controlMode=mode,
                             force=maxForce)
 
-gripper = Gripper(model, k=[2000,70], d=[20,.1])
+gripper = Gripper(model)
 for mech in bb._mechanisms:
     # Good grasping parameters for testing
     p_mech_w = p.getLinkState(bb.bb_id, mech.handle_id)[0]
@@ -63,25 +63,23 @@ for mech in bb._mechanisms:
     # try correct policy on each
     if mech.mechanism_type == 'Door':
         goal_q = -np.pi/2 if mech.flipped else np.pi/2
-        params = policies.RevParams(q_t_w_des,
-                            p_mech_w,
-                            mech.joint_model.rot_center,
-                            mech.joint_model.rot_axis,
-                            mech.joint_model.rot_radius,
-                            mech.joint_model.rot_orientation,
-                            goal_q)
-        traj = policies.rev(params, args.debug)
+        policy = Rev(mech.joint_model.rot_center,
+                        mech.joint_model.rot_axis,
+                        mech.joint_model.rot_radius,
+                        mech.joint_model.rot_orientation,
+                        goal_q)
     elif mech.mechanism_type == 'Slider':
-        params = policies.PrismParams(q_t_w_des,
-                                p_mech_w,
-                                mech.joint_model.rigid_position,
-                                mech.joint_model.rigid_orientation,
-                                mech.joint_model.prismatic_dir,
-                                .1)
-        traj = policies.prism(params, args.debug)
+        policy = Prism(mech.joint_model.rigid_position,
+                        mech.joint_model.rigid_orientation,
+                        mech.joint_model.prismatic_dir,
+                        .1)
+    init_joint_pos = bb.project_onto_backboard(p_mech_w)
+    grasp_pos = np.add(p_mech_w, [0., .015, 0.])
+    grasp_pose = util.Pose(grasp_pos, q_t_w_des)
+    traj = policy.generate_trajectory(grasp_pose, init_joint_pos, args.debug)
 
     # execute trajectory
-    gripper.execute_trajectory(traj, debug=args.debug)
+    gripper.execute_trajectory(grasp_pose, traj, debug=args.debug)
 
 p.disconnect(client)
 
