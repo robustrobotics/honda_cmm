@@ -12,17 +12,17 @@ Pose represents an SE(3) pose
 :param q: a vector of length 4, representing an (x,y,z,w) quaternion
 """
 
-Result = namedtuple('Result', 'gripper policy mechanism waypoints_reached duration motion final_pose image')
+Result = namedtuple('Result', 'gripper policy busybox waypoints_reached duration motion final_pose image')
 """
 Result contains the performance information after the gripper tries to move a mechanism
 :param gripper: gripper.Gripper object
 :param policy: policies.Policy object
-:param mechanism: data.Mechanism object
+:param busybox: gen.generator_busybox.Busybox object
 :param waypoints_reached: scalar, percentage of waypoints reached when attempting to move mechanism
 :param duration: scalar, execution duration before success or timeout
 :param motion: scalar, the net distance the mechanism handle moved
-:param final_pose: util.Pose object, the final_pose of the gripper tip if it is in contact with the mechanism
-                    at completion, else None
+:param final_pose: util.Pose object, the final_pose of the mechanism handle is the
+                    gripper tip in contact with the mechanism at completion, else None
 :param image: type returned by p.getCameraImage ([2:4] are RGB and depth values)
 """
 

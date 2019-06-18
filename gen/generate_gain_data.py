@@ -12,7 +12,7 @@ k_rot_range = [-5,1] # sampled in logspace
 d_lin_range = [-5,4] # sampled in logspace
 d_rot_range = [-5,1] # sampled in logspace
 add_dist_range = [0.,.1]
-p_err_eps_range = [.001, .1]
+p_err_thresh_range = [.001, .1]
 delta_pos_range = [.001, .1]
 
 def learn_gains(file_name, n_samples, viz, debug):
@@ -27,10 +27,10 @@ def learn_gains(file_name, n_samples, viz, debug):
         k = [k_lin, k_rot]
         d = [d_lin, d_rot]
         add_dist = np.random.uniform(*add_dist_range)
-        p_err_eps = np.random.uniform(*p_err_eps_range)
+        p_err_thresh = np.random.uniform(*p_err_thresh_range)
         delta_pos = np.random.uniform(*delta_pos_range)
 
-        results += test_policy(viz, debug, 1, True, k, d, add_dist, p_err_eps, delta_pos)
+        results += test_policy(viz, debug, 1, True, k, d, add_dist, p_err_thresh, delta_pos)
 
         # save to pickle (keep overwriting latest file in case it crashes)
         fname = file_name + '.pickle'
@@ -103,15 +103,15 @@ if __name__ == '__main__':
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--n-samples', type=int, default=5)
     parser.add_argument('--plot', type=str) # give filename (without .pickle)
-    parser.add_argument('--file', type=str) # give filename (without .pickle)
+    parser.add_argument('--fname', type=str) # give filename (without .pickle)
     args = parser.parse_args()
 
     if args.debug:
         import pdb; pdb.set_trace()
 
-    if not args.plot:
-        learn_gains(args.file, args.n_samples, args.viz, args.debug)
-        plot_from_file(args.file)
+    if args.fname:
+        learn_gains(args.fname, args.n_samples, args.viz, args.debug)
+        plot_from_file(args.fname)
     else:
         plot_from_file(args.plot)
 
