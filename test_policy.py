@@ -81,7 +81,7 @@ def test_policy(viz=False, debug=False, max_mech=6, random=False, k=None, d=None
         # execute trajectory
         waypoints_reached, duration, joint_motion, pose_joint_world_final = \
                 gripper.execute_trajectory(pose_tip_world_init,traj, mech, debug=debug)
-        results += [util.Result(gripper, policy, mech, waypoints_reached, duration,\
+        results += [util.Result(gripper, policy, bb, waypoints_reached, duration,\
                     joint_motion, pose_joint_world_final, image)]
 
     p.disconnect(client)
