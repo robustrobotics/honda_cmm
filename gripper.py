@@ -24,7 +24,7 @@ com - center of mass of the entire gripper body
 '''
 
 class Gripper:
-    def __init__(self, bb_id, k=[2000.,200.], d=[.45,.45]):
+    def __init__(self, bb_id, k=None, d=None, add_dist=None, p_err_eps=None):
         self.id = p.loadSDF("../models/gripper/gripper_high_fric.sdf")[0]
         self.bb_id = bb_id
         self.left_finger_tip_id = 2
@@ -33,8 +33,16 @@ class Gripper:
         self.right_finger_base_joint_id = 3
         self.q_t_w_des =  [0.50019904,  0.50019904, -0.49980088, 0.49980088]
         self.finger_force = 20
-        self.k = k
-        self.d = d
+
+        # control parameters
+        if k is None:
+            self.k = [2000.,20.]
+        if d is None:
+            self.d = [.45,.45]
+        if add_dist is None:
+            self.add_dist = 0.1
+        if p_err_eps is None:
+            self.p_err_eps = .005
 
         # get mass of gripper
         mass = 0
@@ -81,18 +89,17 @@ class Gripper:
         return v_com_w_err[:3], v_com_w_err[3:]
 
     def at_des_pose(self, pose_t_w_des):
-        p_err_eps = .005
+
         #e_err_eps = .4
         p_com_w_err, e_com_w_err = self.get_pose_error(pose_t_w_des)
-        return np.linalg.norm(p_com_w_err) < p_err_eps# and np.linalg.norm(e_com_w_err) < e_err_eps
+        return np.linalg.norm(p_com_w_err) < self.p_err_eps# and np.linalg.norm(e_com_w_err) < e_err_eps
 
     def move_PD(self, pose_t_w_des, debug=False, timeout=100):
         # move setpoint further away in a straight line between curr pose and goal pose
-        add_dist = 0.1
         dir = np.subtract(pose_t_w_des.pos, self.get_p_tip_world())
         mag = np.linalg.norm([dir])
         unit_dir = np.divide(dir,mag)
-        p_t_w_des_far = np.add(pose_t_w_des.pos,np.multiply(add_dist,unit_dir))
+        p_t_w_des_far = np.add(pose_t_w_des.pos,np.multiply(self.add_dist,unit_dir))
         pose_t_w_des_far = util.Pose(p_t_w_des_far, pose_t_w_des.orn)
         finished = False
         for i in itertools.count():
