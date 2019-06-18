@@ -8,8 +8,7 @@ class Policy(object):
     def __init__(self, type, delta_pos=None):
         self.type = type
         # max distance between waypoints in trajectory
-        if delta_pos is None:
-            self.delta_pos = 0.01
+        self.delta_pos = 0.01 if delta_pos is None else delta_pos
 
     def generate_trajectory(self, init_grasp_pose, init_joint_pos, goal_q, debug=False):
         joint_orn = np.array([0., 0., 0., 1.])

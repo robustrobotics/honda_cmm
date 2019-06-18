@@ -35,14 +35,10 @@ class Gripper:
         self.finger_force = 20
 
         # control parameters
-        if k is None:
-            self.k = [2000.,20.]
-        if d is None:
-            self.d = [.45,.45]
-        if add_dist is None:
-            self.add_dist = 0.1
-        if p_err_eps is None:
-            self.p_err_eps = .005
+        self.k = [2000.,20.] if k is None else k
+        self.d = [0.45,0.45] if d is None else d
+        self.add_dist = 0.1 if add_dist is None else add_dist
+        self.p_err_eps = 0.005 if p_err_eps is None else p_err_eps
 
         # get mass of gripper
         mass = 0
