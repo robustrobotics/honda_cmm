@@ -4,7 +4,7 @@ import argparse
 import pybullet as p
 import pybullet_data
 from actions.gripper import Gripper
-from gen.generator import BusyBox
+from gen.generator_busybox import BusyBox
 from actions.policies import generate_random_policy, Prismatic, Revolute
 from collections import namedtuple
 np.random.seed(0)

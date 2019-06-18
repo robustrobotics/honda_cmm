@@ -4,7 +4,7 @@ import pybullet as p
 import pickle
 import sys
 from test_policy import test_policy
-from gen.generator import Door, Slider
+from gen.generator_busybox import Door, Slider
 
 # range of gains to try
 k_lin_range = [-1,5] # sampled in logspace

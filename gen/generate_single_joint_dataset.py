@@ -6,7 +6,7 @@ import pybullet_data
 import aabbtree as aabb
 from actions.gripper import Gripper
 from util import util
-from gen.generator import BusyBox
+from gen.generator_busybox import BusyBox
 
 
 class JointLogger(object):
