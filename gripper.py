@@ -24,7 +24,7 @@ com - center of mass of the entire gripper body
 '''
 
 class Gripper:
-    def __init__(self, bb_id, k=[200.,5.], d=[45.,1.]):
+    def __init__(self, bb_id, k=[2000.,200.], d=[.45,.45]):
         self.id = p.loadSDF("../models/gripper/gripper_high_fric.sdf")[0]
         self.bb_id = bb_id
         self.left_finger_tip_id = 2
@@ -86,7 +86,7 @@ class Gripper:
         p_com_w_err, e_com_w_err = self.get_pose_error(pose_t_w_des)
         return np.linalg.norm(p_com_w_err) < p_err_eps# and np.linalg.norm(e_com_w_err) < e_err_eps
 
-    def move_PD(self, pose_t_w_des, debug=False, timeout=500):
+    def move_PD(self, pose_t_w_des, debug=False, timeout=100):
         # move setpoint further away in a straight line between curr pose and goal pose
         add_dist = 0.1
         dir = np.subtract(pose_t_w_des.pos, self.get_p_tip_world())
@@ -94,7 +94,6 @@ class Gripper:
         unit_dir = np.divide(dir,mag)
         p_t_w_des_far = np.add(pose_t_w_des.pos,np.multiply(add_dist,unit_dir))
         pose_t_w_des_far = util.Pose(p_t_w_des_far, pose_t_w_des.orn)
-
         finished = False
         for i in itertools.count():
             # keep fingers closed (doesn't seem to make a difference but should
