@@ -43,15 +43,15 @@ class Recorder(object):
             pickle.dump(self.frames, handle)
 
 
-def vis_frame(pos, quat, length=.2, lifeTime=.4):
+def vis_frame(pos, quat, length=0.2, lifeTime=0.4):
     """ This function visualizes a coordinate frame for the supplied frame where the
     red,green,blue lines correpsond to the x,y,z axes.
     :param p: a vector of length 3, position of the frame (x,y,z)
     :param q: a vector of length 4, quaternion of the frame (x,y,z,w)
     """
-    new_x = transformation([length, 0, 0], pos, quat)
-    new_y = transformation([0, length, 0], pos, quat)
-    new_z = transformation([0, 0, length], pos, quat)
+    new_x = transformation([length, 0.0, 0.0], pos, quat)
+    new_y = transformation([0.0, length, 0.0], pos, quat)
+    new_z = transformation([0.0, 0.0, length], pos, quat)
 
     p.addUserDebugLine(pos, new_x, [1,0,0], lifeTime=lifeTime)
     p.addUserDebugLine(pos, new_y, [0,1,0], lifeTime=lifeTime)
@@ -96,7 +96,7 @@ def transformation(pos, translation_vec, quat, inverse=False):
     T = np.zeros((4,4))
     T[:3,:3] = R
     T[:3,3] = translation_vec
-    T[3,3] = 1
+    T[3,3] = 1.0
     pos = np.concatenate([pos, [1]])
     new_pos = np.dot(T, pos)
     return new_pos[:3]

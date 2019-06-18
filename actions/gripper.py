@@ -13,10 +13,11 @@ pose_ is a util.Pose()
 p_ is a vector of length 3 representing a position
 q_ is a vector of length 4 representing a quaternion
 e_ is a vector of length 3 representing euler angles
-v is a vector of length 6 with [0:3] representing the linear velocity and
+v_ is a vector of length 6 with [0:3] representing the linear velocity and
                                 [3:6] representing the angular velocity
-lin_v is a vector of length 3 representing the linear velocity
-omega is a vector of length 3 representing the angular velocity
+lin_v_ is a vector of length 3 representing the linear velocity
+omega_ is a vector of length 3 representing the angular velocity
+config_ is the configuration of a joint. the dimensionality depends on the joint-type
 the first following variable name represents the point/pose being described
 the second following variable name indicates the frame that the point or pose is defined in
 
@@ -28,6 +29,7 @@ tip - tip of the gripper frame
 com - center of mass of the entire gripper body
 left - left finger tip of gripper
 right - right finger tip of gripper
+joint - mechanism handle
 _err - error
 _des - desired
 _thresh - threshold
