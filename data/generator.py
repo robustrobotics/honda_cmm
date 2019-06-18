@@ -6,7 +6,7 @@ import pybullet_data
 import aabbtree as aabb
 import cv2
 from gripper import Gripper
-import util
+from util import util
 
 class Mechanism(object):
     def __init__(self, p_type):

@@ -5,7 +5,7 @@ import pybullet as p
 import pybullet_data
 import aabbtree as aabb
 from gripper import Gripper
-import util
+from util import util
 from data.generator import BusyBox
 
 

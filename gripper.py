@@ -1,6 +1,6 @@
 import pybullet as p
 import numpy as np
-import util
+from util import util
 import time
 from collections import namedtuple
 import itertools

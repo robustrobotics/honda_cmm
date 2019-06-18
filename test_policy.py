@@ -1,4 +1,4 @@
-import util
+from util import util
 import numpy as np
 import argparse
 import pybullet as p
