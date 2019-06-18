@@ -94,7 +94,7 @@ def test_policy(viz=False, debug=False, max_mech=6, random=False, k=None, d=None
         traj = policy.generate_trajectory(grasp_pose, init_joint_pos, goal_q, debug)
 
         # execute trajectory
-        waypoints_reached, duration, motion = gripper.execute_trajectory(grasp_pose, traj, debug=debug)
+        waypoints_reached, duration, motion = gripper.execute_trajectory(grasp_pose, traj, mech, debug=debug)
         if gripper.in_contact(mech):
             final_pose = p.getLinkState(bb.bb_id, mech.handle_id)
         else:

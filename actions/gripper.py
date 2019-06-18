@@ -78,7 +78,7 @@ class Gripper:
         p_tip_base = util.transformation(p_tip_world, p_base_world, q_base_world, inverse=True)
         return p_tip_base
 
-    def get_pose_com_(self, mode):
+    def get_pose_com_(self, frame):
         com_numerator = np.array([0.0, 0.0, 0.0])
         for link_index in range(p.getNumJoints(self.id)):
             link_com = p.getLinkState(self.id, link_index)[0]
@@ -89,19 +89,19 @@ class Gripper:
         p_base_world, q_base_world = p.getBasePositionAndOrientation(self.id)
         q_com_world = q_base_world
 
-        if mode == 'world':
+        if frame == 'world':
             return p_com_world, q_com_world
-        elif mode == 'tip':
+        elif frame == 'tip':
             p_tip_world = self.get_p_tip_world()
             p_com_tip = util.transformation(p_com_world, p_tip_world, q_base_world, inverse=True)
             q_com_tip = np.array([0.,0.,0.,1.])
             return p_com_tip, q_com_tip
-        elif mode == 'base':
+        elif frame == 'base':
             p_com_base = util.transformation(p_com_world, p_base_world, q_base_world, inverse=True)
             q_com_base = np.array([0.0,0.0,0.0,1.0])
             return p_com_base, q_com_base
 
-    def get_pose_error(self, pose_tip_world_des):
+    def get_pose_tip_world_error(self, pose_tip_world_des):
         p_tip_world = self.get_p_tip_world()
         q_tip_world = p.getBasePositionAndOrientation(self.id)[1]
         p_tip_world_err = np.subtract(pose_tip_world_des.p, p_tip_world)
@@ -121,7 +121,7 @@ class Gripper:
         return v_com_world_err[:3], v_com_world_err[3:]
 
     def at_des_pose(self, pose_tip_world_des):
-        p_tip_world_err, _ = self.get_pose_error(pose_tip_world_des)
+        p_tip_world_err, _ = self.get_pose_tip_world_error(pose_tip_world_des)
         return np.linalg.norm(p_tip_world_err) < self.p_err_thresh
 
     def in_contact(self, mech):
@@ -184,7 +184,7 @@ class Gripper:
                 p.addUserDebugLine(pose_tip_world_des.p, np.add(pose_tip_world_des.p,[0,0,10]), [1,0,0], lifeTime=.5)
                 p_tip_world = self.get_p_tip_world()
                 p.addUserDebugLine(p_tip_world, np.add(p_tip_world,[0,0,10]), [0,1,0], lifeTime=.5)
-                err = self.get_pose_error(pose_tip_world_des)
+                err = self.get_pose_tip_world_error(pose_tip_world_des)
                 if debug:
                     sys.stdout.write("\r%.3f %.3f" % (np.linalg.norm(err[0]), np.linalg.norm(err[1])))
                 util.vis_frame(*pose_tip_world_des)
@@ -195,7 +195,7 @@ class Gripper:
                 if debug:
                     print('timeout limit reached. moving the next joint')
                 break
-            p_tip_world_err, e_tip_world_err = self.get_pose_error(pose_tip_world_des_far)
+            p_tip_world_err, e_tip_world_err = self.get_pose_tip_world_error(pose_tip_world_des_far)
             v_tip_world_des = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
             lin_v_com_world_err, omega_com_world_err = self.get_v_com_world_error(v_tip_world_des)
 
@@ -210,17 +210,15 @@ class Gripper:
             p.stepSimulation()
         return finished
 
-    def execute_trajectory(self, grasp_pose, traj, debug=False, callback=None, bb=None, mech=None):
+    def execute_trajectory(self, grasp_pose, traj, mech, debug=False, callback=None, bb=None):
         self.grasp_handle(grasp_pose, debug)
         start_time = time.time()
         motion = 0.0
         for (i, pose_tip_world_des) in enumerate(traj):
-            if mech:
-                start_mech_pose = p.getLinkState(self.bb_id, mech.handle_id)[0]
+            start_mech_pose = p.getLinkState(self.bb_id, mech.handle_id)[0]
             finished = self.move_PD(pose_tip_world_des, debug)
-            if mech:
-                final_mech_pose = p.getLinkState(self.id, mech.handle_id)[0]
-                motion += np.linalg.norm(np.subtract(final_mech_pose,start_mech_pose))
+            final_mech_pose = p.getLinkState(self.id, mech.handle_id)[0]
+            motion += np.linalg.norm(np.subtract(final_mech_pose,start_mech_pose))
             if not finished:
                 break
             if not callback is None:
