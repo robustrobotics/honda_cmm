@@ -11,13 +11,14 @@ source .venv/bin/activate
 pip3 install -r requirements.txt
 ```
 
-1. Generate trajectories by running:
-python3 actuate_model.py --model-name simple_busybox --log-name
-full_busybox.json --joint-name all --duration 5
+### Manipulate BusyBox with Gripper
+Generate a random BusyBox and actuate it with model-based policies:
 
-2. Fit the articulated models:
-a) Change honda.launch to have the correct json log name.
-b) roslaunch cmm_articulated honda.launch
+```python3 -m test_policy```
 
-3. Visualize the results by running the first part again:
-python3 actuate_model.py --model-name simple_busybox --visualize --duration 10
+Below are some optional command line arguments:
+
+  1. ```--viz``` runs the pyBullet GUI
+  2. ```--random``` generates random policies to execute on the different Mechanisms (if not specified then the correct policies are used)
+  3. ```---debug``` launches the pdb debugger and displays helpful visualizations and output (enter 'c' to continue without the debugger)
+  4. ```--max-mech``` the maximum number of mechanisms to attempt to fit onto the BusyBox
