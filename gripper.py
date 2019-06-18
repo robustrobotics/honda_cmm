@@ -164,23 +164,25 @@ class Gripper:
         p.setJointMotorControl2(self.id,5,p.POSITION_CONTROL,targetPosition=0,force=self.finger_force)
         p.stepSimulation()
 
-    def execute_trajectory(self, grasp_pose, traj, debug=False, callback=None, bb=None, mech=None):
+    def execute_trajectory(self, grasp_pose, traj, mech, debug=False, callback=None, bb=None):
         self.grasp_handle(grasp_pose, debug)
         start_time = time.time()
         motion = 0
         for (i, pose_t_w_des) in enumerate(traj):
-            if mech:
-                start_mech_pose = p.getLinkState(self.bb_id, mech.handle_id)[0]
+            start_mech_pose = p.getLinkState(self.bb_id, mech.handle_id)[0]
             finished = self.move_PD(pose_t_w_des, debug)
-            if mech:
-                final_mech_pose = p.getLinkState(self.id, mech.handle_id)[0]
-                motion += np.linalg.norm(np.subtract(final_mech_pose,start_mech_pose))
+            final_mech_pose = p.getLinkState(self.id, mech.handle_id)[0]
+            motion += np.linalg.norm(np.subtract(final_mech_pose,start_mech_pose))
             if not finished:
                 break
             if not callback is None:
                 callback(bb)
         duration = time.time() - start_time
-        return i/len(traj), duration, motion
+        if self.in_contact(mech):
+            final_pose = p.getLinkState(self.bb_id, mech.handle_id)
+        else:
+            final_pose = None
+        return i/len(traj), duration, motion, final_pose
 
     def in_contact(self, mech):
         points = p.getContactPoints(self.id, self.bb_id, linkIndexB=mech.handle_id)
