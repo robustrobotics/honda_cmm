@@ -5,7 +5,7 @@ from math import log, pi
 
 def gaussian_log_likelihood(x, mean, logvar, clip=True):
     if clip:
-        logvar = torch.clamp(logvar, min=-4, max=3)
+        logvar = torch.clamp(logvar, min=-11, max=3)
     a = log(2*pi)
     b = logvar
     c = (x - mean)**2 / torch.exp(logvar)

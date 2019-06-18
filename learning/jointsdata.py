@@ -23,16 +23,16 @@ class JointsDataset(data.Dataset):
 
         self.n_datasets = len(data)
         self.sample_size = len(data[0])
-        self.n_features = len(data[0][0])
+        self.n_features = 3 # len(data[0][0])
 
         sets = np.zeros((self.n_datasets, self.sample_size, self.n_features),
                         dtype=np.float32)
         labels = []
         for ix, (data, label) in enumerate(zip(data, labs)):
-            sets[ix, :, :] = data
+            d = np.array(data, dtype=np.float32)
+            sets[ix, :, :] = d[:, 0:3]
             labels.append(label)
 
-        print(labels)
         return {
             "datasets": sets,
             "joints": ["Door_0", "Door_1", "Slider"],

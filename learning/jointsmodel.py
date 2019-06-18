@@ -99,17 +99,18 @@ class Statistician(nn.Module):
         z = None
         for inference_network in self.inference_networks:
             z_mean, z_logvar = inference_network(x, z, c)
+            #print(z_mean[0:10], z_logvar[0:10])
             qz_params.append([z_mean, z_logvar])
             z = self.reparameterize_gaussian(z_mean, z_logvar)
             qz_samples.append(z)
 
         # latent decoders
         pz_params = []
-        z = None
-        for i, latent_decoder in enumerate(self.latent_decoders):
-            z_mean, z_logvar = latent_decoder(z, c)
-            pz_params.append([z_mean, z_logvar])
-            z = qz_samples[i]
+        # z = None
+        # for i, latent_decoder in enumerate(self.latent_decoders):
+        #     z_mean, z_logvar = latent_decoder(z, c)
+        #     pz_params.append([z_mean, z_logvar])
+        #     z = qz_samples[i]
 
         # observation decoder
         zs = torch.cat(qz_samples, dim=1)
@@ -146,28 +147,32 @@ class Statistician(nn.Module):
             (self.batch_size, self.sample_size, self.z_dim),
             (self.batch_size, 1, self.z_dim)
         )
-        for i in range(self.n_stochastic):
-            args = (qz_params[i][0].view(shapes[0]),
-                    qz_params[i][1].view(shapes[0]),
-                    pz_params[i][0].view(shapes[1] if i == 0 else shapes[0]),
-                    pz_params[i][1].view(shapes[1] if i == 0 else shapes[0]))
-            kl_z = kl_diagnormal_diagnormal(*args)
-            kl += kl_z
+        # for i in range(self.n_stochastic):
+        #     args = (qz_params[i][0].view(shapes[0]),
+        #             qz_params[i][1].view(shapes[0]),
+        #             pz_params[i][0].view(shapes[1] if i == 0 else shapes[0]),
+        #             pz_params[i][1].view(shapes[1] if i == 0 else shapes[0]))
+        #     kl_z = kl_diagnormal_diagnormal(*args)
+        #     kl += kl_z
+        kl += 1*kl_diagnormal_stdnormal(qz_params[0][0].view(shapes[0]),
+                                         qz_params[0][1].view(shapes[0]))
 
         kl /= (self.batch_size * self.sample_size)
 
         # Variational lower bound and weighted loss
         vlb = recon_loss - kl
+        #weight = 0.5
+        kl *= 0.0001
         loss = - ((weight * recon_loss) - (kl / weight))
 
-        return loss, vlb
+        return loss, vlb, recon_loss, kl
 
     def step(self, batch, alpha, optimizer, clip_gradients=True):
         assert self.training is True
 
         inputs = Variable(batch.cuda())
         outputs = self.forward(inputs)
-        loss, vlb = self.loss(outputs, weight=(alpha + 1))
+        loss, vlb, recon_loss, kl = self.loss(outputs, weight=(alpha + 1))
 
         # perform gradient update
         optimizer.zero_grad()
@@ -179,7 +184,7 @@ class Statistician(nn.Module):
         optimizer.step()
 
         # output variational lower bound
-        return vlb.data.item()
+        return vlb.data.item(), recon_loss.data.item(), kl.data.item()
 
     def save(self, optimizer, path):
         torch.save({

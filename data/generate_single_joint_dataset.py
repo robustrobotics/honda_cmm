@@ -6,7 +6,7 @@ import pybullet_data
 import cv2
 import pickle
 from gripper import Gripper
-from data.generator import BusyBox
+from data.generator import BusyBox, Door, Slider
 
 
 class JointLogger(object):
@@ -76,7 +76,7 @@ class JointLogger(object):
         #self.imgs.append(self.take_photo())
 
     def save(self):
-        with open('{0}/dataset.pkl'.format(self.folder), 'wb') as handle:
+        with open('{0}/dataset_test.pkl'.format(self.folder), 'wb') as handle:
             pickle.dump((self.datasets, self.labels), handle)
 
 
@@ -108,7 +108,7 @@ if __name__ == '__main__':
         plane_id = p.loadURDF("plane.urdf")
 
         print('Busybox Number:', ix)
-        bb = BusyBox.generate_random_busybox(max_mech=1)
+        bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider])
 
         p.setGravity(0, 0, -10)
         bb_file = 'models/busybox_{0}.urdf'.format(ix)
