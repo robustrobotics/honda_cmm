@@ -31,6 +31,7 @@ com - center of mass of the entire gripper body
 left - left finger tip of gripper
 right - right finger tip of gripper
 joint - mechanism handle
+joint_base - handle projected onto the BusyBox back link
 door - door base of a revolute joint
 track - track of prismatic joint
 _err - error
@@ -220,19 +221,19 @@ class Gripper:
     def execute_trajectory(self, grasp_pose, traj, mech, debug=False, callback=None, bb=None):
         self._grasp_handle(grasp_pose, debug)
         start_time = time.time()
-        motion = 0.0
+        joint_motion = 0.0
         for (i, pose_tip_world_des) in enumerate(traj):
             start_mech_pose = p.getLinkState(self._bb_id, mech.handle_id)[0]
             finished = self._move_PD(pose_tip_world_des, debug)
             final_mech_pose = p.getLinkState(self._bb_id, mech.handle_id)[0]
-            motion = np.add(motion, np.linalg.norm(np.subtract(final_mech_pose,start_mech_pose)))
+            joint_motion = np.add(joint_motion, np.linalg.norm(np.subtract(final_mech_pose,start_mech_pose)))
             if not finished:
                 break
             if not callback is None:
                 callback(bb)
         duration = np.subtract(time.time(), start_time)
         if self._in_contact(mech):
-            final_pose = p.getLinkState(self._bb_id, mech.handle_id)
+            pose_joint_world_final = p.getLinkState(self._bb_id, mech.handle_id)
         else:
-            final_pose = None
-        return np.divide(i,len(traj)), duration, motion, final_pose
+            pose_joint_world_final = None
+        return np.divide(i,len(traj)), duration, joint_motion, pose_joint_world_final

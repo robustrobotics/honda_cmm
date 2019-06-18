@@ -7,9 +7,9 @@ from actions.gripper import Gripper
 from gen.generator import BusyBox
 from actions.policies import generate_random_policy, Prismatic, Revolute
 from collections import namedtuple
-
+np.random.seed(0)
 def test_policy(viz=False, debug=False, max_mech=6, random=False, k=None, d=None,\
-                    add_dist=None, p_err_eps=None, delta_pos=None):
+                    add_dist=None, p_err_thresh=None, delta_pos=None):
     if not viz:
         client = p.connect(p.DIRECT)
     else:
@@ -25,7 +25,7 @@ def test_policy(viz=False, debug=False, max_mech=6, random=False, k=None, d=None
         mech = bb._mechanisms[0]
     except:
         if debug:
-            print('generated a Busyox with no Mechanisms')
+            print('generated a Busybox with no Mechanisms')
         p.disconnect(client)
         return []
     p.resetDebugVisualizerCamera(
@@ -53,36 +53,36 @@ def test_policy(viz=False, debug=False, max_mech=6, random=False, k=None, d=None
 
     # can change resolution and shadows with this call
     image = p.getCameraImage(1024,768) # do before add gripper to world
-    gripper = Gripper(model, k, d, add_dist, p_err_eps)
+    gripper = Gripper(model, k, d, add_dist, p_err_thresh)
 
     results = []
     for mech in bb._mechanisms:
         # parameters for grasping
-        p_mech_w = p.getLinkState(bb.bb_id, mech.handle_id)[0]
-        q_t_w_des = np.array([0.50019904,  0.50019904, -0.49980088, 0.49980088])
+        p_joint_world_init = p.getLinkState(bb.bb_id, mech.handle_id)[0]
+        q_tip_world_init = np.array([0.50019904,  0.50019904, -0.49980088, 0.49980088])
 
         # try correct policy on each
         if not random:
             if mech.mechanism_type == 'Door':
                 policy = Revolute.model(bb, mech, delta_pos)
-                goal_q = -np.pi/2 if mech.flipped else np.pi/2
+                config_goal = -np.pi/2 if mech.flipped else np.pi/2
             elif mech.mechanism_type == 'Slider':
                 policy = Prismatic.model(bb, mech, delta_pos)
-                goal_q = .1
-        # else generate a radom policy and goal config
+                config_goal = .1
+        # else generate a random policy and goal config
         else:
             policy = generate_random_policy(bb, delta_pos)
-            goal_q = policy.generate_random_config()
-        init_joint_pos = bb.project_onto_backboard(p_mech_w)
-        grasp_pos = np.add(p_mech_w, [0., .015, 0.])
-        grasp_pose = util.Pose(grasp_pos, q_t_w_des)
-        traj = policy.generate_trajectory(grasp_pose, init_joint_pos, goal_q, debug)
+            config_goal = policy.generate_random_config()
+        p_joint_base_world_init = bb.project_onto_backboard(p_joint_world_init)
+        p_tip_world_init = np.add(p_joint_world_init, [0., .015, 0.])
+        pose_tip_world_init = util.Pose(p_tip_world_init, q_tip_world_init)
+        traj = policy.generate_trajectory(pose_tip_world_init, p_joint_world_init, config_goal, debug)
 
         # execute trajectory
-        waypoints_reached, duration, motion, final_pose = \
-                gripper.execute_trajectory(grasp_pose, traj, mech, debug=debug)
+        waypoints_reached, duration, joint_motion, pose_joint_world_final = \
+                gripper.execute_trajectory(pose_tip_world_init,traj, mech, debug=debug)
         results += [util.Result(gripper, policy, mech, waypoints_reached, duration,\
-                    motion, final_pose, image)]
+                    joint_motion, pose_joint_world_final, image)]
 
     p.disconnect(client)
     return results
