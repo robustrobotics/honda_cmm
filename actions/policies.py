@@ -18,8 +18,8 @@ class Policy(object):
 
         # initial offset between joint pose orn and gripper orn
         # assume that we want to keep this offset constant throughout the traj
-        init_delta_q = util.quat_math(joint_orn, init_grasp_pose.orn, True, False)
-        pos_grasp_joint = util.transformation(init_grasp_pose.pos, init_joint_pos, joint_orn, inverse=True)
+        init_delta_q = util.quat_math(joint_orn, init_grasp_pose.q, True, False)
+        pos_grasp_joint = util.transformation(init_grasp_pose.p, init_joint_pos, joint_orn, inverse=True)
 
 
         poses = []
@@ -30,14 +30,14 @@ class Policy(object):
             # for rev, orn should change with q
             # for prism, orn should remain constant
             # for now remain constant for both
-            grasp_orn = util.quat_math(curr_joint_pose.orn, init_delta_q, False, False)
+            grasp_orn = util.quat_math(curr_joint_pose.q, init_delta_q, False, False)
 
             pos_grasp_world = util.transformation(pos_grasp_joint, *curr_joint_pose)
             poses += [util.Pose(pos_grasp_world, grasp_orn)]
             curr_q += delta_q
             if debug:
                 if i>0:
-                    p.addUserDebugLine(poses[i-1].pos, poses[i].pos)
+                    p.addUserDebugLine(poses[i-1].p, poses[i].p)
         return poses
 
 class Poke(Policy):

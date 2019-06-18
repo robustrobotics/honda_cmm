@@ -5,7 +5,7 @@ import util.transformations as trans
 import math
 from collections import namedtuple
 
-Pose = namedtuple('Pose', 'pos orn')
+Pose = namedtuple('Pose', 'p q')
 
 class Recorder(object):
 
