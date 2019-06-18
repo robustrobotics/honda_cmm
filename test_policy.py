@@ -8,21 +8,6 @@ from gen.generator import BusyBox
 from actions.policies import generate_random_policy, Prismatic, Revolute
 from collections import namedtuple
 
-Result = namedtuple('Result', 'gripper policy mechanism waypoints_reached duration motion final_pose image')
-"""
-Result contains the performance information after the gripper tries to move a mechanism
-
-:param gripper: gripper.Gripper object
-:param policy: policies.Policy object
-:param mechanism: data.Mechanism object
-:param waypoints_reached: percentage of waypoints reached when attempting to move mechanism
-:param duration: execution duration before success or timeout
-:param motion: the net distance the mechanism handle moved
-:param final_pose: the final_pose of the gripper tip if it is in contact with the mechanism
-                    at completion, else None
-:param image: type returned by p.getCameraImage ([2:4] are RGB and depth values)
-"""
-
 def test_policy(viz=False, debug=False, max_mech=6, random=False, k=None, d=None,\
                     add_dist=None, p_err_eps=None, delta_pos=None):
     if not viz:
@@ -96,7 +81,7 @@ def test_policy(viz=False, debug=False, max_mech=6, random=False, k=None, d=None
         # execute trajectory
         waypoints_reached, duration, motion, final_pose = \
                 gripper.execute_trajectory(grasp_pose, traj, mech, debug=debug)
-        results += [Result(gripper, policy, mech, waypoints_reached, duration,\
+        results += [util.Result(gripper, policy, mech, waypoints_reached, duration,\
                     motion, final_pose, image)]
 
     p.disconnect(client)
