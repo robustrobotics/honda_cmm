@@ -3,9 +3,9 @@ import numpy as np
 import argparse
 import pybullet as p
 import pybullet_data
-from gripper import Gripper
-from data.generator import BusyBox
-from policies import generate_random_policy, Prismatic, Revolute
+from actions.gripper import Gripper
+from gen.generator import BusyBox
+from actions.policies import generate_random_policy, Prismatic, Revolute
 from collections import namedtuple
 
 Result = namedtuple('Result', 'gripper policy mechanism waypoints_reached duration motion final_pose image')

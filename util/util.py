@@ -1,7 +1,7 @@
 import pybullet as p
 import numpy as np
 import pickle
-from . import transformations as trans
+import util.transformations as trans
 import math
 from collections import namedtuple
 

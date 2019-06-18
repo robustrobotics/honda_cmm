@@ -5,7 +5,7 @@ import pybullet as p
 import pybullet_data
 import aabbtree as aabb
 import cv2
-from gripper import Gripper
+from actions.gripper import Gripper
 from util import util
 
 class Mechanism(object):

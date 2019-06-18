@@ -4,9 +4,9 @@ import argparse
 import pybullet as p
 import pybullet_data
 import aabbtree as aabb
-from gripper import Gripper
+from actions.gripper import Gripper
 from util import util
-from data.generator import BusyBox
+from gen.generator import BusyBox
 
 
 class JointLogger(object):
