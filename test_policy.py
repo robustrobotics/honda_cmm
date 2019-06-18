@@ -8,7 +8,7 @@ from data.generator import BusyBox
 from policies import generate_random_policy, Prismatic, Revolute
 from collections import namedtuple
 
-Result = namedtuple('Result', 'gripper policy mechanism waypoints_reached duration motion final_pose image')
+Result = namedtuple('Result', 'gripper policy busybox mechanism waypoints_reached duration motion final_pose image')
 """
 Result contains the performance information after the gripper tries to move a mechanism
 
@@ -95,7 +95,7 @@ def test_policy(viz=False, debug=False, max_mech=6, random=False, k=None, d=None
 
         # execute trajectory
         waypoints_reached, duration, motion, final_pose = gripper.execute_trajectory(grasp_pose, traj, mech, debug=debug)
-        results += [Result(gripper, policy, mech, waypoints_reached, duration,\
+        results += [Result(gripper, policy, bb, mech, waypoints_reached, duration,\
                     motion, final_pose, image)]
 
     p.disconnect(client)
