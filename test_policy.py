@@ -25,7 +25,8 @@ def test_policy(viz=False, debug=False, max_mech=6, random=False, k=None, d=None
     try:
         mech = bb._mechanisms[0]
     except:
-        print('generated a Busyox with no Mechanisms')
+        if debug:
+            print('generated a Busyox with no Mechanisms')
         p.disconnect(client)
         return []
     p.resetDebugVisualizerCamera(

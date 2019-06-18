@@ -17,27 +17,25 @@ delta_pos_range = [.001, .1]
 
 def learn_gains(file_name, n_samples, viz, debug):
     results = []
-    for mech_type in [Door, Slider]:
-        type = 'door' if mech_type == Door else 'slider'
-        for i in range(n_samples):
-            sys.stdout.write("\rProcessing %s %i/%i" % (type, i+1, n_samples))
+    for i in range(n_samples):
+        sys.stdout.write("\rProcessing sample %i/%i" % (i+1, n_samples))
 
-            k_lin = np.power(10., np.random.uniform(*k_lin_range))
-            k_rot = np.power(10., np.random.uniform(*k_rot_range))
-            d_lin = np.power(10., np.random.uniform(*d_lin_range))
-            d_rot = np.power(10., np.random.uniform(*d_rot_range))
-            k = [k_lin, k_rot]
-            d = [d_lin, d_rot]
-            add_dist = np.random.uniform(*add_dist_range)
-            p_err_eps = np.random.uniform(*p_err_eps_range)
-            delta_pos = np.random.uniform(*delta_pos_range)
+        k_lin = np.power(10., np.random.uniform(*k_lin_range))
+        k_rot = np.power(10., np.random.uniform(*k_rot_range))
+        d_lin = np.power(10., np.random.uniform(*d_lin_range))
+        d_rot = np.power(10., np.random.uniform(*d_rot_range))
+        k = [k_lin, k_rot]
+        d = [d_lin, d_rot]
+        add_dist = np.random.uniform(*add_dist_range)
+        p_err_eps = np.random.uniform(*p_err_eps_range)
+        delta_pos = np.random.uniform(*delta_pos_range)
 
-            results += test_policy(viz, debug, 1, True, k, d, add_dist, p_err_eps, delta_pos)
+        results += test_policy(viz, debug, 1, True, k, d, add_dist, p_err_eps, delta_pos)
 
-            # save to pickle (keep overwriting latest file in case it crashes)
-            fname = file_name + '.pickle'
-            with open(fname, 'wb') as handle:
-                pickle.dump(results, handle)
+        # save to pickle (keep overwriting latest file in case it crashes)
+        fname = file_name + '.pickle'
+        with open(fname, 'wb') as handle:
+            pickle.dump(results, handle)
 
 def plot_from_file(file_name):
     fname = file_name + '.pickle'
