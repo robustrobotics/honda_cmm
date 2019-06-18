@@ -99,7 +99,7 @@ if __name__ == '__main__':
         import pdb; pdb.set_trace()
 
     test_policy(args.viz, args.debug, args.max_mech, args.random)
-
+    print('done testing policy')
     try:
         while True:
             pass

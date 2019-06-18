@@ -33,6 +33,7 @@ joint - mechanism handle
 _err - error
 _des - desired
 _thresh - threshold
+_M - matrix form of a pose/transformation
 """
 
 class Gripper:
@@ -220,7 +221,7 @@ class Gripper:
         for (i, pose_tip_world_des) in enumerate(traj):
             start_mech_pose = p.getLinkState(self._bb_id, mech.handle_id)[0]
             finished = self._move_PD(pose_tip_world_des, debug)
-            final_mech_pose = p.getLinkState(self._id, mech.handle_id)[0]
+            final_mech_pose = p.getLinkState(self._bb_id, mech.handle_id)[0]
             motion = np.add(motion, np.linalg.norm(np.subtract(final_mech_pose,start_mech_pose)))
             if not finished:
                 break
@@ -228,7 +229,7 @@ class Gripper:
                 callback(bb)
         duration = np.subtract(time.time(), start_time)
         if self._in_contact(mech):
-            final_pose = p.getLinkState(bb._bb_id, mech.handle_id)
+            final_pose = p.getLinkState(self._bb_id, mech.handle_id)
         else:
             final_pose = None
         return np.divide(i,len(traj)), duration, motion, final_pose
