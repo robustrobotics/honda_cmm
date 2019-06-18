@@ -5,10 +5,11 @@ import itertools
 import pybullet as p
 
 class Policy(object):
-    def __init__(self, type, delta_pos = .01):
+    def __init__(self, type, delta_pos=None):
         self.type = type
         # max distance between waypoints in trajectory
-        self.delta_pos = delta_pos
+        if delta_pos is None:
+            self.delta_pos = 0.01
 
     def generate_trajectory(self, init_grasp_pose, init_joint_pos, goal_q, debug=False):
         joint_orn = np.array([0., 0., 0., 1.])
@@ -63,7 +64,7 @@ class Slide(Policy):
         pass
 
 class Prismatic(Policy):
-    def __init__(self, pos, orn, dir):
+    def __init__(self, pos, orn, dir, delta_pos):
         self.rigid_position = pos
         self.rigid_orientation = orn
         self.prismatic_dir = dir
@@ -71,7 +72,7 @@ class Prismatic(Policy):
         # derived
         self.origin_M = util.pose_to_matrix(self.rigid_position, self.rigid_orientation)
 
-        super(Prismatic,self).__init__('Prismatic')
+        super(Prismatic,self).__init__('Prismatic', delta_pos)
         self.delta_q_mag = self.delta_pos
 
     def forward_kinematics(self, q):
@@ -92,23 +93,23 @@ class Prismatic(Policy):
         return np.random.uniform(-0.5,0.5)
 
     @staticmethod
-    def model(bb, mech):
+    def model(bb, mech, delta_pos=None):
         p_track_w = p.getLinkState(bb.bb_id,mech.track_id)[0]
         rigid_position = bb.project_onto_backboard(p_track_w)
         rigid_orientation = [0., 0., 0., 1.]
         prismatic_dir = [mech.axis[0], 0., mech.axis[1]]
-        return Prismatic(rigid_position, rigid_orientation, prismatic_dir)
+        return Prismatic(rigid_position, rigid_orientation, prismatic_dir, delta_pos)
 
     @staticmethod
-    def random(bb):
+    def random(bb, delta_pos=None):
         rigid_position = random_pos(bb)
         rigid_orientation = np.array([0.,0.,0.,1.]) # this is hard coded in the joint models as well
         angle = np.random.uniform(0, np.pi)
         prismatic_dir = np.array([np.cos(angle), 0., np.sin(angle)])
-        return Prismatic(rigid_position, rigid_orientation, prismatic_dir)
+        return Prismatic(rigid_position, rigid_orientation, prismatic_dir, delta_pos)
 
 class Revolute(Policy):
-    def __init__(self, center, axis, radius, orn):
+    def __init__(self, center, axis, radius, orn, delta_pos):
         self.rot_center = center
         self.rot_axis = axis
         self.rot_radius = radius
@@ -118,7 +119,7 @@ class Revolute(Policy):
         self.center = util.pose_to_matrix(self.rot_center, self.rot_axis)
         self.radius = util.pose_to_matrix(self.rot_radius, self.rot_orientation)
 
-        super(Revolute,self).__init__('Revolute')
+        super(Revolute,self).__init__('Revolute', delta_pos)
         self.delta_q_mag = self.delta_pos/np.linalg.norm(self.radius)
 
     def forward_kinematics(self, q):
@@ -139,22 +140,22 @@ class Revolute(Policy):
         return np.random.uniform(-2*np.pi,2*np.pi)
 
     @staticmethod
-    def model(bb, mech):
+    def model(bb, mech, delta_pos):
         p_door_base_w = p.getLinkState(bb.bb_id, mech.door_base_id)[0]
         p_handle_w = p.getLinkState(bb.bb_id, mech.handle_id)[0]
         rot_center = bb.project_onto_backboard([p_door_base_w[0], p_door_base_w[1], p_handle_w[2]])
         rot_radius = np.subtract([p_handle_w[0],rot_center[1],p_handle_w[2]],rot_center)
         rot_axis = [0., 0., 0., 1.]
         rot_orientation = [0., 0., 0., 1.]
-        return Revolute(rot_center, rot_axis, rot_radius, rot_orientation)
+        return Revolute(rot_center, rot_axis, rot_radius, rot_orientation, delta_pos)
 
     @staticmethod
-    def random(bb):
+    def random(bb, delta_pos):
         rot_center = random_pos(bb)
         rot_axis = np.array([0.,0.,0.,1.]) # this is hard coded in the joint models as well
         rot_radius = random_radius()
         rot_orientation = np.array([0.,0.,0.,1.]) # this is hard coded in the joint models as well
-        return Revolute(rot_center, rot_axis, rot_radius, rot_orientation)
+        return Revolute(rot_center, rot_axis, rot_radius, rot_orientation, delta_pos)
 
 class Path(Policy):
     def __init__(self):
@@ -169,9 +170,9 @@ class Path(Policy):
 
 # couldn't make staticmethod of Policy because needed child class types first
 # TODO: add back other policy types as they're made
-def generate_random_policy(bb, policy_types=[Revolute, Prismatic]):
+def generate_random_policy(bb, delta_pos=None, policy_types=[Revolute, Prismatic]):
     policy_type = np.random.choice(policy_types)
-    return policy_type.random(bb)
+    return policy_type.random(bb, delta_pos)
 
 ## Helper Functions
 def random_pos(bb):
