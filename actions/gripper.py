@@ -10,6 +10,7 @@ import sys
 Naming convention
 -----------------
 pose_ is a util.Pose()
+M_ is a transformation matrix
 p_ is a vector of length 3 representing a position
 q_ is a vector of length 4 representing a quaternion
 e_ is a vector of length 3 representing euler angles
@@ -30,6 +31,8 @@ com - center of mass of the entire gripper body
 left - left finger tip of gripper
 right - right finger tip of gripper
 joint - mechanism handle
+door - door base of a revolute joint
+track - track of prismatic joint
 _err - error
 _des - desired
 _thresh - threshold
