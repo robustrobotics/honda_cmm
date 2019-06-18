@@ -5,7 +5,7 @@ import itertools
 import pybullet as p
 
 class Policy(object):
-    def __init__(self, type, delta_pos = .001):
+    def __init__(self, type, delta_pos = .01):
         self.type = type
         # max distance between waypoints in trajectory
         self.delta_pos = delta_pos
@@ -19,7 +19,8 @@ class Policy(object):
         # initial offset between joint pose orn and gripper orn
         # assume that we want to keep this offset constant throughout the traj
         init_delta_q = util.quat_math(joint_orn, init_grasp_pose.orn, True, False)
-        init_delta_pos = np.subtract(init_grasp_pose.pos,init_joint_pos)
+        pos_grasp_joint = util.transformation(init_grasp_pose.pos, init_joint_pos, joint_orn, inverse=True)
+
 
         poses = []
         for i in itertools.count():
@@ -30,8 +31,9 @@ class Policy(object):
             # for prism, orn should remain constant
             # for now remain constant for both
             grasp_orn = util.quat_math(curr_joint_pose.orn, init_delta_q, False, False)
-            grasp_pos = np.add(curr_joint_pose.pos,init_delta_pos)
-            poses += [util.Pose(grasp_pos, grasp_orn)]
+
+            pos_grasp_world = util.transformation(pos_grasp_joint, *curr_joint_pose)
+            poses += [util.Pose(pos_grasp_world, grasp_orn)]
             curr_q += delta_q
             if debug:
                 if i>0:
@@ -141,8 +143,8 @@ class Revolute(Policy):
         p_door_base_w = p.getLinkState(bb.bb_id, mech.door_base_id)[0]
         p_handle_w = p.getLinkState(bb.bb_id, mech.handle_id)[0]
         rot_center = bb.project_onto_backboard([p_door_base_w[0], p_door_base_w[1], p_handle_w[2]])
-        rot_axis = [0., 0., 0., 1.]
         rot_radius = np.subtract([p_handle_w[0],rot_center[1],p_handle_w[2]],rot_center)
+        rot_axis = [0., 0., 0., 1.]
         rot_orientation = [0., 0., 0., 1.]
         return Revolute(rot_center, rot_axis, rot_radius, rot_orientation)
 
