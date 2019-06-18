@@ -8,9 +8,10 @@ from data.generator import BusyBox
 from policies import generate_random_policy, Prismatic, Revolute
 from collections import namedtuple
 
-Result = namedtuple('Result', 'k d mechanism waypoints_reached duration')
+Result = namedtuple('Result', 'gripper policy mechanism waypoints_reached duration motion final_pose image')
 
-def test_policy(viz=False, debug=False, max_mech=6, random=False, k=None, d=None, add_dist=None, p_err_eps=None, delta_pos=None):
+def test_policy(viz=False, debug=False, max_mech=6, random=False, k=None, d=None,\
+                    add_dist=None, p_err_eps=None, delta_pos=None):
     if not viz:
         client = p.connect(p.DIRECT)
     else:
@@ -52,6 +53,8 @@ def test_policy(viz=False, debug=False, max_mech=6, random=False, k=None, d=None
                                 controlMode=mode,
                                 force=maxForce)
 
+    # can change resolution and shadows with this call
+    image = p.getCameraImage(1024,768) # do before add gripper to world
     gripper = Gripper(model, k, d, add_dist, p_err_eps)
 
     results = []
@@ -79,7 +82,12 @@ def test_policy(viz=False, debug=False, max_mech=6, random=False, k=None, d=None
 
         # execute trajectory
         waypoints_reached, duration, motion = gripper.execute_trajectory(grasp_pose, traj, debug=debug)
-        results += [Result(gripper.k, gripper.d, mech, waypoints_reached, duration)]
+        if gripper.in_contact(mech):
+            final_pose = p.getLinkState(bb.bb_id, mech.handle_id)
+        else:
+            final_pose = None
+        results += [Result(gripper, policy, mech, waypoints_reached, duration,\
+                    motion, final_pose, image)]
 
     p.disconnect(client)
     return results

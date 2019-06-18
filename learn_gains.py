@@ -65,8 +65,8 @@ def plot_from_file(file_name):
     for result in results:
         wr = result.waypoints_reached
         time = result.duration
-        a = ax0.scatter([result.k[0]], [result.d[0]], cmap=cm, c=[wr], s=2, vmin=0, vmax=1) # s is markersize
-        b = ax1.scatter([result.k[1]], [result.d[1]], cmap=cm, c=[wr], s=2, vmin=0, vmax=1)
+        a = ax0.scatter([result.gripper.k[0]], [result.gripper.d[0]], cmap=cm, c=[wr], s=2, vmin=0, vmax=1) # s is markersize
+        b = ax1.scatter([result.gripper.k[1]], [result.gripper.d[1]], cmap=cm, c=[wr], s=2, vmin=0, vmax=1)
     ks = np.power(10.,np.linspace(k_lin_range[0], k_lin_range[1],1000))
     mass = 1.5
     ds_critically_damped = np.sqrt(4*mass*ks)
@@ -95,7 +95,7 @@ def plot_from_file(file_name):
     fig1.colorbar(b)
 
     plt.show()
-    input('hit enter when done\n')
+    input('\nhit enter when done')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
