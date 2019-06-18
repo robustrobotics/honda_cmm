@@ -3,13 +3,9 @@ import numpy as np
 import pickle
 import transformations as trans
 import math
+from collections import namedtuple
 
-class Command:
-    def __init__(self, finger_state='close', force_dir=None, tip_orientation=None, traj=None):
-        self.finger_state = finger_state
-        self.force_dir = force_dir
-        self.tip_orientation = tip_orientation
-        self.traj = traj
+Pose = namedtuple('Pose', 'pos orn')
 
 class Recorder(object):
 
@@ -37,7 +33,25 @@ def vis_frame(pos, orn, length=.2, lifeTime=.4):
     p.addUserDebugLine(pos, new_y, [0,1,0], lifeTime=lifeTime)
     p.addUserDebugLine(pos, new_z, [0,0,1], lifeTime=lifeTime)
 
-def transformation(pos, translation_vec, quat):
+def skew_symmetric(vec):
+    i, j, k = vec
+    return np.array([[0, -k, j], [k, 0, -i], [-j, i, 0]])
+
+def adjoint_transformation(vel, translation_vec, quat, inverse=False):
+    if inverse:
+        translation_vec, quat = p.invertTransform(translation_vec, quat)
+
+    R = p.getMatrixFromQuaternion(quat)
+    R = np.reshape(R, (3,3))
+    T = np.zeros((6,6))
+    T[:3,:3] = R
+    T[:3,3:] = skew_symmetric(translation_vec).dot(R)
+    T[3:,3:] = R
+    return np.dot(T, vel)
+
+def transformation(pos, translation_vec, quat, inverse=False):
+    if inverse:
+        translation_vec, quat = p.invertTransform(translation_vec, quat)
     R = p.getMatrixFromQuaternion(quat)
     R = np.reshape(R, (3,3))
     T = np.zeros((4,4))
@@ -48,21 +62,21 @@ def transformation(pos, translation_vec, quat):
     new_pos = np.dot(T, pos)
     return new_pos[:3]
 
-def diff_quat(q0, q1, step_size=None, add=False):
+def quat_math(q0, q1, inv0, inv1):
+    if not isinstance(q0, np.ndarray):
+        q0 = np.array(q0)
+    if not isinstance(q1, np.ndarray):
+        q1 = np.array(q1)
     q0 = to_transquat(q0)
     q0 = trans.unit_vector(q0)
     q1 = to_transquat(q1)
     q1 = trans.unit_vector(q1)
-    if add:
+    if inv0:
+        q0 = trans.quaternion_conjugate(q0)
+    if inv1:
         q1 = trans.quaternion_conjugate(q1)
-    orn_err = trans.quaternion_multiply(q0, trans.quaternion_conjugate(q1))
-    orn_err = to_pyquat(orn_err)
-
-    orn_des = None
-    if step_size is not None:
-        orn_des = trans.quaternion_slerp(q1, q0, step_size)
-        orn_des = to_pyquat(orn_des)
-    return orn_err, orn_des
+    res = trans.quaternion_multiply(q0,q1)
+    return to_pyquat(res)
 
 def to_transquat(pybullet_quat):
     return np.concatenate([[pybullet_quat[3]], pybullet_quat[:3]])

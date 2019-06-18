@@ -134,6 +134,7 @@ if __name__ == '__main__':
         p.disconnect(client)
 
     logger.save()
+
     for d in logger.datasets:
         print(len(d))
     print(logger.datasets[0][0:100:30])

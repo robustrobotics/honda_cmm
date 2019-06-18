@@ -6,10 +6,7 @@ import pybullet_data
 import aabbtree as aabb
 import cv2
 from gripper import Gripper
-from joints import Prismatic, Revolute
 import util
-
-#np.random.seed(0)
 
 class Mechanism(object):
     def __init__(self, p_type):
@@ -59,6 +56,7 @@ class Slider(Mechanism):
         Slider.n_sliders += 1
 
         slider_handle_name = 'slider_{0}_handle'.format(name)
+        slider_track_name = 'slider_{0}_track'.format(name)
         handle = urdf.Link(slider_handle_name,
                            urdf.Inertial(
                                urdf.Origin(xyz=(0, 0, 0), rpy=(0, 0, 0)),
@@ -81,7 +79,7 @@ class Slider(Mechanism):
                                )
                            ))
 
-        track = urdf.Link('slider_{0}_track'.format(name),
+        track = urdf.Link(slider_track_name.format(name),
                            urdf.Inertial(
                                urdf.Origin(xyz=(0, 0, 0), rpy=(0, 0, 0)),
                                urdf.Mass(value=0.1),
@@ -126,7 +124,9 @@ class Slider(Mechanism):
         self._joints.append(track_joint)
 
         self.handle_name = slider_handle_name
+        self.track_name = slider_track_name
         self.handle_id = None
+        self.track_id = None
         self.origin = (x_offset, z_offset)
         self.range = range
         self.handle_radius = 0.025
@@ -143,13 +143,6 @@ class Slider(Mechanism):
         x_max = self.origin[0] + np.abs(np.cos(a))*self.range/2.0 + self.handle_radius
 
         return aabb.AABB([(x_min, x_max), (z_min, z_max)])
-
-    def set_joint_model(self, bb_id):
-        p_back_w = p.getLinkState(bb_id, 0)[0]
-        rigid_position = np.add(p_back_w, [self.origin[0], .05, self.origin[1]])
-        rigid_orientation = [0., 0., 0., 1.]
-        prismatic_dir = [self.axis[0], 0., self.axis[1]]
-        self.joint_model = Prismatic(rigid_position, rigid_orientation, prismatic_dir)
 
     @staticmethod
     def random(width, height):
@@ -275,15 +268,6 @@ class Door(Mechanism):
             x_max = self.origin[0]
         return aabb.AABB([(x_min, x_max), (z_min, z_max)])
 
-    def set_joint_model(self, bb_id):
-        p_b_w = p.getLinkState(bb_id, self.door_base_id)[0]
-        p_h_w = p.getLinkState(bb_id, self.handle_id)[0]
-        rot_center = [p_b_w[0], p_b_w[1], p_h_w[2]]
-        rot_axis = [0., 0., 0., 1.]
-        rot_radius = np.subtract(p_h_w, rot_center)
-        rot_orientation = [0., 0., 0., 1.]
-        self.joint_model = Revolute(rot_center, rot_axis, rot_radius, rot_orientation)
-
     @staticmethod
     def random(width, height):
         door_offset = (np.random.uniform(-width/2.0, width/2.0),
@@ -307,6 +291,8 @@ class BusyBox(object):
         self._links = []
         self._joints = []
         self._create_skeleton(width, height)
+        self.width = width
+        self.height = height
 
     def _create_skeleton(self, width, height):
         """
@@ -383,11 +369,17 @@ class BusyBox(object):
                     if mech.mechanism_type == 'Door':
                         if mech.door_base_name == link_name.decode("utf-8"):
                             mech.door_base_id = joint_info[0]
+            elif 'track' in link_name.decode("utf-8"):
+                for mech in self._mechanisms:
+                    if mech.mechanism_type == "Slider":
+                        if mech.track_name == link_name.decode("utf-8"):
+                            mech.track_id = joint_info[0]
         self.bb_id = bb_id
 
-    def set_joint_models(self, bb_id):
-        for mech in self._mechanisms:
-            mech.set_joint_model(bb_id)
+    def project_onto_backboard(self, pos):
+        bb_thickness = 0.05
+        p_bb_base_w = p.getLinkState(self.bb_id,0)[0]
+        return [pos[0], p_bb_base_w[1]+bb_thickness/2, pos[2]]
 
     def get_urdf(self):
         """
@@ -399,23 +391,6 @@ class BusyBox(object):
             elements += m.get_joints()
         robot = urdf.Robot('busybox', *elements)
         return str(robot)
-
-    def actuate_joints(self, bb_id, gripper, control_method, debug, viz, callback=None):
-        for mechanism in self._mechanisms:
-            gripper.grasp_handle(mechanism, viz)
-            if control_method == 'force':
-                for t in range(700):
-                    command = mechanism.joint_model.get_force_direction(bb_id, mechanism)
-                    gripper.apply_command(command, debug, viz)
-            elif control_method == 'traj':
-                if mechanism.mechanism_type == 'Slider':
-                    delta_q = .2
-                if mechanism.mechanism_type == 'Door':
-                    delta_q = np.pi/2
-                    if mechanism.flipped:
-                        delta_q = -np.pi/2
-                command = mechanism.joint_model.get_pose_trajectory(bb_id, mechanism, delta_q)
-                gripper.apply_command(command, debug, viz, callback, self)
 
     @staticmethod
     def _check_collision(width, height, mechs, mech):
@@ -507,7 +482,6 @@ if __name__ == '__main__':
             handle.write(bb.get_urdf())
         model = p.loadURDF(bb_file, [0., -.3, 0.])
         bb.set_mechanism_ids(model)
-        bb.set_joint_models(model)
         maxForce = 10
         mode = p.VELOCITY_CONTROL
         for jx in range(0, p.getNumJoints(model)):
