@@ -37,6 +37,7 @@ if __name__ == '__main__':
 
         if not args.test_read:
             generate_data(args.n_samples, args.viz, args.debug)
+            write_to_file(args.fname)
         else:
             test_read(args.fname)
     except KeyboardInterrupt:

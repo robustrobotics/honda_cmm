@@ -52,7 +52,9 @@ def test_policy(viz=False, debug=False, max_mech=6, random=False, k=None, d=None
                                 force=maxForce)
 
     # can change resolution and shadows with this call
-    image = p.getCameraImage(1024,768) # do before add gripper to world
+    image_data_pybullet = p.getCameraImage(205, 154, shadow=0) # do before add gripper to world
+    image_data = util.ImageData(*image_data_pybullet[:3])
+
     gripper = Gripper(model, k, d, add_dist, p_err_thresh)
 
     results = []
@@ -76,13 +78,13 @@ def test_policy(viz=False, debug=False, max_mech=6, random=False, k=None, d=None
         p_joint_base_world_init = bb.project_onto_backboard(p_joint_world_init)
         p_tip_world_init = np.add(p_joint_world_init, [0., .015, 0.])
         pose_tip_world_init = util.Pose(p_tip_world_init, q_tip_world_init)
-        traj = policy.generate_trajectory(pose_tip_world_init, p_joint_world_init, config_goal, debug)
+        traj = policy.generate_trajectory(pose_tip_world_init, p_joint_base_world_init, config_goal, debug)
 
         # execute trajectory
         waypoints_reached, duration, joint_motion, pose_joint_world_final = \
                 gripper.execute_trajectory(pose_tip_world_init, traj, mech, debug=debug)
         results += [util.Result(gripper, policy, bb, waypoints_reached, duration,\
-                    joint_motion, pose_joint_world_final, image)]
+                    joint_motion, pose_joint_world_final, image_data)]
 
     p.disconnect(client)
     return results

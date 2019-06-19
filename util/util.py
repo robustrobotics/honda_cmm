@@ -23,9 +23,17 @@ Result contains the performance information after the gripper tries to move a me
 :param motion: scalar, the net distance the mechanism handle moved
 :param final_pose: util.Pose object, the final_pose of the mechanism handle is the
                     gripper tip in contact with the mechanism at completion, else None
-:param image: type returned by p.getCameraImage ([2:4] are RGB and depth values)
+:param image:util.ImageData
 """
 
+ImageData = namedtuple('ImageData', 'width height rgbPixels')
+"""
+ImageData contains a subset of the image data returned by pybullet
+:param width: int, width image resolution in pixels (horizontal)
+:param height: int, height image resolution in pixels (vertical)
+:param rgbPixels: list of [char RED,char GREEN,char BLUE, char ALPHA] [0..width*height],
+                    list of pixel colors in R,G,B,A format, in range [0..255] for each color
+"""
 class Recorder(object):
 
     def __init__(self, height, width):
