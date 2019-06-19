@@ -1,10 +1,10 @@
 import numpy as np
 import argparse
 import pybullet as p
-import pickle
 import sys
 from test_policy import test_policy
 from gen.generator_busybox import Door, Slider
+from util import util
 
 # range of gains to try
 k_lin_range = [-1,5] # sampled in logspace
@@ -15,11 +15,11 @@ add_dist_range = [0.,.1]
 p_err_thresh_range = [.001, .1]
 p_delta_range = [.001, .1]
 
-def learn_gains(file_name, n_samples, viz, debug):
-    results = []
+results = []
+
+def learn_gains(file_name, n_samples, viz, debug, git_hash):
     for i in range(n_samples):
         sys.stdout.write("\rProcessing sample %i/%i" % (i+1, n_samples))
-
         k_lin = np.power(10., np.random.uniform(*k_lin_range))
         k_rot = np.power(10., np.random.uniform(*k_rot_range))
         d_lin = np.power(10., np.random.uniform(*d_lin_range))
@@ -29,18 +29,10 @@ def learn_gains(file_name, n_samples, viz, debug):
         add_dist = np.random.uniform(*add_dist_range)
         p_err_thresh = np.random.uniform(*p_err_thresh_range)
         p_delta = np.random.uniform(*p_delta_range)
-
-        results += test_policy(viz, debug, 1, True, k, d, add_dist, p_err_thresh, p_delta)
-
-        # save to pickle (keep overwriting latest file in case it crashes)
-        fname = file_name + '.pickle'
-        with open(fname, 'wb') as handle:
-            pickle.dump(results, handle)
+        results.extend(test_policy(viz, debug, 1, True, k, d, add_dist, p_err_thresh, p_delta))
 
 def plot_from_file(file_name):
-    fname = file_name + '.pickle'
-    with open(fname, 'rb') as handle:
-        results = pickle.load(handle)
+    plot_data = util.read_from_file(file_name)
 
     # plot results
     import matplotlib.pyplot as plt
@@ -53,20 +45,21 @@ def plot_from_file(file_name):
 
     min_time = float('inf')
     max_time = 0
-    for result in results:
-        if result.waypoints_reached>.5:
+    for data_point in plot_data:
+        if data_point.waypoints_reached>.5:
             # for some reason the time is negative sometimes...
-            if result.duration > 0:
-                if result.duration>max_time:
-                    max_time = result.duration
-                if result.duration<min_time:
-                    min_time = result.duration
+            if data_point.duration > 0:
+                if data_point.duration>max_time:
+                    max_time = data_point.duration
+                if data_point.duration<min_time:
+                    min_time = data_point.duration
 
-    for result in results:
-        wr = result.waypoints_reached
-        time = result.duration
-        a = ax0.scatter([result.gripper.k[0]], [result.gripper.d[0]], cmap=cm, c=[wr], s=2, vmin=0, vmax=1) # s is markersize
-        b = ax1.scatter([result.gripper.k[1]], [result.gripper.d[1]], cmap=cm, c=[wr], s=2, vmin=0, vmax=1)
+    for data_point in plot_data:
+        wr = data_point.waypoints_reached
+        time = data_point.duration
+        a = ax0.scatter([data_point.gripper.k[0]], [data_point.gripper.d[0]], cmap=cm, c=[wr], s=2, vmin=0, vmax=1) # s is markersize
+        b = ax1.scatter([data_point.gripper.k[1]], [data_point.gripper.d[1]], cmap=cm, c=[wr], s=2, vmin=0, vmax=1)
+
     ks = np.power(10.,np.linspace(k_lin_range[0], k_lin_range[1],1000))
     mass = 1.5
     ds_critically_damped = np.sqrt(4*mass*ks)
@@ -102,21 +95,36 @@ if __name__ == '__main__':
     parser.add_argument('--viz', action='store_true')
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--n-samples', type=int, default=5)
-    parser.add_argument('--plot', type=str) # give filename (without .pickle)
+    parser.add_argument('--plot', action='store_true') # give filename (without .pickle)
     parser.add_argument('--fname', type=str) # give filename (without .pickle)
+    parser.add_argument('--save-git', action='store_true')
     args = parser.parse_args()
 
     if args.debug:
         import pdb; pdb.set_trace()
 
-    if args.fname:
-        learn_gains(args.fname, args.n_samples, args.viz, args.debug)
+    if args.plot:
         plot_from_file(args.fname)
     else:
-        plot_from_file(args.plot)
+        try:
+            git_hash = None
+            if args.save_git:
+                import git
+                repo = git.Repo(search_parent_directories=True)
+                git_hash = repo.head.object.hexsha
+            learn_gains(args.fname, args.n_samples, args.viz, args.debug, git_hash)
+            util.write_to_file(args.fname, results)
+        except KeyboardInterrupt:
+            # if Ctrl+C write to pickle
+            util.write_to_file(args.fname, results)
+            print('Exiting...')
+        except:
+            # if crashes write to pickle
+            util.write_to_file(args.fname, results)
 
-    try:
-        while True:
-            pass
-    except KeyboardInterrupt:
-        print('Exiting...')
+            # for post-mortem debugging since can't run module from command line in pdb.pm() mode
+            import traceback, pdb, sys
+            traceback.print_exc()
+            print('')
+            pdb.post_mortem()
+            sys.exit(1)
