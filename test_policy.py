@@ -7,7 +7,7 @@ from actions.gripper import Gripper
 from gen.generator_busybox import BusyBox
 from actions.policies import generate_random_policy, Prismatic, Revolute
 from collections import namedtuple
-np.random.seed(11)
+
 def test_policy(viz=False, debug=False, max_mech=6, random=False, k=None, d=None,\
                     add_dist=None, p_err_thresh=None, delta_pos=None):
     if not viz:
