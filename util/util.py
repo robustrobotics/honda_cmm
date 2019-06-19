@@ -60,6 +60,19 @@ class Recorder(object):
         with open(fname, 'wb') as handle:
             pickle.dump(self.frames, handle)
 
+def write_to_file(file_name, data):
+    # save to pickle
+    fname = file_name + '.pickle'
+    with open(fname, 'wb') as handle:
+        pickle.dump(data, handle)
+    print('\nwrote dataset to '+fname)
+
+def read_from_file(file_name):
+    fname = file_name + '.pickle'
+    with open(fname, 'rb') as handle:
+        data = pickle.load(handle)
+        print('successfully read in '+fname)
+    return data
 
 def vis_frame(pos, quat, length=0.2, lifeTime=0.4):
     """ This function visualizes a coordinate frame for the supplied frame where the
