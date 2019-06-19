@@ -131,7 +131,8 @@ class Prismatic(Policy):
         return np.random.uniform(-0.5,0.5)
 
     def get_params_tuple(self):
-        return PrismaticParams(self.rigid_position, self.rigid_orientation, self.prismatic_dir)
+        prim_params = PrismaticParams(self.rigid_position, self.rigid_orientation, self.prismatic_dir)
+        return PolicyParams(self.type, prim_params)
 
     @staticmethod
     def model(bb, mech, p_delta=None):
@@ -201,7 +202,8 @@ class Revolute(Policy):
         return np.random.uniform(-2*np.pi,2*np.pi)
 
     def get_params_tuple(self):
-        return RevoluteParams(self.rot_center, self.rot_axis, self.rot_radius, self.rot_orientation)
+        prim_params =  RevoluteParams(self.rot_center, self.rot_axis, self.rot_radius, self.rot_orientation)
+        return PolicyParams(self.type, prim_params)
 
     @staticmethod
     def model(bb, mech, p_delta):
