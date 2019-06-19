@@ -233,7 +233,7 @@ class Gripper:
                 callback(bb)
         duration = np.subtract(time.time(), start_time)
         if self._in_contact(mech):
-            pose_joint_world_final = p.getLinkState(self._bb_id, mech.handle_id)
+            pose_joint_world_final = util.Pose(*p.getLinkState(self._bb_id, mech.handle_id)[:2])
         else:
             pose_joint_world_final = None
         return np.divide(i,len(traj)), duration, joint_motion, pose_joint_world_final
