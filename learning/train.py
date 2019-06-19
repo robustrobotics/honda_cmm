@@ -1,5 +1,6 @@
 import argparse
 import numpy as np
+import torch
 from learning.nn_disp_pol import DistanceRegressor as NNPol
 from learning.nn_disp_pol_vis import DistanceRegressor as NNPolVis
 from learning.dataloaders import setup_data_loaders
