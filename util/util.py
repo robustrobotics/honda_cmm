@@ -12,11 +12,12 @@ Pose represents an SE(3) pose
 :param q: a vector of length 4, representing an (x,y,z,w) quaternion
 """
 
-Result = namedtuple('Result', 'control_params policy_params waypoints_reached motion final_pose image_data git_hash')
+Result = namedtuple('Result', 'control_params policy_params mechanism_params waypoints_reached motion final_pose image_data git_hash')
 """
 Result contains the performance information after the gripper tries to move a mechanism
 :param control_params: utils.util.ControlParams
 :param policy_params: actions.policies.PolicyParams
+:param mechanism_params: gen.generator_busybox.MechanismParams
 :param waypoints_reached: scalar, percentage of waypoints reached when attempting to move mechanism
 :param motion: scalar, the net distance the mechanism handle moved
 :param final_pose: util.Pose object, the final_pose of the mechanism handle is the

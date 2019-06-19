@@ -7,6 +7,11 @@ import aabbtree as aabb
 import cv2
 from actions.gripper import Gripper
 from util import util
+from collections import namedtuple
+
+MechanismParams = namedtuple('MechanismParams', 'type params')
+SliderParams = namedtuple('SliderParams', 'range')
+DoorParams = namedtuple('DoorParams', 'door_size flipped')
 
 class Mechanism(object):
     def __init__(self, p_type):
@@ -32,6 +37,9 @@ class Mechanism(object):
         :return: aabb.AABB
         """
         raise NotImplementedError('Collision Bounding Box not implemented for mechanism: {0}'.format(self.mechanism_type))
+
+    def get_params_tuple(self):
+        raise NotImplementedError('get_params_tuple not implemented for mechanism: {0}'.format(self.mechanism_type))
 
     @staticmethod
     def random():
@@ -143,6 +151,9 @@ class Slider(Mechanism):
         x_max = self.origin[0] + np.abs(np.cos(a))*self.range/2.0 + self.handle_radius
 
         return aabb.AABB([(x_min, x_max), (z_min, z_max)])
+
+    def get_params_tuple(self):
+        return MechanismParams(self.mechanism_type, SliderParams(self.range))
 
     @staticmethod
     def random(width, height):
@@ -267,6 +278,9 @@ class Door(Mechanism):
             x_min = self.origin[0] - self.door_size[0]
             x_max = self.origin[0]
         return aabb.AABB([(x_min, x_max), (z_min, z_max)])
+
+    def get_params_tuple(self):
+        return MechanismParams(self.mechanism_type, DoorParams(self.door_size, self.flipped))
 
     @staticmethod
     def random(width, height):

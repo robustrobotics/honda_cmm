@@ -86,9 +86,9 @@ def test_policy(viz=False, debug=False, max_mech=6, random=False, k=None, d=None
 
         # save result data
         control_params = util.ControlParams(gripper.k, gripper.d, gripper.add_dist, gripper.p_err_thresh, policy.p_delta)
-        prim_policy_params = policy.get_params_tuple()
-        policy_params = policies.PolicyParams(policy.type, prim_policy_params)
-        results += [util.Result(control_params, policy_params, waypoints_reached,\
+        policy_params = policy.get_params_tuple()
+        mechanism_params = mech.get_params_tuple()
+        results += [util.Result(control_params, policy_params, mechanism_params, waypoints_reached,\
                     joint_motion, pose_joint_world_final, image_data, git_hash)]
 
     p.disconnect(client)
