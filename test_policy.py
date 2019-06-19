@@ -5,11 +5,11 @@ import pybullet as p
 import pybullet_data
 from actions.gripper import Gripper
 from gen.generator_busybox import BusyBox
-from actions.policies import generate_random_policy, Prismatic, Revolute
+from actions import policies
 from collections import namedtuple
 
 def test_policy(viz=False, debug=False, max_mech=6, random=False, k=None, d=None,\
-                    add_dist=None, p_err_thresh=None, delta_pos=None):
+                    add_dist=None, p_err_thresh=None, p_delta=None, git_hash=None):
     if not viz:
         client = p.connect(p.DIRECT)
     else:
@@ -66,14 +66,14 @@ def test_policy(viz=False, debug=False, max_mech=6, random=False, k=None, d=None
         # try correct policy on each
         if not random:
             if mech.mechanism_type == 'Door':
-                policy = Revolute.model(bb, mech, delta_pos)
+                policy = policies.Revolute.model(bb, mech, p_delta)
                 config_goal = -np.pi/2 if mech.flipped else np.pi/2
             elif mech.mechanism_type == 'Slider':
-                policy = Prismatic.model(bb, mech, delta_pos)
+                policy = policies.Prismatic.model(bb, mech, p_delta)
                 config_goal = .1
         # else generate a random policy and goal config
         else:
-            policy = generate_random_policy(bb, delta_pos)
+            policy = policies.generate_random_policy(bb, p_delta)
             config_goal = policy.generate_random_config()
         p_joint_base_world_init = bb.project_onto_backboard(p_joint_world_init)
         p_tip_world_init = np.add(p_joint_world_init, [0., .015, 0.])
@@ -83,8 +83,13 @@ def test_policy(viz=False, debug=False, max_mech=6, random=False, k=None, d=None
         # execute trajectory
         waypoints_reached, duration, joint_motion, pose_joint_world_final = \
                 gripper.execute_trajectory(pose_tip_world_init, traj, mech, debug=debug)
-        results += [util.Result(gripper, policy, bb, waypoints_reached, duration,\
-                    joint_motion, pose_joint_world_final, image_data)]
+
+        # save result data
+        control_params = util.ControlParams(gripper.k, gripper.d, gripper.add_dist, gripper.p_err_thresh, policy.p_delta)
+        prim_policy_params = policy.get_params_tuple()
+        policy_params = policies.PolicyParams(policy.type, prim_policy_params)
+        results += [util.Result(control_params, policy_params, waypoints_reached,\
+                    joint_motion, pose_joint_world_final, image_data, git_hash)]
 
     p.disconnect(client)
     return results

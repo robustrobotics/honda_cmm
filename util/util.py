@@ -12,18 +12,17 @@ Pose represents an SE(3) pose
 :param q: a vector of length 4, representing an (x,y,z,w) quaternion
 """
 
-Result = namedtuple('Result', 'gripper policy busybox waypoints_reached duration motion final_pose image')
+Result = namedtuple('Result', 'control_params policy_params waypoints_reached motion final_pose image_data git_hash')
 """
 Result contains the performance information after the gripper tries to move a mechanism
-:param gripper: gripper.Gripper object
-:param policy: policies.Policy object
-:param busybox: gen.generator_busybox.Busybox object
+:param control_params: utils.util.ControlParams
+:param policy_params: actions.policies.PolicyParams
 :param waypoints_reached: scalar, percentage of waypoints reached when attempting to move mechanism
-:param duration: scalar, execution duration before success or timeout
 :param motion: scalar, the net distance the mechanism handle moved
 :param final_pose: util.Pose object, the final_pose of the mechanism handle is the
                     gripper tip in contact with the mechanism at completion, else None
-:param image:util.ImageData
+:param image: utils.util.ImageData
+:param git_hash: None or str representing the git hash when the data was collected
 """
 
 ImageData = namedtuple('ImageData', 'width height rgbPixels')
@@ -34,6 +33,17 @@ ImageData contains a subset of the image data returned by pybullet
 :param rgbPixels: list of [char RED,char GREEN,char BLUE, char ALPHA] [0..width*height],
                     list of pixel colors in R,G,B,A format, in range [0..255] for each color
 """
+
+ControlParams = namedtuple('ControlParams', 'k d add_dist p_err_thresh p_delta')
+"""
+ControlParams contain all params that go into the PD controller
+:param k: actions.gripper.Gripper.k
+:param d: actions.gripper.Gripper.d
+:param add_dist: actions.gripper.Gripper.add_dist
+:param p_err_thresh: actions.gripper.Gripper.p_err_thresh
+:param p_delta: actions.policies.Policy.p_delta
+"""
+
 class Recorder(object):
 
     def __init__(self, height, width):

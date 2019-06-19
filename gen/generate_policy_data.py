@@ -4,10 +4,10 @@ import argparse
 from test_policy import test_policy
 
 samples = []
-def generate_data(n_samples, viz, debug):
+def generate_data(n_samples, viz, debug, git_hash):
     for i in range(n_samples):
         sys.stdout.write("\rProcessing sample %i/%i" % (i+1, n_samples))
-        samples.append(test_policy(viz=viz, debug=debug, max_mech=1, random=True))
+        samples.append(test_policy(viz=viz, debug=debug, max_mech=1, random=True, git_hash=git_hash))
 
 def write_to_file(file_name):
     # save to pickle
@@ -29,6 +29,7 @@ if __name__ == '__main__':
     parser.add_argument('--n-samples', type=int, default=5)
     parser.add_argument('--fname', type=str) # give filename (without .pickle)
     parser.add_argument('--test-read', action='store_true')
+    parser.add_argument('--save-git', action='store_true')
     args = parser.parse_args()
 
     try:
@@ -36,7 +37,12 @@ if __name__ == '__main__':
             import pdb; pdb.set_trace()
 
         if not args.test_read:
-            generate_data(args.n_samples, args.viz, args.debug)
+            git_has = None
+            if args.save_git:
+                import git
+                repo = git.Repo(search_parent_directories=True)
+                git_hash = repo.head.object.hexsha
+            generate_data(args.n_samples, args.viz, args.debug, git_hash)
             write_to_file(args.fname)
         else:
             test_read(args.fname)

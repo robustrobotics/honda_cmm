@@ -111,3 +111,9 @@ venv.bak/
 
 # randomly generated URDFs
 models/*.urdf
+
+# mac specific
+.DS_Store
+
+# generated pickle files
+/data

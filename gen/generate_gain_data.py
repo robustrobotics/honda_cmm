@@ -13,7 +13,7 @@ d_lin_range = [-5,4] # sampled in logspace
 d_rot_range = [-5,1] # sampled in logspace
 add_dist_range = [0.,.1]
 p_err_thresh_range = [.001, .1]
-delta_pos_range = [.001, .1]
+p_delta_range = [.001, .1]
 
 def learn_gains(file_name, n_samples, viz, debug):
     results = []
@@ -28,9 +28,9 @@ def learn_gains(file_name, n_samples, viz, debug):
         d = [d_lin, d_rot]
         add_dist = np.random.uniform(*add_dist_range)
         p_err_thresh = np.random.uniform(*p_err_thresh_range)
-        delta_pos = np.random.uniform(*delta_pos_range)
+        p_delta = np.random.uniform(*p_delta_range)
 
-        results += test_policy(viz, debug, 1, True, k, d, add_dist, p_err_thresh, delta_pos)
+        results += test_policy(viz, debug, 1, True, k, d, add_dist, p_err_thresh, p_delta)
 
         # save to pickle (keep overwriting latest file in case it crashes)
         fname = file_name + '.pickle'
