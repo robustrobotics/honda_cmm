@@ -28,18 +28,23 @@ if __name__ == '__main__':
     parser.add_argument('--n-samples', type=int, default=5)
     parser.add_argument('--fname', type=str) # give filename (without .pickle)
     parser.add_argument('--test-read', action='store_true')
+    parser.add_argument('--pdb', action='store_true') # if want pdb but not all print outs
     args = parser.parse_args()
 
-    if args.debug:
-        import pdb; pdb.set_trace()
-
-    if not args.test_read:
-        generate_data(args.fname, args.n_samples, args.viz, args.debug)
-    else:
-        test_read(args.fname)
-
     try:
-        while True:
-            pass
+        if args.debug or args.pdb:
+            import pdb; pdb.set_trace()
+
+        if not args.test_read:
+            generate_data(args.fname, args.n_samples, args.viz, args.debug)
+        else:
+            test_read(args.fname)
     except KeyboardInterrupt:
         print('Exiting...')
+    except:
+        # for post-mortem debugging since can't run module from command line in pdb.pm() mode
+        import traceback, pdb, sys
+        traceback.print_exc()
+        print('')
+        pdb.post_mortem()
+        sys.exit(1)
