@@ -21,7 +21,7 @@ class PolicyEncoder(nn.Module):
         for _ in range(n_layer-1):
             layers.append(nn.Linear(n_hidden, n_hidden))
             layers.append(nn.ReLU())
-        self.model = nn.Sequential(layers)
+        self.model = nn.Sequential(*layers)
 
 
     def forward(self, theta, dq):
