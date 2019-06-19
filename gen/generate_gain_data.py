@@ -43,22 +43,10 @@ def plot_from_file(file_name):
     fig1, ax1 = plt.subplots()
     cm = plt.cm.get_cmap('copper')
 
-    min_time = float('inf')
-    max_time = 0
-    for data_point in plot_data:
-        if data_point.waypoints_reached>.5:
-            # for some reason the time is negative sometimes...
-            if data_point.duration > 0:
-                if data_point.duration>max_time:
-                    max_time = data_point.duration
-                if data_point.duration<min_time:
-                    min_time = data_point.duration
-
     for data_point in plot_data:
         wr = data_point.waypoints_reached
-        time = data_point.duration
-        a = ax0.scatter([data_point.gripper.k[0]], [data_point.gripper.d[0]], cmap=cm, c=[wr], s=2, vmin=0, vmax=1) # s is markersize
-        b = ax1.scatter([data_point.gripper.k[1]], [data_point.gripper.d[1]], cmap=cm, c=[wr], s=2, vmin=0, vmax=1)
+        a = ax0.scatter([data_point.control_params.k[0]], [data_point.control_params.d[0]], cmap=cm, c=[wr], s=2, vmin=0, vmax=1) # s is markersize
+        b = ax1.scatter([data_point.control_params.k[1]], [data_point.control_params.d[1]], cmap=cm, c=[wr], s=2, vmin=0, vmax=1)
 
     ks = np.power(10.,np.linspace(k_lin_range[0], k_lin_range[1],1000))
     mass = 1.5
