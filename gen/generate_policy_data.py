@@ -4,7 +4,7 @@ from test_policy import test_policy
 from util import util
 
 results = []
-def generate_data(n_results, viz, debug, git_hash):
+def generate_data(n_samples, viz, debug, git_hash):
     for i in range(n_samples):
         sys.stdout.write("\rProcessing sample %i/%i" % (i+1, n_samples))
         results.extend(test_policy(viz=viz, debug=debug, max_mech=1, random=True, git_hash=git_hash))
