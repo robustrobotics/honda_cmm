@@ -7,7 +7,7 @@ from actions.gripper import Gripper
 from gen.generator_busybox import BusyBox
 from actions.policies import generate_random_policy, Prismatic, Revolute
 from collections import namedtuple
-
+np.random.seed(11)
 def test_policy(viz=False, debug=False, max_mech=6, random=False, k=None, d=None,\
                     add_dist=None, p_err_thresh=None, delta_pos=None):
     if not viz:
@@ -78,7 +78,7 @@ def test_policy(viz=False, debug=False, max_mech=6, random=False, k=None, d=None
         p_joint_base_world_init = bb.project_onto_backboard(p_joint_world_init)
         p_tip_world_init = np.add(p_joint_world_init, [0., .015, 0.])
         pose_tip_world_init = util.Pose(p_tip_world_init, q_tip_world_init)
-        traj = policy.generate_trajectory(pose_tip_world_init, p_joint_world_init, config_goal, debug)
+        traj = policy.generate_trajectory(pose_tip_world_init, p_joint_base_world_init, config_goal, debug)
 
         # execute trajectory
         waypoints_reached, duration, joint_motion, pose_joint_world_final = \
