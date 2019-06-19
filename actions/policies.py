@@ -7,6 +7,17 @@ import pybullet as p
 """See actions.gripper for variable naming and naming conventions
 """
 
+PolicyParams = namedtuple('PolicyParams', 'type params')
+"""
+Tuple for storing policy data
+:param type: str, name of the Policy object type
+:param params: one of {actions.policies.PrismaticParams, actions.policies.RevoluteParams}
+"""
+
+PrismaticParams = namedtuple('PrismaticParams', 'rigid_position rigid_orientation prismatic_dir')
+
+RevoluteParams = namedtuple('RevoluteParams', 'rot_center rot_axis rot_radius rot_orientation')
+
 class Policy(object):
     def __init__(self, type, p_delta=None):
         """ This is an interface for each Policy type. Each Policy must implement the
@@ -54,6 +65,9 @@ class Policy(object):
 
     def generate_random_config(self):
         raise NotImplementedError('generate_random_config not implemented for policy type '+self.type)
+
+    def get_params_tuple(self):
+        raise NotImplementedError('get_params_tuple not implemented for policy type '+self.type)
 
     def _config_dir(self, config_curr, config_goal):
         return 1 if (config_goal > config_curr) else -1
@@ -115,6 +129,9 @@ class Prismatic(Policy):
         based on the data.generator range of random prismatic joint track lengths
         """
         return np.random.uniform(-0.5,0.5)
+
+    def get_params_tuple(self):
+        return PrismaticParams(self.rigid_position, self.rigid_orientation, self.prismatic_dir)
 
     @staticmethod
     def model(bb, mech, p_delta=None):
@@ -182,6 +199,9 @@ class Revolute(Policy):
         """ This function generates a random revolute joint configuration
         """
         return np.random.uniform(-2*np.pi,2*np.pi)
+
+    def get_params_tuple(self):
+        return RevoluteParams(self.rot_center, self.rot_axis, self.rot_radius, self.rot_orientation)
 
     @staticmethod
     def model(bb, mech, p_delta):
