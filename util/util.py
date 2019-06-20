@@ -12,7 +12,8 @@ Pose represents an SE(3) pose
 :param q: a vector of length 4, representing an (x,y,z,w) quaternion
 """
 
-Result = namedtuple('Result', 'control_params policy_params mechanism_params waypoints_reached motion final_pose image_data git_hash')
+Result = namedtuple('Result', 'control_params policy_params mechanism_params waypoints_reached \
+                        motion pose_joint_world_final config_goal image_data git_hash')
 """
 Result contains the performance information after the gripper tries to move a mechanism
 :param control_params: utils.util.ControlParams
@@ -21,8 +22,9 @@ Result contains the performance information after the gripper tries to move a me
 :param waypoints_reached: scalar, percentage of waypoints reached when attempting to move mechanism
 :param motion: scalar, the cummulative distance the mechanism handle moved
 :param initial_pose:
-:param final_pose: util.Pose object, the final_pose of the mechanism handle is the
-                    gripper tip in contact with the mechanism at completion, else None
+:param pose_joint_world_final: util.Pose object, the final pose of the mechanism handle if the
+                    gripper tip is in contact with the mechanism at completion, else None
+:param config_goal: the goal configuration which the joint was attempting to reach
 :param image: utils.util.ImageData
 :param git_hash: None or str representing the git hash when the data was collected
 """

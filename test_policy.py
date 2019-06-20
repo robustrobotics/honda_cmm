@@ -90,7 +90,7 @@ def test_policy(viz=False, debug=False, max_mech=6, random=False, k=None, d=None
         policy_params = policy.get_params_tuple()
         mechanism_params = mech.get_params_tuple()
         results += [util.Result(control_params, policy_params, mechanism_params, waypoints_reached,\
-                    joint_motion, pose_joint_world_final, image_data, git_hash)]
+                    joint_motion, pose_joint_world_final, config_goal, image_data, git_hash)]
 
     p.disconnect(client)
     return results
