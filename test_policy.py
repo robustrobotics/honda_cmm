@@ -61,7 +61,7 @@ def test_policy(viz=False, debug=False, max_mech=6, random=False, k=None, d=None
     results = []
     for mech in bb._mechanisms:
         # parameters for grasping
-        p_joint_world_init = p.getLinkState(bb.bb_id, mech.handle_id)[0]
+        pose_joint_world_init = util.Pose(*p.getLinkState(bb.bb_id, mech.handle_id)[:2])
         q_tip_world_init = np.array([0.50019904,  0.50019904, -0.49980088, 0.49980088])
 
         # try correct policy on each
@@ -76,8 +76,8 @@ def test_policy(viz=False, debug=False, max_mech=6, random=False, k=None, d=None
         else:
             policy = policies.generate_random_policy(bb, p_delta)
             config_goal = policy.generate_random_config()
-        p_joint_base_world_init = bb.project_onto_backboard(p_joint_world_init)
-        p_tip_world_init = np.add(p_joint_world_init, [0., .015, 0.])
+        p_joint_base_world_init = bb.project_onto_backboard(pose_joint_world_init.p)
+        p_tip_world_init = np.add(pose_joint_world_init.p, [0., .015, 0.])
         pose_tip_world_init = util.Pose(p_tip_world_init, q_tip_world_init)
         traj = policy.generate_trajectory(pose_tip_world_init, p_joint_base_world_init, config_goal, debug)
 
@@ -90,7 +90,7 @@ def test_policy(viz=False, debug=False, max_mech=6, random=False, k=None, d=None
         policy_params = policy.get_params_tuple()
         mechanism_params = mech.get_params_tuple()
         results += [util.Result(control_params, policy_params, mechanism_params, waypoints_reached,\
-                    joint_motion, pose_joint_world_final, config_goal, image_data, git_hash)]
+                    joint_motion, pose_joint_world_init, pose_joint_world_final, config_goal, image_data, git_hash)]
 
     p.disconnect(client)
     return results
