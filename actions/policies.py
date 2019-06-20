@@ -22,7 +22,7 @@ class Policy(object):
     def __init__(self, type, p_delta=None):
         """ This is an interface for each Policy type. Each Policy must implement the
         generate_trajectory, _forward_kinematics, _inverse_kinematics, generate_random_config,
-        random, and model methods
+        _random, and _model methods
         :param type: string, name of the child Policy class
         :param p_delta (optional): scalar, the distance between trajectory waypoints
         """
@@ -63,6 +63,10 @@ class Policy(object):
                     p.addUserDebugLine(poses[i-1].p, poses[i].p)
         return poses
 
+    @staticmethod
+    def generate_model_based_config(mech, random=False):
+        raise NotImplementedError('generate_model_based_config not implemented for policy type '+self.type)
+
     def generate_random_config(self):
         raise NotImplementedError('generate_random_config not implemented for policy type '+self.type)
 
@@ -86,8 +90,8 @@ class Policy(object):
         raise NotImplementedError('_random not implemented for policy type '+self.type)
 
     @staticmethod
-    def model():
-        raise NotImplementedError('model not implemented for policy typeb'+self.type)
+    def _model():
+        raise NotImplementedError('_model not implemented for policy type '+self.type)
 
 class Prismatic(Policy):
     def __init__(self, pos, orn, dir, p_delta=None):
@@ -124,6 +128,13 @@ class Prismatic(Policy):
         p_joint_origin = M_joint_origin[:3,3]
         return np.dot(self.prismatic_dir, p_joint_origin)
 
+    @staticmethod
+    def generate_model_based_config(mech, random=False):
+        if random:
+            return np.random.uniform(-mech.range/2.0, mech.range/2.0)
+        else:
+            return np.random.choice([-mech.range/2.0, mech.range/2.0])
+
     def generate_random_config(self):
         """ This function generates a random prismatic joint configuration. The range is
         based on the data.generator range of random prismatic joint track lengths
@@ -135,7 +146,7 @@ class Prismatic(Policy):
         return PolicyParams(self.type, prim_params)
 
     @staticmethod
-    def model(bb, mech, p_delta=None):
+    def _model(bb, mech, p_delta=None):
         """ This function generates a Prismatic policy from the mechanism model
         """
         p_track_world = p.getLinkState(bb.bb_id,mech.track_id)[0]
@@ -196,6 +207,19 @@ class Revolute(Policy):
         angle, direction, point = util.trans.rotation_from_matrix(M_radius_joint_center)
         return angle
 
+    @staticmethod
+    def generate_model_based_config(mech, random=False):
+        if random:
+            if mech.flipped:
+                return np.random.uniform(0., -np.pi/2.0)
+            else:
+                return np.random.uniform(0., np.pi/2.0)
+        else:
+            if mech.flipped:
+                return -np.pi/2.0
+            else:
+                return np.pi/2.0
+
     def generate_random_config(self):
         """ This function generates a random revolute joint configuration
         """
@@ -206,7 +230,7 @@ class Revolute(Policy):
         return PolicyParams(self.type, prim_params)
 
     @staticmethod
-    def model(bb, mech, p_delta):
+    def _model(bb, mech, p_delta):
         """ This function generates a Revolute policy from the mechanism model
         """
         p_door_world = p.getLinkState(bb.bb_id, mech.door_base_id)[0]
@@ -247,6 +271,12 @@ class Path(Policy):
 def generate_random_policy(bb, p_delta=None, policy_types=[Revolute, Prismatic]):
     policy_type = np.random.choice(policy_types)
     return policy_type._random(bb, p_delta)
+
+def generate_model_based_policy(bb, mech, p_delta=None):
+    if mech.mechanism_type == 'Door':
+        return Revolute._model(bb, mech, p_delta)
+    if mech.mechanism_type == 'Slider':
+        return Prismatic._model(bb, mech, p_delta)
 
 ## Helper Functions
 def _random_p(bb):
