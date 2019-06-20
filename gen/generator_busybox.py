@@ -371,23 +371,21 @@ class BusyBox(object):
 
     def set_mechanism_ids(self, bb_id):
         num_joints = p.getNumJoints(bb_id)
-        for joint_id in range(num_joints):
+        # joint_id 0 is the busybox back_link
+        for joint_id in range(1,num_joints):
             joint_info = p.getJointInfo(bb_id, joint_id)
             link_name = joint_info[12]
-            if 'handle' in link_name.decode("utf-8"):
-                for mech in self._mechanisms:
-                    if mech.handle_name == link_name.decode("utf-8"):
-                        mech.handle_id = joint_info[0]
-            elif 'door' in link_name.decode("utf-8") and 'base' in link_name.decode("utf-8"):
-                for mech in self._mechanisms:
-                    if mech.mechanism_type == 'Door':
-                        if mech.door_base_name == link_name.decode("utf-8"):
-                            mech.door_base_id = joint_info[0]
-            elif 'track' in link_name.decode("utf-8"):
-                for mech in self._mechanisms:
-                    if mech.mechanism_type == "Slider":
-                        if mech.track_name == link_name.decode("utf-8"):
-                            mech.track_id = joint_info[0]
+            set = False
+            for mech in self._mechanisms:
+                if mech.handle_name == link_name.decode("utf-8"):
+                    mech.handle_id = joint_info[0]
+                    set = True
+                if mech.mechanism_type == 'Door' and mech.door_base_name == link_name.decode("utf-8"):
+                    mech.door_base_type = joint_info[0]
+                    set = True
+                if mech.mechanism_type == 'Slider' and mech.track_name == link_name.decode("utf-8"):
+                    mech.track_id = joint_info[0]
+                    set = True
         self.bb_id = bb_id
 
     def project_onto_backboard(self, pos):
