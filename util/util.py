@@ -19,7 +19,8 @@ Result contains the performance information after the gripper tries to move a me
 :param policy_params: actions.policies.PolicyParams
 :param mechanism_params: gen.generator_busybox.MechanismParams
 :param waypoints_reached: scalar, percentage of waypoints reached when attempting to move mechanism
-:param motion: scalar, the net distance the mechanism handle moved
+:param motion: scalar, the cummulative distance the mechanism handle moved
+:param initial_pose:
 :param final_pose: util.Pose object, the final_pose of the mechanism handle is the
                     gripper tip in contact with the mechanism at completion, else None
 :param image: utils.util.ImageData
