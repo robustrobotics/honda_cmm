@@ -16,7 +16,6 @@ p_err_thresh_range = [.001, .1]
 p_delta_range = [.001, .1]
 
 results = []
-
 def learn_gains(file_name, n_samples, viz, debug, git_hash, urdf_num):
     for i in range(n_samples):
         sys.stdout.write("\rProcessing sample %i/%i" % (i+1, n_samples))

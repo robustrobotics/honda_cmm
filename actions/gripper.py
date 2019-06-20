@@ -61,6 +61,8 @@ class Gripper:
         self._left_finger_base_joint_id = 0
         self._right_finger_base_joint_id = 3
         self._finger_force = 20
+        self.pose_tip_world_reset = util.Pose([0.0, 0.0, 0.2], \
+                            [0.50019904,  0.50019904, -0.49980088, 0.49980088])
 
         # get mass of gripper
         mass = 0
@@ -146,11 +148,8 @@ class Gripper:
 
     def _grasp_handle(self, pose_tip_world_des, debug=False):
         # move to default start pose
-        p_tip_world_init = [0.0, 0.0, 0.2]
-        q_tip_world_init = [0.50019904,  0.50019904, -0.49980088, 0.49980088]
-        pose_tip_world_init = util.Pose(p_tip_world_init, q_tip_world_init)
         for t in range(10):
-            self._set_pose_tip_world(pose_tip_world_init, reset=True)
+            self._set_pose_tip_world(self.pose_tip_world_reset, reset=True)
 
         # open fingers
         for t in range(10):

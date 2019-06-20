@@ -86,11 +86,11 @@ class Policy(object):
         raise NotImplementedError('_inverse_kinematics function not implemented for policy type '+self.type)
 
     @staticmethod
-    def _random():
+    def _random(bb, p_delta=None):
         raise NotImplementedError('_random not implemented for policy type '+self.type)
 
     @staticmethod
-    def _model():
+    def _model(bb, mech, p_delta=None):
         raise NotImplementedError('_model not implemented for policy type '+self.type)
 
 class Prismatic(Policy):
@@ -230,7 +230,7 @@ class Revolute(Policy):
         return PolicyParams(self.type, prim_params)
 
     @staticmethod
-    def _model(bb, mech, p_delta):
+    def _model(bb, mech, p_delta=None):
         """ This function generates a Revolute policy from the mechanism model
         """
         p_door_world = p.getLinkState(bb.bb_id, mech.door_base_id)[0]
@@ -245,7 +245,7 @@ class Revolute(Policy):
         return Revolute(rot_center, rot_axis, rot_radius, rot_orientation, p_delta)
 
     @staticmethod
-    def _random(bb, p_delta):
+    def _random(bb, p_delta=None):
         """ This function generates a random Revolute policy. The ranges are
         based on the data.generator range prismatic joints
         """

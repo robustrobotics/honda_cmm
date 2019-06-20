@@ -60,10 +60,7 @@ def test_policy(viz=False, debug=False, max_mech=6, random=False, k=None, d=None
 
     results = []
     for mech in bb._mechanisms:
-        # parameters for grasping
-        pose_joint_world_init = util.Pose(*p.getLinkState(bb.bb_id, mech.handle_id)[:2])
-        q_tip_world_init = np.array([0.50019904,  0.50019904, -0.49980088, 0.49980088])
-
+        # generate either a random or model-based policy and goal configuration
         if random:
             policy = policies.generate_random_policy(bb, p_delta)
             config_goal = policy.generate_random_config()
@@ -71,9 +68,13 @@ def test_policy(viz=False, debug=False, max_mech=6, random=False, k=None, d=None
             policy = policies.generate_model_based_policy(bb, mech, p_delta)
             config_goal = policy.generate_model_based_config(mech, random=False)
 
+        # set up initial grasp pose and joint position
+        pose_joint_world_init = util.Pose(*p.getLinkState(bb.bb_id, mech.handle_id)[:2])
         p_joint_base_world_init = bb.project_onto_backboard(pose_joint_world_init.p)
-        p_tip_world_init = np.add(pose_joint_world_init.p, [0., .015, 0.])
-        pose_tip_world_init = util.Pose(p_tip_world_init, q_tip_world_init)
+        p_tip_world_init = np.add(pose_joint_world_init.p, [0., .015, 0.]) # back up a little for better grasp
+        pose_tip_world_init = util.Pose(p_tip_world_init, gripper.pose_tip_world_reset.q)
+
+        # calculate trajectory
         traj = policy.generate_trajectory(pose_tip_world_init, p_joint_base_world_init, config_goal, debug)
 
         # execute trajectory
