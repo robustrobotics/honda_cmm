@@ -380,12 +380,15 @@ class BusyBox(object):
                 if mech.handle_name == link_name.decode("utf-8"):
                     mech.handle_id = joint_info[0]
                     set = True
+                    break
                 if mech.mechanism_type == 'Door' and mech.door_base_name == link_name.decode("utf-8"):
-                    mech.door_base_type = joint_info[0]
+                    mech.door_base_id = joint_info[0]
                     set = True
+                    break
                 if mech.mechanism_type == 'Slider' and mech.track_name == link_name.decode("utf-8"):
                     mech.track_id = joint_info[0]
                     set = True
+                    break
         self.bb_id = bb_id
 
     def project_onto_backboard(self, pos):
