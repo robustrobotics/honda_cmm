@@ -45,26 +45,26 @@ if __name__ == '__main__':
     if args.debug:
         import pdb; pdb.set_trace()
 
+    try:
         try:
-            try:
-                import git
-                repo = git.Repo(search_parent_directories=True)
-                git_hash = repo.head.object.hexsha
-            except:
-                git_hash = None
-            learn_gains(args.fname, args.n_samples, args.viz, args.debug, git_hash, args.urdf_num)
-            util.write_to_file(args.fname, results)
-        except KeyboardInterrupt:
-            # if Ctrl+C write to pickle
-            util.write_to_file(args.fname, results)
-            print('Exiting...')
+            import git
+            repo = git.Repo(search_parent_directories=True)
+            git_hash = repo.head.object.hexsha
         except:
-            # if crashes write to pickle
-            util.write_to_file(args.fname, results)
+            git_hash = None
+        learn_gains(args.fname, args.n_samples, args.viz, args.debug, git_hash, args.urdf_num)
+        util.write_to_file(args.fname, results)
+    except KeyboardInterrupt:
+        # if Ctrl+C write to pickle
+        util.write_to_file(args.fname, results)
+        print('Exiting...')
+    except:
+        # if crashes write to pickle
+        util.write_to_file(args.fname, results)
 
-            # for post-mortem debugging since can't run module from command line in pdb.pm() mode
-            import traceback, pdb, sys
-            traceback.print_exc()
-            print('')
-            pdb.post_mortem()
-            sys.exit(1)
+        # for post-mortem debugging since can't run module from command line in pdb.pm() mode
+        import traceback, pdb, sys
+        traceback.print_exc()
+        print('')
+        pdb.post_mortem()
+        sys.exit(1)
