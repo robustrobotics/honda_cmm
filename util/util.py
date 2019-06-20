@@ -16,7 +16,7 @@ Result = namedtuple('Result', 'control_params policy_params mechanism_params way
                         motion pose_joint_world_init pose_joint_world_final config_goal image_data git_hash')
 """
 Result contains the performance information after the gripper tries to move a mechanism
-:param control_params: utils.util.ControlParams
+:param control_params: util.util.ControlParams
 :param policy_params: actions.policies.PolicyParams
 :param mechanism_params: gen.generator_busybox.MechanismParams
 :param waypoints_reached: scalar, percentage of waypoints reached when attempting to move mechanism
@@ -25,7 +25,7 @@ Result contains the performance information after the gripper tries to move a me
 :param pose_joint_world_final: util.Pose object or None, the final pose of the mechanism handle if the
                     gripper tip is in contact with the mechanism at completion, else None
 :param config_goal: the goal configuration which the joint was attempting to reach
-:param image: utils.util.ImageData
+:param image: util.util.ImageData
 :param git_hash: None or str representing the git hash when the data was collected
 """
 
