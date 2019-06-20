@@ -4,10 +4,11 @@ from test_policy import test_policy
 from util import util
 
 results = []
-def generate_data(n_samples, viz, debug, git_hash):
+def generate_data(n_samples, viz, debug, git_hash, urdf_num):
     for i in range(n_samples):
         sys.stdout.write("\rProcessing sample %i/%i" % (i+1, n_samples))
-        results.extend(test_policy(viz=viz, debug=debug, max_mech=1, random=True, git_hash=git_hash))
+        results.extend(test_policy(viz=viz, debug=debug, max_mech=1, random=True, \
+                        git_hash=git_hash, tag='_policy_'+str(urdf_num)))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -17,6 +18,8 @@ if __name__ == '__main__':
     parser.add_argument('--fname', type=str) # give filename (without .pickle)
     parser.add_argument('--test-read', action='store_true')
     parser.add_argument('--save-git', action='store_true')
+    # if running multiple tests, give then a urdf_num so correct urdf read from/written to
+    parser.add_argument('--urdf-num', type=int, default=0)
     args = parser.parse_args()
 
     if args.debug:
@@ -32,7 +35,7 @@ if __name__ == '__main__':
                 import git
                 repo = git.Repo(search_parent_directories=True)
                 git_hash = repo.head.object.hexsha
-            generate_data(args.n_samples, args.viz, args.debug, git_hash)
+            generate_data(args.n_samples, args.viz, args.debug, git_hash, args.urdf_num)
             util.write_to_file(args.fname, results)
         except KeyboardInterrupt:
             # if Ctrl+C write to pickle

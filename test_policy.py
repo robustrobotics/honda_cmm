@@ -9,7 +9,8 @@ from actions import policies
 from collections import namedtuple
 
 def test_policy(viz=False, debug=False, max_mech=6, random=False, k=None, d=None,\
-                    add_dist=None, p_err_thresh=None, p_delta=None, git_hash=None):
+                    add_dist=None, p_err_thresh=None, p_delta=None, git_hash=None,\
+                    tag=''):
     if not viz:
         client = p.connect(p.DIRECT)
     else:
@@ -38,7 +39,7 @@ def test_policy(viz=False, debug=False, max_mech=6, random=False, k=None, d=None
 
     #p.setGravity(0, 0, -10)
 
-    bb_file = 'models/busybox.urdf'
+    bb_file = 'models/busybox' + tag + '.urdf'
     with open(bb_file, 'w') as handle:
         handle.write(bb.get_urdf())
     model = p.loadURDF(bb_file, [0., -.3, 0.])

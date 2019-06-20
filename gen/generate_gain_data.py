@@ -17,7 +17,7 @@ p_delta_range = [.001, .1]
 
 results = []
 
-def learn_gains(file_name, n_samples, viz, debug, git_hash):
+def learn_gains(file_name, n_samples, viz, debug, git_hash, urdf_num):
     for i in range(n_samples):
         sys.stdout.write("\rProcessing sample %i/%i" % (i+1, n_samples))
         k_lin = np.power(10., np.random.uniform(*k_lin_range))
@@ -29,7 +29,9 @@ def learn_gains(file_name, n_samples, viz, debug, git_hash):
         add_dist = np.random.uniform(*add_dist_range)
         p_err_thresh = np.random.uniform(*p_err_thresh_range)
         p_delta = np.random.uniform(*p_delta_range)
-        results.extend(test_policy(viz, debug, 1, True, k, d, add_dist, p_err_thresh, p_delta))
+        results.extend(test_policy(viz=viz, debug=debug, max_mech=1, random=True,\
+                        k=k, d=d, add_dist=add_dist, p_err_thresh=p_err_thresh, \
+                        p_delta=p_delta, tag='_gains_'+str(urdf_num)))
 
 def plot_from_file(file_name):
     plot_data = util.read_from_file(file_name)
@@ -45,8 +47,10 @@ def plot_from_file(file_name):
 
     for data_point in plot_data:
         wr = data_point.waypoints_reached
-        a = ax0.scatter([data_point.control_params.k[0]], [data_point.control_params.d[0]], cmap=cm, c=[wr], s=2, vmin=0, vmax=1) # s is markersize
-        b = ax1.scatter([data_point.control_params.k[1]], [data_point.control_params.d[1]], cmap=cm, c=[wr], s=2, vmin=0, vmax=1)
+        a = ax0.scatter([data_point.control_params.k[0]], [data_point.control_params.d[0]], \
+                            cmap=cm, c=[wr], s=2, vmin=0, vmax=1) # s is markersize
+        b = ax1.scatter([data_point.control_params.k[1]], [data_point.control_params.d[1]], \
+                            cmap=cm, c=[wr], s=2, vmin=0, vmax=1)
 
     ks = np.power(10.,np.linspace(k_lin_range[0], k_lin_range[1],1000))
     mass = 1.5
@@ -86,6 +90,8 @@ if __name__ == '__main__':
     parser.add_argument('--plot', action='store_true') # give filename (without .pickle)
     parser.add_argument('--fname', type=str) # give filename (without .pickle)
     parser.add_argument('--save-git', action='store_true')
+    # if running multiple tests, give then a urdf_num so correct urdf read from/written to
+    parser.add_argument('--urdf-num', type=int, default=0)
     args = parser.parse_args()
 
     if args.debug:
@@ -100,7 +106,7 @@ if __name__ == '__main__':
                 import git
                 repo = git.Repo(search_parent_directories=True)
                 git_hash = repo.head.object.hexsha
-            learn_gains(args.fname, args.n_samples, args.viz, args.debug, git_hash)
+            learn_gains(args.fname, args.n_samples, args.viz, args.debug, git_hash, args.urdf_num)
             util.write_to_file(args.fname, results)
         except KeyboardInterrupt:
             # if Ctrl+C write to pickle
