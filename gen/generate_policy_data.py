@@ -34,6 +34,7 @@ if __name__ == '__main__':
                 repo = git.Repo(search_parent_directories=True)
                 git_hash = repo.head.object.hexsha
             except:
+                print('install gitpython to save git hash to results')
                 git_hash = None
             generate_data(args.n_samples, args.viz, args.debug, git_hash, args.urdf_num)
             util.write_to_file(args.fname, results)
