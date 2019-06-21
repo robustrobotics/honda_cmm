@@ -192,9 +192,7 @@ class Gripper:
                 p_tip_world = self._get_p_tip_world()
                 p.addUserDebugLine(p_tip_world, np.add(p_tip_world,[0,0,10]), [0,1,0], lifeTime=.5)
                 err = self._get_pose_tip_world_error(pose_tip_world_des)
-                if debug:
-                    sys.stdout.write("\r%.3f %.3f" % (np.linalg.norm(err[0]), np.linalg.norm(err[1])))
-                util.vis_frame(*pose_tip_world_des)
+                sys.stdout.write("\r%.3f %.3f" % (np.linalg.norm(err[0]), np.linalg.norm(err[1])))
             if self._at_des_pose(pose_tip_world_des):
                 finished = True
                 break
@@ -235,4 +233,4 @@ class Gripper:
             pose_joint_world_final = util.Pose(*p.getLinkState(self._bb_id, mech.handle_id)[:2])
         else:
             pose_joint_world_final = None
-        return np.divide(i,len(traj)), duration, joint_motion, pose_joint_world_final
+        return np.divide(i+1,len(traj)), duration, joint_motion, pose_joint_world_final
