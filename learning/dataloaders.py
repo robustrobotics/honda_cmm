@@ -63,10 +63,11 @@ class PolicyDataset(Dataset):
         super(PolicyDataset, self).__init__()
         self.items = items
         self.tensors = [torch.tensor(item['params']) for item in items]
-        self.ys = [torch.tensor(item['y']) for item in items]
+        self.configs = [torch.tensor([item['config']]) for item in items]
+        self.ys = [torch.tensor([item['y']]) for item in items]
 
     def __getitem__(self, index):
-        return self.items[index]['type'], self.tensors[index], self.ys[index]
+        return self.items[index]['type'], self.tensors[index], self.configs[index], self.ys[index]
 
     def __len__(self):
         return len(self.items)
@@ -86,23 +87,27 @@ def parse_pickle_file(fname):
     for entry in data:
         if len(entry) == 0:
             continue
-        policy_type = entry[0].policy_params.type
+        policy_type = entry.policy_params.type
         if policy_type == 'Prismatic':
-            pos = list(entry[0].policy_params.params.rigid_position)
-            orn = list(entry[0].policy_params.params.rigid_orientation)
-            dir = list(entry[0].policy_params.params.prismatic_dir)
-            policy_params = pos + orn + dir
+            pos = list(entry.policy_params.params.rigid_position)
+            orn = list(entry.policy_params.params.rigid_orientation)
+            dir = list(entry.policy_params.params.prismatic_dir)
+            range = [entry.mechanism_params.params.range]
+            policy_params = pos + orn + dir + range
         elif policy_type == 'Revolute':
-            center = list(entry[0].policy_params.params.rot_center)
-            axis = list(entry[0].policy_params.params.rot_axis)
-            orn = list(entry[0].policy_params.params.rot_orientation)
-            radius = list(entry[0].policy_params.params.rot_radius)
-            policy_params = center + axis + orn + radius
-        motion = entry[0].motion
+            center = list(entry.policy_params.params.rot_center)
+            axis = list(entry.policy_params.params.rot_axis)
+            orn = list(entry.policy_params.params.rot_orientation)
+            radius = list(entry.policy_params.params.rot_radius)
+            flipped = [entry.mechanism_params.params.flipped]
+            door_size = list(entry.mechanism_params.params.door_size)
+            policy_params = center + axis + orn + radius + door_size + flipped
+        motion = entry.motion
 
         parsed_data.append({
             'type': policy_type,
             'params': policy_params,
+            'config': entry.config_goal,
             'y': motion
         })
 

@@ -19,10 +19,13 @@ class DistanceRegressor(nn.Module):
         for name, dim in zip(policy_names, policy_dims):
             self.policy_modules[name] = PolicyEncoder(n_params=dim,
                                                       n_q=1,
-                                                      n_layer=2,
+                                                      n_layer=3,
                                                       n_hidden=hdim)
 
-        self.fc1 = nn.Linear(hdim, 1)
+        self.fc1 = nn.Linear(hdim, hdim)
+        self.fc2 = nn.Linear(hdim, 1)
+
+        self.RELU = nn.ReLU()
         self.SOFTPLUS = nn.Softplus()
 
     def forward(self, policy_type, theta, q):
@@ -34,5 +37,5 @@ class DistanceRegressor(nn.Module):
         :return:
         """
         x = self.policy_modules[policy_type].forward(theta, q)
-        x = self.fc1(x)
+        x = self.fc2(self.RELU(self.fc1(x)))
         return self.SOFTPLUS(x)
