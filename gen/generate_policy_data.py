@@ -7,7 +7,7 @@ results = []
 def generate_data(n_samples, viz, debug, git_hash, urdf_num):
     for i in range(n_samples):
         sys.stdout.write("\rProcessing sample %i/%i" % (i+1, n_samples))
-        results.extend(test_policy(viz=viz, debug=debug, max_mech=1, random=True, \
+        results.extend(test_policy(viz=viz, debug=debug, max_mech=1, random_policy=False, \
                         git_hash=git_hash, tag='_policy_'+str(urdf_num)))
 
 if __name__ == '__main__':

@@ -8,7 +8,7 @@ from gen.generator_busybox import BusyBox
 from actions import policies
 from collections import namedtuple
 
-def test_policy(viz=False, debug=False, max_mech=6, random=False, k=None, d=None,\
+def test_policy(viz=False, debug=False, max_mech=6, random_policy=False, k=None, d=None,\
                     add_dist=None, p_err_thresh=None, p_delta=None, git_hash=None,\
                     tag=''):
     if not viz:
@@ -61,7 +61,7 @@ def test_policy(viz=False, debug=False, max_mech=6, random=False, k=None, d=None
     results = []
     for mech in bb._mechanisms:
         # generate either a random or model-based policy and goal configuration
-        if random:
+        if random_policy:
             policy = policies.generate_random_policy(bb, p_delta)
             config_goal = policy.generate_random_config()
         else:

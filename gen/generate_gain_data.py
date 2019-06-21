@@ -28,7 +28,7 @@ def learn_gains(file_name, n_samples, viz, debug, git_hash, urdf_num):
         add_dist = np.random.uniform(*add_dist_range)
         p_err_thresh = np.random.uniform(*p_err_thresh_range)
         p_delta = np.random.uniform(*p_delta_range)
-        results.extend(test_policy(viz=viz, debug=debug, max_mech=1, random=True,\
+        results.extend(test_policy(viz=viz, debug=debug, max_mech=1, random_policy=False,\
                         k=k, d=d, add_dist=add_dist, p_err_thresh=p_err_thresh, \
                         p_delta=p_delta, tag='_gains_'+str(urdf_num)))
 
