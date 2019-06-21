@@ -9,11 +9,11 @@ class PlotFunc(object):
     def description():
         return 'No description for PlotFunc: ' + self.__name__
 
-    def plot(self, plot_data):
-        plt.figure()
+    def plot(self, figure_num, plot_data):
+        plt.figure(figure_num)
         self._plot(plot_data)
 
-class PlotDoorMotion(PlotFunc):
+class DoorRadiusMotion(PlotFunc):
 
     @staticmethod
     def description():
@@ -27,7 +27,7 @@ class PlotDoorMotion(PlotFunc):
         plt.ylabel('Motion of Handle')
         plt.title('Motion of Doors')
 
-class PlotSliderMotion(PlotFunc):
+class SliderRangeMotion(PlotFunc):
 
     @staticmethod
     def description():
@@ -41,11 +41,25 @@ class PlotSliderMotion(PlotFunc):
         plt.ylabel('Motion of Handle')
         plt.title('Motion of Sliders')
 
-class PlotSliderWR(PlotFunc):
+class DoorRadiusWR(PlotFunc):
 
     @staticmethod
     def description():
-        return 'Plot the slider range versus the joint motion'
+        return 'Plot the door radius versus the % of waypoints reached'
+
+    def _plot(self, plot_data):
+        for data_point in plot_data:
+            if data_point.mechanism_params.type == 'Door':
+                plt.plot(data_point.mechanism_params.params.door_size[0], data_point.waypoints_reached, 'b.')
+        plt.xlabel('Door Radius')
+        plt.ylabel('Percentage of Trajectory Waypoints Reached')
+        plt.title('Waypoints Reached by Door')
+
+class SliderRangeWR(PlotFunc):
+
+    @staticmethod
+    def description():
+        return 'Plot the slider range versus the % of waypoints reached'
 
     def _plot(self, plot_data):
         for data_point in plot_data:
@@ -53,13 +67,43 @@ class PlotSliderWR(PlotFunc):
                 plt.plot(data_point.mechanism_params.params.range, data_point.waypoints_reached, 'b.')
         plt.xlabel('Slider Range')
         plt.ylabel('Percentage of Trajectory Waypoints Reached')
-        plt.title('Waypoints Reached by Slider')
+        plt.title('Slider Range vs Waypoints Reached')
 
-class PlotWRKD(PlotFunc):
+class SliderAxisMotion(PlotFunc):
 
     @staticmethod
     def description():
-        return 'Plot a heatmap of the # waypoints reached for varying k and d values'
+        return 'Plot the slider axis versus the joint_motion'
+
+    def _plot(self, plot_data):
+        for data_point in plot_data:
+            if data_point.mechanism_params.type == 'Slider':
+                angle = np.arccos(data_point.policy_params.params.prismatic_dir[0])
+                plt.plot(angle, data_point.motion, 'b.')
+        plt.xlabel('Slider Axis Angle')
+        plt.ylabel('Percentage of Trajectory Waypoints Reached')
+        plt.title('Motion of Handle')
+
+class SliderAxisWR(PlotFunc):
+
+    @staticmethod
+    def description():
+        return 'Plot the slider axis versus the % of waypoints reached'
+
+    def _plot(self, plot_data):
+        for data_point in plot_data:
+            if data_point.mechanism_params.type == 'Slider':
+                angle = np.arccos(data_point.policy_params.params.prismatic_dir[0])
+                plt.plot(angle, data_point.waypoints_reached, 'b.')
+        plt.xlabel('Slider Axis Angle')
+        plt.ylabel('Percentage of Trajectory Waypoints Reached')
+        plt.title('Slider Angle vs Waypoints Reached')
+
+class WRKD(PlotFunc):
+
+    @staticmethod
+    def description():
+        return 'Plot a heatmap of the % waypoints reached for varying k and d values'
 
     def _plot(self, plot_data):
         #import gen.generate_policy_data
@@ -104,7 +148,7 @@ class PlotWRKD(PlotFunc):
 def plot_results(file_name):
     plot_data = util.read_from_file(file_name)
 
-    plot_funcs = [PlotDoorMotion, PlotSliderMotion, PlotSliderWR, PlotWRKD]
+    plot_funcs = PlotFunc.__subclasses__()
     for (i, func) in enumerate(plot_funcs):
         print(i, ':', func.description())
     plot_nums = input('Above are the possible plots, type in the numbers of the plots you would like to visualize, eg. 1, 3, 4 [ENTER]\n')
@@ -113,7 +157,7 @@ def plot_results(file_name):
     plt.ion()
     for plot_num in plot_nums:
         plot_func = plot_funcs[plot_num]()
-        plot_func.plot(plot_data)
+        plot_func.plot(plot_num, plot_data)
     plt.show()
     input('hit [ENTER] to close plots')
 
