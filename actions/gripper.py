@@ -215,6 +215,12 @@ class Gripper:
             p.stepSimulation()
         return finished
 
+    def set_control_params(self, policy):
+        if policy.type == 'Revolute':
+            self.k = [2000.0,20.0]
+        if policy.type == 'Prismatic':
+            self.k = [200.0,20.0]
+
     def execute_trajectory(self, grasp_pose, traj, mech, debug=False, callback=None, bb=None):
         self._grasp_handle(grasp_pose, debug)
         start_time = time.time()

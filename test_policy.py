@@ -4,7 +4,7 @@ import argparse
 import pybullet as p
 import pybullet_data
 from actions.gripper import Gripper
-from gen.generator_busybox import BusyBox
+from gen.generator_busybox import BusyBox, Slider, Door
 from actions import policies
 from collections import namedtuple
 
@@ -21,7 +21,7 @@ def test_policy(viz=False, debug=False, max_mech=6, random_policy=False, k=None,
     p.setAdditionalSearchPath(pybullet_data.getDataPath())
     p.setRealTimeSimulation(0)
 
-    bb = BusyBox.generate_random_busybox(max_mech=max_mech)
+    bb = BusyBox.generate_random_busybox(max_mech=max_mech, mech_types=[Door, Slider])
     try:
         mech = bb._mechanisms[0]
     except:
@@ -67,6 +67,7 @@ def test_policy(viz=False, debug=False, max_mech=6, random_policy=False, k=None,
         else:
             policy = policies.generate_model_based_policy(bb, mech, p_delta)
             config_goal = policy.generate_model_based_config(mech, random=False)
+        gripper.set_control_params(policy)
 
         # set up initial grasp pose and joint position
         pose_joint_world_init = util.Pose(*p.getLinkState(bb.bb_id, mech.handle_id)[:2])
