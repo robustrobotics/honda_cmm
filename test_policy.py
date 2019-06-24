@@ -53,7 +53,7 @@ def test_policy(viz=False, debug=False, max_mech=6, random_policy=False, k=None,
                                 force=maxForce)
 
     # can change resolution and shadows with this call
-    view_matrix = p.computeViewMatrixFromYawPitchRoll(distance=0.2,
+    view_matrix = p.computeViewMatrixFromYawPitchRoll(distance=0.4,
                                                       yaw=180,
                                                       pitch=0,
                                                       roll=0,
