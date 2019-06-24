@@ -53,7 +53,7 @@ def test_policy(viz=False, debug=False, max_mech=6, random_policy=False, k=None,
                                 force=maxForce)
 
     # can change resolution and shadows with this call
-    image_data_pybullet = p.getCameraImage(205, 154, shadow=0) # do before add gripper to world
+    image_data_pybullet = p.getCameraImage(205, 154, shadow=0, renderer=p.ER_TINY_RENDERER)  # do before add gripper to world
     image_data = util.ImageData(*image_data_pybullet[:3])
 
     gripper = Gripper(model, k, d, add_dist, p_err_thresh)
