@@ -10,7 +10,7 @@ from util import util
 from collections import namedtuple
 
 MechanismParams = namedtuple('MechanismParams', 'type params')
-SliderParams = namedtuple('SliderParams', 'range')
+SliderParams = namedtuple('SliderParams', 'axis range')
 DoorParams = namedtuple('DoorParams', 'door_size flipped')
 
 class Mechanism(object):
@@ -153,7 +153,7 @@ class Slider(Mechanism):
         return aabb.AABB([(x_min, x_max), (z_min, z_max)])
 
     def get_params_tuple(self):
-        return MechanismParams(self.mechanism_type, SliderParams(self.range))
+        return MechanismParams(self.mechanism_type, SliderParams(self.axis, self.range))
 
     @staticmethod
     def random(width, height):
