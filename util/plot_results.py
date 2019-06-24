@@ -2,6 +2,7 @@ import argparse
 import matplotlib.pyplot as plt
 import numpy as np
 from util import util
+import sys
 
 class PlotFunc(object):
 
@@ -78,7 +79,7 @@ class SliderAxisMotion(PlotFunc):
     def _plot(self, plot_data):
         for data_point in plot_data:
             if data_point.mechanism_params.type == 'Slider':
-                angle = np.arccos(data_point.policy_params.params.prismatic_dir[0])
+                angle = np.arccos(data_point.mechanism_params.params.axis[0])
                 plt.plot(angle, data_point.motion, 'b.')
         plt.xlabel('Slider Axis Angle')
         plt.ylabel('Percentage of Trajectory Waypoints Reached')
@@ -93,7 +94,7 @@ class SliderAxisWR(PlotFunc):
     def _plot(self, plot_data):
         for data_point in plot_data:
             if data_point.mechanism_params.type == 'Slider':
-                angle = np.arccos(data_point.policy_params.params.prismatic_dir[0])
+                angle = np.arccos(data_point.mechanism_params.params.axis[0])
                 plt.plot(angle, data_point.waypoints_reached, 'b.')
         plt.xlabel('Slider Axis Angle')
         plt.ylabel('Percentage of Trajectory Waypoints Reached')
@@ -145,8 +146,23 @@ class WRKD(PlotFunc):
         fig0.colorbar(a)
         fig1.colorbar(b)
 
+def print_stats(data):
+    stats = {}
+    for data_point in data:
+        mech_type = data_point.mechanism_params.type
+        policy_type = data_point.policy_params.type
+        key = (mech_type, policy_type)
+        if key not in stats:
+            stats[key] = 1
+        else:
+            stats[key] += 1
+    print('Stats on the dataset')
+    for (key, val) in stats.items():
+        sys.stdout.write('  %s mech, %s policy: %i\n' % (*key, val))
+
 def plot_results(file_name):
-    plot_data = util.read_from_file(file_name)
+    data = util.read_from_file(file_name)
+    print_stats(data)
 
     plot_funcs = PlotFunc.__subclasses__()
     for (i, func) in enumerate(plot_funcs):
@@ -157,7 +173,7 @@ def plot_results(file_name):
     plt.ion()
     for plot_num in plot_nums:
         plot_func = plot_funcs[plot_num]()
-        plot_func.plot(plot_num, plot_data)
+        plot_func.plot(plot_num, data)
     plt.show()
     input('hit [ENTER] to close plots')
 
