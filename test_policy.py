@@ -53,7 +53,20 @@ def test_policy(viz=False, debug=False, max_mech=6, random_policy=False, k=None,
                                 force=maxForce)
 
     # can change resolution and shadows with this call
-    image_data_pybullet = p.getCameraImage(205, 154, shadow=0, renderer=p.ER_TINY_RENDERER)  # do before add gripper to world
+    view_matrix = p.computeViewMatrixFromYawPitchRoll(distance=0.2,
+                                                      yaw=180,
+                                                      pitch=0,
+                                                      roll=0,
+                                                      upAxisIndex=2,
+                                                      cameraTargetPosition=(0., 0., bb.height / 2))
+
+    aspect = 205. / 154.
+    nearPlane = 0.01
+    farPlane = 100
+    fov = 60
+    projection_matrix = p.computeProjectionMatrixFOV(fov, aspect, nearPlane, farPlane)
+
+    image_data_pybullet = p.getCameraImage(205, 154, shadow=0, renderer=p.ER_TINY_RENDERER, viewMatrix=view_matrix, projectionMatrix=projection_matrix)  # do before add gripper to world
     image_data = util.ImageData(*image_data_pybullet[:3])
 
     gripper = Gripper(model, k, d, add_dist, p_err_thresh)
