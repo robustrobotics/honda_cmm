@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-def plot_y_yhat(y, yhat, types):
+def plot_y_yhat(y, yhat, types, title=''):
     lookup = {'Revolute': 'r',
               'Prismatic': 'b'}
     plt.xlim([0, 0.25])
@@ -10,6 +10,8 @@ def plot_y_yhat(y, yhat, types):
 
     plt.xlabel(r'$y$')
     plt.ylabel(r'$\hat{y}$')
+
+    plt.title(title)
 
     x = np.linspace(0, 0.5, 100)
     plt.plot(x, x, 'k')

@@ -16,7 +16,7 @@ def test_policy(viz=False, debug=False, max_mech=6, random_policy=False, k=None,
     else:
         client = p.connect(p.GUI)
         p.configureDebugVisualizer(p.COV_ENABLE_GUI,0)
-        p.configureDebugVisualizer(p.COV_ENABLE_MOUSE_PICKING,0)
+        p.configureDebugVisualizer(p.COV_ENABLE_MOUSE_PICKING, 0)
 
     p.setAdditionalSearchPath(pybullet_data.getDataPath())
     p.setRealTimeSimulation(0)

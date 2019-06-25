@@ -5,6 +5,7 @@ import pickle
 import torch
 from torch.utils.data.dataset import Dataset
 from torch.utils.data import Sampler
+from torchvision.transforms import ToTensor
 
 
 class CustomSampler(Sampler):
@@ -62,12 +63,20 @@ class PolicyDataset(Dataset):
     def __init__(self, items):
         super(PolicyDataset, self).__init__()
         self.items = items
+
         self.tensors = [torch.tensor(item['params']) for item in items]
         self.configs = [torch.tensor([item['config']]) for item in items]
         self.ys = [torch.tensor([item['y']]) for item in items]
 
+        tt = ToTensor()
+        self.images = []
+        for item in items:
+            w, h, im = item['image']
+            np_im = np.array(im, dtype=np.uint8).reshape(h, w, 4)
+            self.images.append(tt(np_im))
+
     def __getitem__(self, index):
-        return self.items[index]['type'], self.tensors[index], self.configs[index], self.ys[index]
+        return self.items[index]['type'], self.tensors[index], self.configs[index], self.images[index], self.ys[index]
 
     def __len__(self):
         return len(self.items)
@@ -93,7 +102,7 @@ def parse_pickle_file(fname):
             orn = list(entry.policy_params.params.rigid_orientation)
             dir = list(entry.policy_params.params.prismatic_dir)
             range = [entry.mechanism_params.params.range]
-            policy_params = pos + orn + dir + range
+            policy_params = pos + orn + dir  # + range
         elif policy_type == 'Revolute':
             center = list(entry.policy_params.params.rot_center)
             axis = list(entry.policy_params.params.rot_axis)
@@ -101,13 +110,14 @@ def parse_pickle_file(fname):
             radius = list(entry.policy_params.params.rot_radius)
             flipped = [entry.mechanism_params.params.flipped]
             door_size = list(entry.mechanism_params.params.door_size)
-            policy_params = center + axis + orn + radius + door_size + flipped
+            policy_params = center + axis + orn + radius  # + door_size + flipped
         motion = entry.motion
 
         parsed_data.append({
             'type': policy_type,
             'params': policy_params,
             'config': entry.config_goal,
+            'image': entry.image_data,
             'y': motion
         })
 
@@ -126,11 +136,13 @@ def create_data_splits(data, val_pct=0.15, test_pct=0.15):
     return train_data, val_data, test_data
 
 
-def setup_data_loaders(fname, batch_size=128, use_cuda=True):
+def setup_data_loaders(fname, batch_size=128, use_cuda=True, small_train=0):
     data = parse_pickle_file(fname)
 
     # Create datasplits.
     train_data, val_data, test_data = create_data_splits(data)
+    if small_train > 0:
+        train_data = train_data[:small_train]
 
     # TODO: Populate dataset objects
 

@@ -28,12 +28,13 @@ class DistanceRegressor(nn.Module):
         self.RELU = nn.ReLU()
         self.SOFTPLUS = nn.Softplus()
 
-    def forward(self, policy_type, theta, q):
+    def forward(self, policy_type, theta, q, im):
         """
         Call the distance regressor for a specific policy instantiation.
         :param policy_type: The name of the policy class being executed.
         :param theta: The policy parameters.
         :param q: How long the policy is executed for.
+        :param im: Unused but kept for a consistent interface.
         :return:
         """
         x = self.policy_modules[policy_type].forward(theta, q)
