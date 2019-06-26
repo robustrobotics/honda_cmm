@@ -21,7 +21,9 @@ def test_policy(viz=False, debug=False, max_mech=6, random_policy=False, k=None,
     p.setAdditionalSearchPath(pybullet_data.getDataPath())
     p.setRealTimeSimulation(0)
 
-    bb = BusyBox.generate_random_busybox(max_mech=max_mech, mech_types=[Door, Slider])
+    # this generates the BusyBox obejct and loads the URDF
+    bb = BusyBox.generate_random_busybox(max_mech=max_mech, mech_types=[Door, Slider], urdf_tag=tag)
+
     try:
         mech = bb._mechanisms[0]
     except:
@@ -38,16 +40,10 @@ def test_policy(viz=False, debug=False, max_mech=6, random_policy=False, k=None,
     plane_id = p.loadURDF("plane.urdf")
 
     #p.setGravity(0, 0, -10)
-
-    bb_file = 'models/busybox' + tag + '.urdf'
-    with open(bb_file, 'w') as handle:
-        handle.write(bb.get_urdf())
-    model = p.loadURDF(bb_file, [0., -.3, 0.])
-    bb.set_mechanism_ids(model)
     maxForce = 10
     mode = p.VELOCITY_CONTROL
-    for jx in range(0, p.getNumJoints(model)):
-        p.setJointMotorControl2(bodyUniqueId=model,
+    for jx in range(0, p.getNumJoints(bb.bb_id)):
+        p.setJointMotorControl2(bodyUniqueId=bb.bb_id,
                                 jointIndex=jx,
                                 controlMode=mode,
                                 force=maxForce)
@@ -69,7 +65,7 @@ def test_policy(viz=False, debug=False, max_mech=6, random_policy=False, k=None,
     image_data_pybullet = p.getCameraImage(205, 154, shadow=0, renderer=p.ER_TINY_RENDERER, viewMatrix=view_matrix, projectionMatrix=projection_matrix)  # do before add gripper to world
     image_data = util.ImageData(*image_data_pybullet[:3])
 
-    gripper = Gripper(model, k, d, add_dist, p_err_thresh)
+    gripper = Gripper(bb.bb_id, k, d, add_dist, p_err_thresh)
 
     results = []
     for mech in bb._mechanisms:

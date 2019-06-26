@@ -443,7 +443,7 @@ class BusyBox(object):
             return False
 
     @staticmethod
-    def generate_random_busybox(min_mech=1, max_mech=6, mech_types=[Slider, Door], n_tries=25):
+    def generate_random_busybox(min_mech=1, max_mech=6, mech_types=[Slider, Door], n_tries=25, urdf_tag=''):
         """
         :param min_mech: int, The minimum number of mechanisms to be included on the busybox.
         :param max_mech: int, The maximum number of classes to be included on the busybox.
@@ -469,8 +469,13 @@ class BusyBox(object):
                     mechs.append(mech)
                     break
 
-        return BusyBox(width, height, bb_thickness, mechs)
-
+        bb = BusyBox(width, height, bb_thickness, mechs)
+        bb_file = 'models/busybox' + urdf_tag + '.urdf'
+        with open(bb_file, 'w') as handle:
+            handle.write(bb.get_urdf())
+        model = p.loadURDF(bb_file, [0., -.3, 0.])
+        bb.set_mechanism_ids(model)
+        return bb
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
