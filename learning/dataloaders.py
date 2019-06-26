@@ -5,7 +5,9 @@ import pickle
 import torch
 from torch.utils.data.dataset import Dataset
 from torch.utils.data import Sampler
-from torchvision.transforms import ToTensor
+import torchvision.transforms as transforms
+import torchvision
+import matplotlib.pyplot as plt
 
 
 class CustomSampler(Sampler):
@@ -59,6 +61,13 @@ class CustomSampler(Sampler):
         return n
 
 
+def imshow(img):
+    img = img / 2 + 0.5     # unnormalize
+    npimg = img.numpy()
+    plt.imshow(np.transpose(npimg, (1, 2, 0)))
+    plt.show()
+
+
 class PolicyDataset(Dataset):
     def __init__(self, items):
         super(PolicyDataset, self).__init__()
@@ -68,12 +77,14 @@ class PolicyDataset(Dataset):
         self.configs = [torch.tensor([item['config']]) for item in items]
         self.ys = [torch.tensor([item['y']]) for item in items]
 
-        tt = ToTensor()
+        tt = transforms.Compose([transforms.ToTensor(),
+                                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
         self.images = []
         for item in items:
             w, h, im = item['image']
-            np_im = np.array(im, dtype=np.uint8).reshape(h, w, 4)
+            np_im = np.array(im, dtype=np.uint8).reshape(h, w, 4)[:, :, 0:3]
             self.images.append(tt(np_im))
+        # imshow(torchvision.utils.make_grid(self.images[0:10]))
 
     def __getitem__(self, index):
         return self.items[index]['type'], self.tensors[index], self.configs[index], self.images[index], self.ys[index]

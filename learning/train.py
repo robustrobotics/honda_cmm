@@ -39,7 +39,8 @@ def train_eval(args, n_train, fname, pviz):
             y = y.cuda()
 
             optim.zero_grad()
-            qs = torch.zeros(x.shape[0], 1)
+            qs = torch.zeros(x.shape[0], 1).cuda()
+            xs = torch.zeros(x.shape).cuda()
             yhat = net.forward(k[0], x, q, im)
 
             loss = loss_fn(yhat, y)
@@ -49,7 +50,7 @@ def train_eval(args, n_train, fname, pviz):
 
             train_losses.append(loss.item())
 
-        #print('[Epoch {}] - Training Loss: {}'.format(ex, np.mean(train_losses)))
+        print('[Epoch {}] - Training Loss: {}'.format(ex, np.mean(train_losses)))
 
         if ex % args.val_freq == 0:
             val_losses = []
@@ -61,7 +62,8 @@ def train_eval(args, n_train, fname, pviz):
                 im = im.cuda()
                 y = y.cuda()
 
-                qs = torch.zeros(x.shape[0], 1)
+                qs = torch.zeros(x.shape[0], 1).cuda()
+                xs = torch.zeros(x.shape).cuda()
                 yhat = net.forward(k[0], x, q, im)
                 loss = loss_fn(yhat, y)
 
@@ -72,7 +74,7 @@ def train_eval(args, n_train, fname, pviz):
                 yhats += yhat.cpu().detach().numpy().tolist()
 
             if pviz:
-                viz.plot_y_yhat(ys, yhats, types, title='PolicyParams')
+                viz.plot_y_yhat(ys, yhats, types, title='ImageOnly')
 
             print('[Epoch {}] - Validation Loss: {}'.format(ex, np.mean(val_losses)))
             if np.mean(val_losses) < best_val:

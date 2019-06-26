@@ -37,6 +37,7 @@ class DistanceRegressor(nn.Module):
         self.fc3 = nn.Linear(hdim, 1)
 
         self.RELU = nn.ReLU()
+        # SoftPLUS didn't work well... probably because our outputs are such small numbers.
         self.SOFTPLUS = nn.Softplus()
 
     def forward(self, policy_type, theta, q, im):
@@ -49,6 +50,6 @@ class DistanceRegressor(nn.Module):
         """
         im = self.image_module(im)
         x = self.policy_modules[policy_type].forward(theta, q)
-        x = torch.cat([im, im], dim=1)
+        x = torch.cat([im, x], dim=1)
         x = self.fc3(self.RELU(self.fc2(self.RELU(self.fc1(x)))))
-        return self.SOFTPLUS(x)
+        return x
