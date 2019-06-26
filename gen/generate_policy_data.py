@@ -4,10 +4,10 @@ from test_policy import test_policy
 from util import util
 
 results = []
-def generate_data(n_samples, viz, debug, git_hash, urdf_num):
+def generate_data(n_samples, viz, debug, git_hash, urdf_num, random_policy):
     for i in range(n_samples):
         sys.stdout.write("\rProcessing sample %i/%i" % (i+1, n_samples))
-        results.extend(test_policy(viz=viz, debug=debug, max_mech=1, random_policy=True, \
+        results.extend(test_policy(viz=viz, debug=debug, max_mech=1, random_policy=random_policy, \
                         git_hash=git_hash, tag='_policy_'+str(urdf_num)))
 
 if __name__ == '__main__':
@@ -19,6 +19,7 @@ if __name__ == '__main__':
     parser.add_argument('--test-read', action='store_true')
     # if running multiple tests, give then a urdf_num so correct urdf read from/written to
     parser.add_argument('--urdf-num', type=int, default=0)
+    parser.add_argument('--random-policy', action='store_true')
     args = parser.parse_args()
 
     if args.debug:
@@ -36,7 +37,7 @@ if __name__ == '__main__':
             except:
                 print('install gitpython to save git hash to results')
                 git_hash = None
-            generate_data(args.n_samples, args.viz, args.debug, git_hash, args.urdf_num)
+            generate_data(args.n_samples, args.viz, args.debug, git_hash, args.urdf_num, args.random_policy)
             util.write_to_file(args.fname, results)
         except KeyboardInterrupt:
             # if Ctrl+C write to pickle
