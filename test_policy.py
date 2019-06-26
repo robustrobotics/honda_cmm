@@ -75,14 +75,14 @@ def test_policy(viz=False, debug=False, max_mech=6, random_policy=False, k=None,
     for mech in bb._mechanisms:
         # generate either a random or model-based policy and goal configuration
         if random_policy:
-            policy = policies.generate_random_policy(bb, p_delta)
+            policy = policies.generate_random_policy(bb, mech, p_delta)
             config_goal = policy.generate_random_config()
         else:
             policy = policies.generate_model_based_policy(bb, mech, p_delta)
             config_goal = policy.generate_model_based_config(mech, random=False)
         gripper.set_control_params(policy)
         pose_handle_world_init = p.getLinkState(bb.bb_id, mech.handle_id)[:2]
-        
+
         # calculate trajectory
         p_handle_base_world = mech.get_pose_handle_base_world().p
         traj = policy.generate_trajectory(p_handle_base_world, config_goal, debug)

@@ -48,10 +48,9 @@ class Policy(object):
             pose_handle_base_world = self._forward_kinematics(config_curr)
             poses += [pose_handle_base_world]
             config_curr += config_delta
-            if debug:
-                # draws the planned handle base trajectory
-                if i>0:
-                    p.addUserDebugLine(poses[i-1].p, poses[i].p)
+        if debug:
+            # draws the planned handle base trajectory
+            self._draw_traj(poses)
         return poses
 
     @staticmethod
@@ -135,22 +134,28 @@ class Prismatic(Policy):
         prim_params = PrismaticParams(self.rigid_position, self.rigid_orientation, self.prismatic_dir)
         return PolicyParams(self.type, prim_params)
 
+    def _draw_traj(self, traj):
+        for i in range(len(traj)-1):
+            # raise so can see above track
+            p.addUserDebugLine(np.add(traj[i].p, [0., .025, 0.]), np.add(traj[i+1].p, [0., .025, 0.]))
+
     @staticmethod
     def _model(bb, mech, p_delta=None):
         """ This function generates a Prismatic policy from the mechanism model
         """
-        p_track_world = p.getLinkState(bb.bb_id,mech.track_id)[0]
+        p_track_world = p.getLinkState(bb.bb_id, mech.track_id)[0]
         rigid_position = bb.project_onto_backboard(p_track_world)
         rigid_orientation = [0., 0., 0., 1.]
         prismatic_dir = [mech.axis[0], 0., mech.axis[1]]
         return Prismatic(rigid_position, rigid_orientation, prismatic_dir, p_delta)
 
     @staticmethod
-    def _random(bb, p_delta=None):
+    def _random(bb, mech, p_delta=None):
         """ This function generates a random Prismatic policy. The ranges are
         based on the data.generator range prismatic joints
         """
-        rigid_position = _random_p(bb)
+        p_handle_world = p.getLinkState(bb.bb_id, mech.handle_id)[0]
+        rigid_position = bb.project_onto_backboard(p_handle_world)
         rigid_orientation = np.array([0.,0.,0.,1.])
         angle = np.random.uniform(0, np.pi)
         prismatic_dir = np.array([np.cos(angle), 0., np.sin(angle)])
@@ -218,13 +223,15 @@ class Revolute(Policy):
         prim_params =  RevoluteParams(self.rot_center, self.rot_axis, self.rot_radius, self.rot_orientation)
         return PolicyParams(self.type, prim_params)
 
+    def _draw_traj(self, traj):
+        for i in range(len(traj)-1):
+            p.addUserDebugLine(traj[i].p, traj[i+1].p)
+
     @staticmethod
     def _model(bb, mech, p_delta=None):
         """ This function generates a Revolute policy from the mechanism model
         """
-        p_door_world = p.getLinkState(bb.bb_id, mech.door_base_id)[0]
-        p_handle_world = p.getLinkState(bb.bb_id, mech.handle_id)[0]
-        rot_center = p_door_world
+        rot_center = p.getLinkState(bb.bb_id, mech.door_base_id)[0]
         p_handle_base_world = mech.get_pose_handle_base_world().p
         # TODO: i think the rot_radius needs to be in the rot_center frame (rot_axis)
         #       currently it is in the world frame
@@ -234,13 +241,14 @@ class Revolute(Policy):
         return Revolute(rot_center, rot_axis, rot_radius, rot_orientation, p_delta)
 
     @staticmethod
-    def _random(bb, p_delta=None):
+    def _random(bb, mech, p_delta=None):
         """ This function generates a random Revolute policy. The ranges are
         based on the data.generator range prismatic joints
         """
         rot_center = _random_p(bb)
+        p_handle_base_world = mech.get_pose_handle_base_world().p
+        rot_radius = np.subtract(p_handle_base_world, rot_center)
         rot_axis = np.array([0.,0.,0.,1.])
-        rot_radius = random_radius()
         rot_orientation = np.array([0.,0.,0.,1.])
         return Revolute(rot_center, rot_axis, rot_radius, rot_orientation, p_delta)
 
@@ -257,9 +265,9 @@ class Path(Policy):
         super(Path,self).__init__('Path', p_delta)
 
 # TODO: add other policy_types as they're made
-def generate_random_policy(bb, p_delta=None, policy_types=[Revolute, Prismatic]):
+def generate_random_policy(bb, mech, p_delta=None, policy_types=[Revolute, Prismatic]):
     policy_type = np.random.choice(policy_types)
-    return policy_type._random(bb, p_delta)
+    return policy_type._random(bb, mech, p_delta)
 
 def generate_model_based_policy(bb, mech, p_delta=None):
     if mech.mechanism_type == 'Door':
@@ -277,8 +285,3 @@ def _random_p(bb):
     y = bb.project_onto_backboard([0., 0., 0.,])[1]
     z = np.random.uniform(*z_limits)
     return (x, y, z)
-
-def random_radius():
-    # based on generator random radius limits
-    r = np.random.uniform(0.05,0.15)
-    return np.array([r, 0., 0.])
