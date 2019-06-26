@@ -3,7 +3,8 @@ import pybullet_data
 from gen.generator_busybox import BusyBox, Slider, Door
 from actions.gripper import Gripper
 from util import util
-def setup_pybullet(viz=False, k=None, d=None, add_dist=None, p_err_thresh=None, max_mech=1,
+
+def random_env(viz=False, k=None, d=None, add_dist=None, p_err_thresh=None, max_mech=1,
                 mech_types = [Door, Slider], debug=False, urdf_tag=''):
 
     if not viz:

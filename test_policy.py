@@ -2,7 +2,7 @@ from util import util
 import numpy as np
 import argparse
 import pybullet as p
-from setup_pybullet import setup_pybullet
+from setup_pybullet import random_env
 from actions import policies
 from gen.generator_busybox import Slider, Door
 
