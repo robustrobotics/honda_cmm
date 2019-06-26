@@ -173,6 +173,8 @@ def to_pyquat(trans_quat):
     return np.concatenate([trans_quat[1:], [trans_quat[0]]])
 
 def euler_from_quaternion(q):
+    """Convert quaternion from (x,y,z,w) returned from pybullet to
+    euler angles = (roll, pitch, yaw) convention used by transformations.py"""
     trans_quat = to_transquat(q)
     eul = trans.euler_from_quaternion(trans_quat)
     return eul

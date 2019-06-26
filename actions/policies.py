@@ -29,36 +29,27 @@ class Policy(object):
         self.type = type
         self.p_delta = 0.01 if p_delta is None else p_delta
 
-    def generate_trajectory(self, pose_tip_world_init, p_joint_world_init, config_goal, debug=False):
+    def generate_trajectory(self, p_handle_base_world, config_goal, debug=False):
         """ This method generates a trajectory of waypoints that the gripper tip should
         move through
-        :param pose_tip_world_init: util.Pose, initial grasp pose of the gripper tip
-        :param p_joint_world_init: a vector of length 3, the initial (x,y,z) position
-                                    of the joint
+        :param p_handle_base_world_init: util.Pose, initial pose of the base of the handle
         :param config_goal: the goal configuration of the joint
         :param debug (optional): if True, display debug visualizations
         """
-        q_joint_world = np.array([0.0, 0.0, 0.0, 1.0])
-        config_curr = self._inverse_kinematics(p_joint_world_init, q_joint_world)
+        # TODO: don't assume handle always starts at config = 0
+        config_curr = self._inverse_kinematics(p_handle_base_world, [0.0, 0.0, 0.0, 1.0])
         config_dir_unit = self._config_dir(config_curr, config_goal)
-        config_delta = self._config_delta_mag*config_dir_unit
-
-        # initial offset between joint pose and gripper pose
-        # assume that we want to keep this offset constant throughout the traj
-        q_tip_joint = util.quat_math(q_joint_world, pose_tip_world_init.q, True, False)
-        p_tip_joint = util.transformation(pose_tip_world_init.p, p_joint_world_init,q_joint_world, inverse=True)
+        config_delta = self.p_delta*config_dir_unit
 
         poses = []
         for i in itertools.count():
             if self._past_goal_config(config_curr, config_goal, config_dir_unit):
                 break
-            pose_joint_world = self._forward_kinematics(config_curr)
-            q_tip_world = util.quat_math(pose_joint_world.q, q_tip_joint, False, False)
-            p_tip_world = util.transformation(p_tip_joint, *pose_joint_world)
-            poses += [util.Pose(p_tip_world, q_tip_world)]
+            pose_handle_base_world = self._forward_kinematics(config_curr)
+            poses += [pose_handle_base_world]
             config_curr += config_delta
             if debug:
-                # draws the planned gripper tip trajectory
+                # draws the planned handle base trajectory
                 if i>0:
                     p.addUserDebugLine(poses[i-1].p, poses[i].p)
         return poses
@@ -112,7 +103,6 @@ class Prismatic(Policy):
         # derived
         self._M_origin_world = util.pose_to_matrix(self.rigid_position, self.rigid_orientation)
         super(Prismatic,self).__init__('Prismatic', p_delta)
-        self._config_delta_mag = self.p_delta
 
     def _forward_kinematics(self, config):
         p_joint_origin = np.multiply(config, self.prismatic_dir)
@@ -189,7 +179,6 @@ class Revolute(Policy):
         self._M_center_world = util.pose_to_matrix(self.rot_center, self.rot_axis)
         self._M_radius_center = util.pose_to_matrix(self.rot_radius, self.rot_orientation)
         super(Revolute,self).__init__('Revolute', p_delta)
-        self._config_delta_mag = self.p_delta/np.linalg.norm(self.rot_radius)
 
     def _forward_kinematics(self, config):
         # rotation matrix for a rotation about the z-axis by config radians
@@ -234,12 +223,12 @@ class Revolute(Policy):
         """ This function generates a Revolute policy from the mechanism model
         """
         p_door_world = p.getLinkState(bb.bb_id, mech.door_base_id)[0]
-        p_joint_world = p.getLinkState(bb.bb_id, mech.handle_id)[0]
-        # make center or rotation and radius in line with busybox backboard
-        # make center of rotation the same z height as the handle
-        rot_center = bb.project_onto_backboard([p_door_world[0], p_door_world[1], p_joint_world[2]])
-        p_joint_base_world = bb.project_onto_backboard(p_joint_world)
-        rot_radius = np.subtract(p_joint_base_world,rot_center)
+        p_handle_world = p.getLinkState(bb.bb_id, mech.handle_id)[0]
+        rot_center = p_door_world
+        p_handle_base_world = mech.get_pose_handle_base_world().p
+        # TODO: i think the rot_radius needs to be in the rot_center frame (rot_axis)
+        #       currently it is in the world frame
+        rot_radius = np.subtract(p_handle_base_world, rot_center)
         rot_axis = [0., 0., 0., 1.]
         rot_orientation = [0., 0., 0., 1.]
         return Revolute(rot_center, rot_axis, rot_radius, rot_orientation, p_delta)

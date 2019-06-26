@@ -81,26 +81,22 @@ def test_policy(viz=False, debug=False, max_mech=6, random_policy=False, k=None,
             policy = policies.generate_model_based_policy(bb, mech, p_delta)
             config_goal = policy.generate_model_based_config(mech, random=False)
         gripper.set_control_params(policy)
-
-        # set up initial grasp pose and joint position
-        pose_joint_world_init = util.Pose(*p.getLinkState(bb.bb_id, mech.handle_id)[:2])
-        p_joint_base_world_init = bb.project_onto_backboard(pose_joint_world_init.p)
-        p_tip_world_init = np.add(pose_joint_world_init.p, [0., .015, 0.]) # back up a little for better grasp
-        pose_tip_world_init = util.Pose(p_tip_world_init, gripper.pose_tip_world_reset.q)
-
+        pose_handle_world_init = p.getLinkState(bb.bb_id, mech.handle_id)[:2]
+        
         # calculate trajectory
-        traj = policy.generate_trajectory(pose_tip_world_init, p_joint_base_world_init, config_goal, debug)
+        p_handle_base_world = mech.get_pose_handle_base_world().p
+        traj = policy.generate_trajectory(p_handle_base_world, config_goal, debug)
 
         # execute trajectory
-        waypoints_reached, duration, joint_motion, pose_joint_world_final = \
-                gripper.execute_trajectory(pose_tip_world_init, traj, mech, debug=debug)
+        waypoints_reached, duration, joint_motion, pose_handle_world_final = \
+                gripper.execute_trajectory(traj, mech, debug=debug)
 
         # save result data
         control_params = util.ControlParams(gripper.k, gripper.d, gripper.add_dist, gripper.p_err_thresh, policy.p_delta)
         policy_params = policy.get_params_tuple()
         mechanism_params = mech.get_params_tuple()
         results += [util.Result(control_params, policy_params, mechanism_params, waypoints_reached,\
-                    joint_motion, pose_joint_world_init, pose_joint_world_final, config_goal, image_data, git_hash)]
+                    joint_motion, pose_handle_world_init, pose_handle_world_final, config_goal, image_data, git_hash)]
 
     p.disconnect(client)
     return results
