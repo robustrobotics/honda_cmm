@@ -175,7 +175,7 @@ class Gripper:
         p.setJointMotorControl2(self._id,5,p.POSITION_CONTROL,targetPosition=0,force=self._finger_force)
         p.stepSimulation()
 
-    def _move_PD(self, pose_handle_base_world_des, prev_pose_handle_base_world_des, q_offset, mech, debug=False, start_t=0, timeout=100):
+    def _move_PD(self, pose_handle_base_world_des, prev_pose_handle_base_world_des, q_offset, mech, debug=False, timeout=100):
         # move setpoint further away in a straight line between previous desired pose and current desired pose
         if prev_pose_handle_base_world_des is None:
             # TODO: could do something smarter here. this assumes initially want to move in +x direction
@@ -189,7 +189,14 @@ class Gripper:
         pose_handle_base_world_des_far = util.Pose(p_handle_base_world_des_far, pose_handle_base_world_des.q)
 
         finished = False
+        handle_base_ps = []
+
+        if debug:
+            p.addUserDebugLine(pose_handle_base_world_des_far.p, np.add(pose_handle_base_world_des_far.p, [0,0,1]), lifeTime=.5)
         for i in itertools.count():
+            handle_base_ps.append(mech.get_pose_handle_base_world().p)
+            if debug:
+                p.addUserDebugLine(mech.get_pose_handle_base_world().p, np.add(mech.get_pose_handle_base_world().p, [0,0,1]), lifeTime=1)
             # keep fingers closed (doesn't seem to make a difference but should
             # probably continually close fingers)
             self._control_fingers('close', debug=debug)
@@ -217,7 +224,7 @@ class Gripper:
             # this should be executed in the WORLD_FRAME
             p.applyExternalTorque(self._id, -1, tau, p.LINK_FRAME)
             p.stepSimulation()
-        return finished
+        return handle_base_ps, finished
 
     def set_control_params(self, policy):
         if policy.type == 'Revolute':
@@ -241,10 +248,13 @@ class Gripper:
         prev_pose_handle_base_world_des = None
         for (i, pose_handle_base_world_des) in enumerate(traj):
             start_p_handle_world = p.getLinkState(self._bb_id, mech.handle_id)[0]
-            finished = self._move_PD(pose_handle_base_world_des, prev_pose_handle_base_world_des, q_offset, mech, debug)
+            handle_base_ps, finished = self._move_PD(pose_handle_base_world_des, prev_pose_handle_base_world_des, q_offset, mech, debug)
             prev_pose_handle_base_world_des = pose_handle_base_world_des
             final_p_handle_world = p.getLinkState(self._bb_id, mech.handle_id)[0]
             joint_motion = np.add(joint_motion, np.linalg.norm(np.subtract(final_p_handle_world,start_p_handle_world)))
+            if debug:
+                for j in range(len(handle_base_ps)-1):
+                    p.addUserDebugLine(handle_base_ps[j], handle_base_ps[j+1], [0,0,1])
             if not finished:
                 break
             if not callback is None:
