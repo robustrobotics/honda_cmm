@@ -13,27 +13,30 @@ class ImageEncoder(nn.Module):
         :param kernel_size: The kernel_size of the convolution.
         """
         super(ImageEncoder, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels=4,
+        self.conv1 = nn.Conv2d(in_channels=3,
                                out_channels=hdim,
                                kernel_size=kernel_size)
-        self.pool = nn.MaxPool2d(kernel_size=4,
-                                 stride=4)
+        self.pool = nn.MaxPool2d(kernel_size=2,
+                                 stride=2)
         self.conv2 = nn.Conv2d(in_channels=hdim,
                                out_channels=hdim,
                                kernel_size=kernel_size)
         self.conv3 = nn.Conv2d(in_channels=hdim,
                                out_channels=hdim,
                                kernel_size=kernel_size)
+        self.conv4 = nn.Conv2d(in_channels=hdim,
+                               out_channels=hdim,
+                               kernel_size=kernel_size)
 
         # Reference: https://pytorch.org/docs/stable/nn.html#maxpool2d
-        for k in range(0, 3):
+        for k in range(0, 4):
             # Output size of kth conv layer
             H = H - kernel_size + 1
             W = W - kernel_size + 1
 
             # Output size of kth pooling layer
-            H = int((H - (4 - 1) - 1)/4.0 + 1)
-            W = int((W - (4 - 1) - 1)/4.0 + 1)
+            H = int((H - (2 - 1) - 1)/2.0 + 1)
+            W = int((W - (2 - 1) - 1)/2.0 + 1)
 
         self.lin_input = H*W*hdim
         print('lin_input:', self.lin_input)
@@ -47,6 +50,8 @@ class ImageEncoder(nn.Module):
         x = self.RELU(self.conv2(x))
         x = self.pool(x)
         x = self.RELU(self.conv3(x))
+        x = self.pool(x)
+        x = self.RELU(self.conv4(x))
         x = self.pool(x)
         x = x.view(-1, self.lin_input)
         x = self.RELU(self.fc1(x))

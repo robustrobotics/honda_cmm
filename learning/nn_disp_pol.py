@@ -39,4 +39,4 @@ class DistanceRegressor(nn.Module):
         """
         x = self.policy_modules[policy_type].forward(theta, q)
         x = self.fc2(self.RELU(self.fc1(x)))
-        return self.SOFTPLUS(x)
+        return x
