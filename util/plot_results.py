@@ -82,7 +82,7 @@ class SliderAxisMotion(PlotFunc):
                 angle = np.arccos(data_point.mechanism_params.params.axis[0])
                 plt.plot(angle, data_point.motion, 'b.')
         plt.xlabel('Slider Axis Angle')
-        plt.ylabel('Percentage of Trajectory Waypoints Reached')
+        plt.ylabel('Motion of Handle')
         plt.title('Motion of Handle')
 
 class SliderAxisWR(PlotFunc):
