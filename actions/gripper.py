@@ -179,7 +179,7 @@ class Gripper:
         # move setpoint further away in a straight line between previous desired pose and current desired pose
         if prev_pose_handle_base_world_des is None:
             # TODO: could do something smarter here. this assumes initially want to move in +x direction
-            dir = [1,0,0]
+            dir = [0,1,0]
             unit_dir = np.divide(dir,np.linalg.norm([dir]))
             p_handle_base_world_des_far = np.add(pose_handle_base_world_des.p, np.multiply(self.add_dist,unit_dir))
         else:
