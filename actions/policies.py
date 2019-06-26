@@ -39,7 +39,7 @@ class Policy(object):
         # TODO: don't assume handle always starts at config = 0
         config_curr = self._inverse_kinematics(p_handle_base_world, [0.0, 0.0, 0.0, 1.0])
         config_dir_unit = self._config_dir(config_curr, config_goal)
-        config_delta = self._config_delta_mag*config_dir_unit
+        config_delta = self.p_delta*config_dir_unit
 
         poses = []
         for i in itertools.count():
@@ -103,7 +103,6 @@ class Prismatic(Policy):
         # derived
         self._M_origin_world = util.pose_to_matrix(self.rigid_position, self.rigid_orientation)
         super(Prismatic,self).__init__('Prismatic', p_delta)
-        self._config_delta_mag = self.p_delta
 
     def _forward_kinematics(self, config):
         p_joint_origin = np.multiply(config, self.prismatic_dir)
@@ -180,7 +179,6 @@ class Revolute(Policy):
         self._M_center_world = util.pose_to_matrix(self.rot_center, self.rot_axis)
         self._M_radius_center = util.pose_to_matrix(self.rot_radius, self.rot_orientation)
         super(Revolute,self).__init__('Revolute', p_delta)
-        self._config_delta_mag = self.p_delta/np.linalg.norm(self.rot_radius)
 
     def _forward_kinematics(self, config):
         # rotation matrix for a rotation about the z-axis by config radians
