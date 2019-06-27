@@ -10,7 +10,7 @@ def test_policy(viz=False, debug=False, max_mech=6, random_policy=False, k=None,
                     add_dist=None, p_err_thresh=None, p_delta=None, git_hash=None,\
                     tag=''):
 
-    bb, gripper, image_data = setup_pybullet(viz, k, d, add_dist, p_err_thresh, max_mech,
+    bb, gripper, image_data = random_env(viz, k, d, add_dist, p_err_thresh, max_mech,
                     mech_types=[Door, Slider], debug=debug, urdf_tag=tag)
 
     results = []
@@ -40,7 +40,7 @@ def test_policy(viz=False, debug=False, max_mech=6, random_policy=False, k=None,
         results += [util.Result(control_params, policy_params, mechanism_params, waypoints_reached,\
                     joint_motion, pose_handle_world_init, pose_handle_world_final, config_goal, image_data, git_hash)]
 
-    p.disconnect(client)
+    p.disconnect()
     return results
 
 if __name__ == '__main__':
