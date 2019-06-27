@@ -7,7 +7,7 @@ from learning.dataloaders import setup_data_loaders
 import learning.viz as viz
 
 
-def train_eval(args, n_train, fname, pviz):
+def train_eval(args, n_train, fname, pviz, use_cuda):
     # Load data
     train_set, val_set, test_set = setup_data_loaders(fname=fname,
                                                       batch_size=args.batch_size,
@@ -17,14 +17,17 @@ def train_eval(args, n_train, fname, pviz):
     if args.model == 'pol':
         net = NNPol(policy_names=['Prismatic', 'Revolute'],
                     policy_dims=[10, 14],
-                    hdim=args.hdim).cuda()
+                    hdim=args.hdim)
     else:
         net = NNPolVis(policy_names=['Prismatic', 'Revolute'],
                        policy_dims=[10, 14],
                        hdim=args.hdim,
                        im_h=154,
                        im_w=205,
-                       kernel_size=5).cuda()
+                       kernel_size=5)
+    if use_cuda:
+        net = net.cuda()
+
     loss_fn = torch.nn.MSELoss()
     optim = torch.optim.Adam(net.parameters())
 
@@ -33,14 +36,13 @@ def train_eval(args, n_train, fname, pviz):
     for ex in range(args.n_epochs):
         train_losses = []
         for bx, (k, x, q, im, y) in enumerate(train_set):
-            x = x.cuda()
-            q = q.cuda()
-            im = im.cuda()
-            y = y.cuda()
+            if use_cuda:
+                x = x.cuda()
+                q = q.cuda()
+                im = im.cuda()
+                y = y.cuda()
 
             optim.zero_grad()
-            qs = torch.zeros(x.shape[0], 1).cuda()
-            xs = torch.zeros(x.shape).cuda()
             yhat = net.forward(k[0], x, q, im)
 
             loss = loss_fn(yhat, y)
@@ -57,21 +59,23 @@ def train_eval(args, n_train, fname, pviz):
 
             ys, yhats, types = [], [], []
             for bx, (k, x, q, im, y) in enumerate(val_set):
-                x = x.cuda()
-                q = q.cuda()
-                im = im.cuda()
-                y = y.cuda()
+                if use_cuda:
+                    x = x.cuda()
+                    q = q.cuda()
+                    im = im.cuda()
+                    y = y.cuda()
 
-                qs = torch.zeros(x.shape[0], 1).cuda()
-                xs = torch.zeros(x.shape).cuda()
                 yhat = net.forward(k[0], x, q, im)
                 loss = loss_fn(yhat, y)
 
                 val_losses.append(loss.item())
 
                 types += k
-                ys += y.cpu().numpy().tolist()
-                yhats += yhat.cpu().detach().numpy().tolist()
+                if use_cuda:
+                    y = y.cpu()
+                    yhat = yhat.cpu()
+                ys += y.numpy().tolist()
+                yhats += yhat.detach().numpy().tolist()
 
             if pviz:
                 viz.plot_y_yhat(ys, yhats, types, title='ImageOnly')
@@ -91,15 +95,16 @@ if __name__ == '__main__':
     parser.add_argument('--val-freq', type=int, default=5)
     parser.add_argument('--mode', choices=['ntrain', 'normal'], default='normal')
     parser.add_argument('--model', choices=['pol', 'polvis'], default='pol')
+    parser.add_argument('--use-cuda', default=False, action='store_true')
     args = parser.parse_args()
 
     if args.mode == 'normal':
-        train_eval(args, 0, 'clean_data.pickle', pviz=True)
+        train_eval(args, 0, 'clean_data.pickle', pviz=True, use_cuda=args.use_cuda)
     elif args.mode == 'ntrain':
         vals = []
         ns = range(100, 1001, 100)
         for n in ns:
-            best_val = train_eval(args, n, 'clean_data.pickle', pviz=False)
+            best_val = train_eval(args, n, 'clean_data.pickle', pviz=False, use_cuda=args.use_cuda)
             vals.append(best_val)
             print(n, best_val)
 
