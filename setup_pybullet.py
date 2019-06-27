@@ -4,9 +4,26 @@ from gen.generator_busybox import BusyBox, Slider, Door
 from actions.gripper import Gripper
 from util import util
 
-def random_env(viz=False, k=None, d=None, add_dist=None, p_err_thresh=None, max_mech=1,
-                mech_types = [Door, Slider], debug=False, urdf_tag=''):
 
+def random_env(max_mech, mech_types, urdf_tag):
+    """ Generate a random BusyBox environment
+    """
+    return BusyBox.generate_random_busybox(max_mech=max_mech, mech_types=[Door, Slider], urdf_tag=urdf_tag)
+
+def custom_env():
+    """ Generate a custom BusyBox environment
+    """
+    bb_width = 0.8
+    bb_height = 0.4
+    door_offset = (.075, -0.09)
+    door_size = (0.15, 0.15)
+    handle_offset = -0.15/2 +.015
+    flipped = True
+    door = Door(door_offset, door_size, handle_offset, flipped, color=[1,0,0])
+    return BusyBox.generate_busybox(bb_width, bb_height, [door])
+
+def setup_env(viz=False, k=None, d=None, add_dist=None, p_err_thresh=None, max_mech=1,
+                mech_types = [Door, Slider], debug=False, urdf_tag='', custom=False):
     if not viz:
         client = p.connect(p.DIRECT)
     else:
@@ -17,8 +34,10 @@ def random_env(viz=False, k=None, d=None, add_dist=None, p_err_thresh=None, max_
     p.setAdditionalSearchPath(pybullet_data.getDataPath())
     p.setRealTimeSimulation(0)
 
-    # this generates the BusyBox object and loads the URDF
-    bb = BusyBox.generate_random_busybox(max_mech=max_mech, mech_types=[Door, Slider], urdf_tag=urdf_tag)
+    if custom:
+        bb = custom_env()
+    else:
+        bb = random_env(max_mech, mech_types, urdf_tag)
 
     try:
         mech = bb._mechanisms[0]
@@ -27,8 +46,8 @@ def random_env(viz=False, k=None, d=None, add_dist=None, p_err_thresh=None, max_
             print('generated a Busybox with no Mechanisms')
         # try again
         p.disconnect(client)
-        return random_env(viz, k, d, add_dist, p_err_thresh, max_mech,
-                        mech_types, debug, urdf_tag)
+        return random_env(viz, k, d, add_dist, p_err_thresh, max_mech, mech_types, debug, urdf_tag)
+
     p.resetDebugVisualizerCamera(
         cameraDistance=0.2,
         cameraYaw=180,
