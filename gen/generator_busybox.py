@@ -56,7 +56,7 @@ class Mechanism(object):
 class Slider(Mechanism):
     n_sliders = 0
 
-    def __init__(self, x_offset, z_offset, range, axis, color, bb_thickness):
+    def __init__(self, x_offset, z_offset, range, axis, color, bb_thickness=0.05):
         """
 
         :param x_offset: The offset in the x-dimension from the busybox backboard.
@@ -165,7 +165,7 @@ class Slider(Mechanism):
         return MechanismParams(self.mechanism_type, SliderParams(self.axis, self.range))
 
     @staticmethod
-    def random(width, height, bb_thickness):
+    def random(width, height, bb_thickness=0.05):
         """
         Generate a random slider within the busybox of dimensions width x height.
         :param width: float, width of the busybox.
@@ -186,7 +186,7 @@ class Slider(Mechanism):
 class Door(Mechanism):
     n_doors = 0
 
-    def __init__(self, door_offset, door_size, handle_offset, flipped, color, bb_thickness):
+    def __init__(self, door_offset, door_size, handle_offset, flipped, color, bb_thickness=0.05):
         super(Door, self).__init__('Door')
         name = Door.n_doors
         Door.n_doors += 1
@@ -298,7 +298,7 @@ class Door(Mechanism):
         return MechanismParams(self.mechanism_type, DoorParams(self.door_size, self.flipped))
 
     @staticmethod
-    def random(width, height, bb_thickness):
+    def random(width, height, bb_thickness=0.05):
         door_offset = (np.random.uniform(-width/2.0, width/2.0),
                        np.random.uniform(-height/2.0, height/2.0))
         door_size = (np.random.uniform(0.07, 0.15),
@@ -315,7 +315,7 @@ class Door(Mechanism):
 
 
 class BusyBox(object):
-    def __init__(self, width, height, bb_thickness, mechanisms):
+    def __init__(self, width, height, mechanisms, bb_thickness=0.05):
         self._mechanisms = mechanisms
         self._links = []
         self._joints = []
@@ -324,7 +324,7 @@ class BusyBox(object):
         self.height = height
         self.bb_thickness = bb_thickness
 
-    def _create_skeleton(self, width, height, bb_thickness):
+    def _create_skeleton(self, width, height, bb_thickness=0.05):
         """
         The busybox skeleton consists of a base and backboard joined by
         a fixed Joint. Note all unspecified dimensions are fixed.
@@ -427,14 +427,16 @@ class BusyBox(object):
     def _check_collision(width, height, mechs, mech):
         tree = aabb.AABBTree()
         # Add edge bounding boxes for backboard.
+        gripper_gap = 0.035 # so gripper doesn't collide with busybox base
         tree.add(aabb.AABB([(-width/2.0, width/2.0), (height/2.0, height/2.0+1)]))  # top
-        tree.add(aabb.AABB([(-width/2.0, width/2.0), (-height/2.0-1, -height/2.0)]))  # bottom
+        tree.add(aabb.AABB([(-width/2.0, width/2.0), (-height/2.0-1, -height/2.0+gripper_gap)]))  # bottom
         tree.add(aabb.AABB([(-width/2.0-1, -width/2.0), (-height/2.0, height/2.0)]))  # left
         tree.add(aabb.AABB([(width/2.0, width/2.0+1), (-height/2.0, height/2.0)]))  # right
 
         # Get the bounding box for each existing mechanism.
         for ix, m in enumerate(mechs):
-            tree.add(m.get_bounding_box(), str(ix))
+            if not m == mech:
+                tree.add(m.get_bounding_box(), str(ix))
 
         # Get the bounding box of the current mechanism and check overlap.
         if tree.does_overlap(mech.get_bounding_box()):
@@ -469,7 +471,20 @@ class BusyBox(object):
                     mechs.append(mech)
                     break
 
-        bb = BusyBox(width, height, bb_thickness, mechs)
+        bb = BusyBox(width, height, mechs, bb_thickness)
+        bb_file = 'models/busybox' + urdf_tag + '.urdf'
+        with open(bb_file, 'w') as handle:
+            handle.write(bb.get_urdf())
+        model = p.loadURDF(bb_file, [0., -.3, 0.])
+        bb.set_mechanism_ids(model)
+        return bb
+
+    @staticmethod
+    def generate_busybox(width, height, mechs, bb_thickness=0.05, urdf_tag=''):
+        bb = BusyBox(width, height, mechs, bb_thickness)
+        for mech in mechs:
+            if BusyBox._check_collision(width, height, mechs, mech):
+                raise Exception('generated a BusyBox with collisions')
         bb_file = 'models/busybox' + urdf_tag + '.urdf'
         with open(bb_file, 'w') as handle:
             handle.write(bb.get_urdf())
