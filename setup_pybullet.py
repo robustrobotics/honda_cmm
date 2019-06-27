@@ -46,7 +46,7 @@ def setup_env(viz=False, k=None, d=None, add_dist=None, p_err_thresh=None, max_m
             print('generated a Busybox with no Mechanisms')
         # try again
         p.disconnect(client)
-        return random_env(viz, k, d, add_dist, p_err_thresh, max_mech, mech_types, debug, urdf_tag)
+        return setup_env(viz, k, d, add_dist, p_err_thresh, max_mech, mech_types, debug, urdf_tag)
 
     p.resetDebugVisualizerCamera(
         cameraDistance=0.2,
