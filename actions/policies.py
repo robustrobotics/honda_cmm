@@ -275,6 +275,12 @@ def generate_model_based_policy(bb, mech, p_delta=None):
     if mech.mechanism_type == 'Slider':
         return Prismatic._model(bb, mech, p_delta)
 
+def generate_policy(type, params):
+    if type == 'Revolute':
+        return Revolute(*params)
+    if type == 'Prismatic':
+        return Prismatic(*params)
+
 ## Helper Functions
 def _random_p(bb):
     bb_center = p.getLinkState(bb.bb_id,0)[0]
