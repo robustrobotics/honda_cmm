@@ -4,12 +4,6 @@ from gen.generator_busybox import BusyBox, Slider, Door
 from actions.gripper import Gripper
 from util import util
 
-
-def random_env(max_mech, mech_types, urdf_tag):
-    """ Generate a random BusyBox environment
-    """
-    return BusyBox.generate_random_busybox(max_mech=max_mech, mech_types=[Door, Slider], urdf_tag=urdf_tag)
-
 def custom_env():
     """ Generate a custom BusyBox environment
     """
@@ -37,7 +31,7 @@ def setup_env(viz=False, k=None, d=None, add_dist=None, p_err_thresh=None, max_m
     if custom:
         bb = custom_env()
     else:
-        bb = random_env(max_mech, mech_types, urdf_tag)
+        bb = BusyBox.generate_random_busybox(max_mech=max_mech, mech_types=[Door, Slider], urdf_tag=urdf_tag)
 
     try:
         mech = bb._mechanisms[0]
