@@ -301,7 +301,7 @@ class Door(Mechanism):
     def random(width, height, bb_thickness=0.05):
         door_offset = (np.random.uniform(-width/2.0, width/2.0),
                        np.random.uniform(-height/2.0, height/2.0))
-        door_size = (np.random.uniform(0.07, 0.15),
+        door_size = (np.random.uniform(0.08, 0.15),
                      np.random.uniform(0.05, 0.15))
         # 0.015 is the handle radius.
         handle_offset = np.random.uniform(-door_size[1]/2+0.015, door_size[1]/2-0.015)
