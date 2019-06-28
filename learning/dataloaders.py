@@ -76,14 +76,9 @@ class PolicyDataset(Dataset):
         self.tensors = [torch.tensor(item['params']) for item in items]
         self.configs = [torch.tensor([item['config']]) for item in items]
         self.ys = [torch.tensor([item['y']]) for item in items]
-
-        tt = transforms.Compose([transforms.ToTensor(),
-                                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
         self.images = []
         for item in items:
-            w, h, im = item['image']
-            np_im = np.array(im, dtype=np.uint8).reshape(h, w, 4)[:, :, 0:3]
-            self.images.append(tt(np_im))
+            self.images.append(item['image'])
         # imshow(torchvision.utils.make_grid(self.images[0:10]))
 
     def __getitem__(self, index):
@@ -93,15 +88,16 @@ class PolicyDataset(Dataset):
         return len(self.items)
 
 
-def parse_pickle_file(fname):
+def parse_pickle_file(fname=None, data=None):
     """
-    Read in the pickle file created by the generate_policy_data file.
+    Can pass in either a file name or a data dictionary to be parsed.
     Extract relevant information into vector format.
     :param fname: Name of the pickle file to load.
     :return:
     """
-    with open(fname, 'rb') as handle:
-        data = pickle.load(handle)
+    if data is None:
+        with open(fname, 'rb') as handle:
+            data = pickle.load(handle)
 
     parsed_data = []
     for entry in data:
@@ -112,23 +108,29 @@ def parse_pickle_file(fname):
             pos = list(entry.policy_params.params.rigid_position)
             orn = list(entry.policy_params.params.rigid_orientation)
             dir = list(entry.policy_params.params.prismatic_dir)
-            range = [entry.mechanism_params.params.range]
+            #range = [entry.mechanism_params.params.range]
             policy_params = pos + orn + dir  # + range
         elif policy_type == 'Revolute':
             center = list(entry.policy_params.params.rot_center)
             axis = list(entry.policy_params.params.rot_axis)
             orn = list(entry.policy_params.params.rot_orientation)
             radius = list(entry.policy_params.params.rot_radius)
-            flipped = [entry.mechanism_params.params.flipped]
-            door_size = list(entry.mechanism_params.params.door_size)
+            #flipped = [entry.mechanism_params.params.flipped]
+            #door_size = list(entry.mechanism_params.params.door_size)
             policy_params = center + axis + orn + radius  # + door_size + flipped
         motion = entry.motion
+
+        tt = transforms.Compose([transforms.ToTensor(),
+                                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+        w, h, im = entry.image_data
+        np_im = np.array(im, dtype=np.uint8).reshape(h, w, 4)[:, :, 0:3]
+        image = tt(np_im)
 
         parsed_data.append({
             'type': policy_type,
             'params': policy_params,
             'config': entry.config_goal,
-            'image': entry.image_data,
+            'image': image,
             'y': motion
         })
 
