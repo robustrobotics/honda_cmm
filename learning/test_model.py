@@ -14,7 +14,7 @@ from util import util
 def objective_func(x, k, image, model):
     return -model.forward(k, x[0], x[1], image)
 
-def test_random_env(model_path, mode, viz, debug):
+def test_random_env(model_path, model, viz, debug):
     # TODO: ability to later visualize when testing max policy, but not during sampling phase
     bb, gripper, image_data = setup_env(viz=False, max_mech=1, debug=debug)
     if args.model == 'pol':
@@ -74,9 +74,10 @@ if __name__ == '__main__':
     parser.add_argument('--viz', action='store_true')
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--model-path', type=str)
+    parser.add_argument('--model', choices=['pol', 'polvis'], default='pol')
     args = parser.parse_args()
 
     if args.debug:
         import pdb; pdb.set_trace()
 
-    test_random_env(args.model_path, args.viz, args.debug)
+    test_random_env(args.model_path, args.model, args.viz, args.debug)
