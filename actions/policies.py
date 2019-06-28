@@ -60,8 +60,8 @@ class Policy(object):
     def generate_random_config(self):
         raise NotImplementedError('generate_random_config not implemented for policy type '+self.type)
 
-    def get_params_tuple(self):
-        raise NotImplementedError('get_params_tuple not implemented for policy type '+self.type)
+    def get_policy_tuple(self):
+        raise NotImplementedError('get_policy_tuple not implemented for policy type '+self.type)
 
     def _config_dir(self, config_curr, config_goal):
         return 1 if (config_goal > config_curr) else -1
@@ -130,7 +130,7 @@ class Prismatic(Policy):
         """
         return np.random.uniform(-0.5,0.5)
 
-    def get_params_tuple(self):
+    def get_policy_tuple(self):
         prim_params = PrismaticParams(self.rigid_position, self.rigid_orientation, self.prismatic_dir)
         return PolicyParams(self.type, prim_params)
 
@@ -219,7 +219,7 @@ class Revolute(Policy):
         """
         return np.random.uniform(-2*np.pi,2*np.pi)
 
-    def get_params_tuple(self):
+    def get_policy_tuple(self):
         prim_params =  RevoluteParams(self.rot_center, self.rot_axis, self.rot_radius, self.rot_orientation)
         return PolicyParams(self.type, prim_params)
 

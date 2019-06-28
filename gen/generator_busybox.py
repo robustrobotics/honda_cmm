@@ -45,8 +45,8 @@ class Mechanism(object):
         """
         raise NotImplementedError('Collision Bounding Box not implemented for mechanism: {0}'.format(self.mechanism_type))
 
-    def get_params_tuple(self):
-        raise NotImplementedError('get_params_tuple not implemented for mechanism: {0}'.format(self.mechanism_type))
+    def get_mechanism_tuple(self):
+        raise NotImplementedError('get_mechanism_tuple not implemented for mechanism: {0}'.format(self.mechanism_type))
 
     @staticmethod
     def random():
@@ -161,7 +161,7 @@ class Slider(Mechanism):
 
         return aabb.AABB([(x_min, x_max), (z_min, z_max)])
 
-    def get_params_tuple(self):
+    def get_mechanism_tuple(self):
         return MechanismParams(self.mechanism_type, SliderParams(self.axis, self.range))
 
     @staticmethod
@@ -294,7 +294,7 @@ class Door(Mechanism):
             x_max = self.origin[0]
         return aabb.AABB([(x_min, x_max), (z_min, z_max)])
 
-    def get_params_tuple(self):
+    def get_mechanism_tuple(self):
         return MechanismParams(self.mechanism_type, DoorParams(self.door_size, self.flipped))
 
     @staticmethod

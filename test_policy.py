@@ -35,8 +35,8 @@ def test_policy(viz=False, debug=False, max_mech=6, random_policy=False, k=None,
 
         # save result data
         control_params = util.ControlParams(gripper.k, gripper.d, gripper.add_dist, gripper.p_err_thresh, policy.p_delta)
-        policy_params = policy.get_params_tuple()
-        mechanism_params = mech.get_params_tuple()
+        policy_params = policy.get_policy_tuple()
+        mechanism_params = mech.get_mechanism_tuple()
         results += [util.Result(control_params, policy_params, mechanism_params, waypoints_reached,\
                     joint_motion, pose_handle_world_init, pose_handle_world_final, config_goal, image_data, git_hash)]
 
