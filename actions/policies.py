@@ -157,8 +157,8 @@ class Prismatic(Policy):
         p_handle_world = p.getLinkState(bb.bb_id, mech.handle_id)[0]
         rigid_position = bb.project_onto_backboard(p_handle_world)
         rigid_orientation = np.array([0.,0.,0.,1.])
-        angle = np.random.uniform(0, np.pi)
-        prismatic_dir = np.array([np.cos(angle), 0., np.sin(angle)])
+        rotation = util.random_quaternion()
+        prismatic_dir = util.transformation([0.,0.,1.], [0., 0., 0.], rotation)
         return Prismatic(rigid_position, rigid_orientation, prismatic_dir, p_delta)
 
 class Revolute(Policy):

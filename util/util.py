@@ -179,6 +179,10 @@ def euler_from_quaternion(q):
     eul = trans.euler_from_quaternion(trans_quat)
     return eul
 
+def random_quaternion(rand=None):
+    trans_quat = trans.random_quaternion(rand)
+    return to_pyquat(trans_quat)
+
 ### mostly taken from transformations.py ###
 def pose_to_matrix(point, q):
     """Convert a pose to a transformation matrix
