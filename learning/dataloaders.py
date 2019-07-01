@@ -84,7 +84,6 @@ class PolicyDataset(Dataset):
             w, h, im = item['image']
             np_im = np.array(im, dtype=np.uint8).reshape(h, w, 4)[:, :, 0:3]
             self.images.append(tt(np_im))
-            self.images.append(item['image'])
         # imshow(torchvision.utils.make_grid(self.images[0:10]))
 
     def __getitem__(self, index):
