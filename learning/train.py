@@ -83,7 +83,7 @@ def train_eval(args, n_train, data_file_name, model_file_name, pviz, use_cuda):
             print('[Epoch {}] - Validation Loss: {}'.format(ex, np.mean(val_losses)))
             if np.mean(val_losses) < best_val:
                 best_val = np.mean(val_losses)
-        torch.save(net.state_dict(), model_file_name)
+    torch.save(net.state_dict(), model_file_name)
     return best_val
 
 
