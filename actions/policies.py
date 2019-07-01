@@ -275,11 +275,11 @@ def generate_model_based_policy(bb, mech, p_delta=None):
     if mech.mechanism_type == 'Slider':
         return Prismatic._model(bb, mech, p_delta)
 
-def generate_policy(type, params):
+def get_policy(type, params):
     if type == 'Revolute':
-        return Revolute(*params)
+        return Revolute(params[:3], params[3:7], params[7:10], params[10:14])
     if type == 'Prismatic':
-        return Prismatic(*params)
+        return Prismatic(params[:3], params[3:7], params[7:10])
 
 ## Helper Functions
 def _random_p(bb):
