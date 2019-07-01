@@ -447,7 +447,7 @@ class BusyBox(object):
             return False
 
     @staticmethod
-    def generate_random_busybox(min_mech=1, max_mech=6, mech_types=[Slider, Door], n_tries=25, urdf_tag=''):
+    def generate_random_busybox(min_mech=1, max_mech=6, mech_types=[Slider, Door], n_tries=25, urdf_tag='', debug=False):
         """
         :param min_mech: int, The minimum number of mechanisms to be included on the busybox.
         :param max_mech: int, The maximum number of classes to be included on the busybox.

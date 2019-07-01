@@ -11,7 +11,7 @@ def test_policy(viz=False, debug=False, max_mech=6, random_policy=False, k=None,
                     add_dist=None, p_err_thresh=None, p_delta=None, git_hash=None,\
                     tag=''):
 
-    bb = BusyBox.generate_random_busybox(max_mech=max_mech, mech_types=[Door, Slider], urdf_tag=tag)
+    bb = BusyBox.generate_random_busybox(max_mech=max_mech, mech_types=[Door, Slider], urdf_tag=tag, debug=debug)
     # setup env and get image before load gripper
     image_data = setup_env(bb, viz=viz, debug=debug)
     gripper = Gripper(bb.bb_id, k, d, add_dist, p_err_thresh)
@@ -25,7 +25,6 @@ def test_policy(viz=False, debug=False, max_mech=6, random_policy=False, k=None,
         else:
             policy = policies.generate_model_based_policy(bb, mech, p_delta)
             config_goal = policy.generate_model_based_config(mech, random=False)
-        gripper.set_control_params(policy)
         pose_handle_world_init = p.getLinkState(bb.bb_id, mech.handle_id)[:2]
 
         # calculate trajectory
@@ -34,7 +33,7 @@ def test_policy(viz=False, debug=False, max_mech=6, random_policy=False, k=None,
 
         # execute trajectory
         waypoints_reached, duration, joint_motion, pose_handle_world_final = \
-                gripper.execute_trajectory(traj, mech, debug=debug)
+                gripper.execute_trajectory(traj, mech, policy.type, debug=debug)
 
         # save result data
         control_params = util.ControlParams(gripper.k, gripper.d, gripper.add_dist, gripper.p_err_thresh, policy.p_delta)

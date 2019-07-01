@@ -7,9 +7,9 @@ from learning.dataloaders import setup_data_loaders
 import learning.viz as viz
 
 
-def train_eval(args, n_train, fname, pviz, use_cuda):
+def train_eval(args, n_train, data_file_name, model_file_name, pviz, use_cuda):
     # Load data
-    train_set, val_set, test_set = setup_data_loaders(fname=fname,
+    train_set, val_set, test_set = setup_data_loaders(fname=data_file_name,
                                                       batch_size=args.batch_size,
                                                       small_train=n_train)
 
@@ -83,7 +83,7 @@ def train_eval(args, n_train, fname, pviz, use_cuda):
             print('[Epoch {}] - Validation Loss: {}'.format(ex, np.mean(val_losses)))
             if np.mean(val_losses) < best_val:
                 best_val = np.mean(val_losses)
-        torch.save(net.state_dict(), 'model.pt')
+        torch.save(net.state_dict(), model_file_name)
     return best_val
 
 
@@ -97,18 +97,22 @@ if __name__ == '__main__':
     parser.add_argument('--model', choices=['pol', 'polvis'], default='pol')
     parser.add_argument('--use-cuda', default=False, action='store_true')
     parser.add_argument('--debug', action='store_true')
+    parser.add_argument('--data-fname', type=str)
+    parser.add_argument('--model-fname', type=str)
     args = parser.parse_args()
 
     if args.debug:
         import pdb; pdb.set_trace()
 
+    data_file_name = args.data_fname + '.pickle'
+    model_file_name = args.model_fname + '.pt'
     if args.mode == 'normal':
-        train_eval(args, 0, 'clean_data.pickle', pviz=True, use_cuda=args.use_cuda)
+        train_eval(args, 0, data_file_name, model_file_name, pviz=True, use_cuda=args.use_cuda)
     elif args.mode == 'ntrain':
         vals = []
         ns = range(100, 1001, 100)
         for n in ns:
-            best_val = train_eval(args, n, 'clean_data.pickle', pviz=False, use_cuda=args.use_cuda)
+            best_val = train_eval(args, n, data_file_name, model_file_name, pviz=False, use_cuda=args.use_cuda)
             vals.append(best_val)
             print(n, best_val)
 

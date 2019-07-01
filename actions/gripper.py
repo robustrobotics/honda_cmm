@@ -226,13 +226,15 @@ class Gripper:
             p.stepSimulation()
         return handle_base_ps, finished
 
-    def set_control_params(self, policy):
-        if policy.type == 'Revolute':
+    def set_control_params(self, policy_type):
+        if policy_type == 'Revolute':
             self.k = [2000.0,20.0]
-        if policy.type == 'Prismatic':
+        if policy_type == 'Prismatic':
             self.k = [200.0,20.0]
 
-    def execute_trajectory(self, traj, mech, debug=False, callback=None, bb=None):
+    def execute_trajectory(self, traj, mech, policy_type, debug=False, callback=None, bb=None):
+        self.set_control_params(policy_type)
+
         # initial grasp pose
         pose_handle_world_init = util.Pose(*p.getLinkState(self._bb_id, mech.handle_id)[:2])
         p_tip_world_init = np.add(pose_handle_world_init.p, [0., .015, 0.]) # back up a little for better grasp
