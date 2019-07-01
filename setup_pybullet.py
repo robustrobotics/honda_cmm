@@ -3,6 +3,11 @@ import pybullet_data
 from util import util
 
 def setup_env(bb, viz=False, debug=False):
+
+    # disconnect if already connected (may want to change viz from False to True)
+    if p.getConnectionInfo()['isConnected']:
+        p.disconnect()
+
     if not viz:
         client = p.connect(p.DIRECT)
     else:

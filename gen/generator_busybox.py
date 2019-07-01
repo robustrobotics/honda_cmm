@@ -324,6 +324,7 @@ class BusyBox(object):
         self.height = height
         self.bb_thickness = bb_thickness
         self.file_name = file_name
+        self.bb_id = None # set with mechanism ids
 
     def _create_skeleton(self, width, height, bb_thickness=0.05):
         """

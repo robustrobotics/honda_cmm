@@ -2,6 +2,8 @@
 import argparse
 import operator
 from actions import policies
+from actions.gripper import Gripper
+from gen.generator_busybox import BusyBox
 from setup_pybullet import setup_env
 from scipy.optimize import minimize
 from learning.nn_disp_pol import DistanceRegressor as NNPol
@@ -18,8 +20,6 @@ def objective_func(x, policy_type, image_tensor, model):
     return -model.forward(policy_type, torch.tensor([x[:-1]]).float(), torch.tensor([[x[-1]]]).float(), image_tensor)
 
 def test_random_env(model, viz, debug):
-    # TODO: ability to later visualize when testing max policy, but not during sampling phase
-    bb, gripper, image_data = setup_env(viz=False, max_mech=1, debug=debug)
     if args.model == 'pol':
         model = NNPol(policy_names=['Prismatic', 'Revolute'],
                     policy_dims=[10, 14],
@@ -36,6 +36,8 @@ def test_random_env(model, viz, debug):
     model.eval()
 
     # only testing with 1 Mechanism per BusyBox right now
+    bb = BusyBox.generate_random_busybox(max_mech=1)
+    image_data = setup_env(bb, viz=False, debug=debug)
     mech = bb._mechanisms[0]
     n_samples = 100
     samples = []
@@ -72,10 +74,11 @@ def test_random_env(model, viz, debug):
     traj = policy_final.generate_trajectory(p_handle_base_world, config_final, debug)
 
     # execute trajectory
-    p.disconnect()
-    bb, gripper, image_data = setup_env(viz=True, debug=debug, bb=bb)
+    setup_env(bb, viz=viz, debug=debug)
+    gripper = Gripper(bb.bb_id)
     gripper.set_control_params(policy_final)
     gripper.execute_trajectory(traj, mech, debug=debug)
+    p.disconnect()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
