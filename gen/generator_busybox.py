@@ -315,7 +315,7 @@ class Door(Mechanism):
 
 
 class BusyBox(object):
-    def __init__(self, width, height, mechanisms, bb_thickness=0.05):
+    def __init__(self, width, height, mechanisms, bb_thickness=0.05, file_name=None):
         self._mechanisms = mechanisms
         self._links = []
         self._joints = []
@@ -323,6 +323,7 @@ class BusyBox(object):
         self.width = width
         self.height = height
         self.bb_thickness = bb_thickness
+        self.file_name = file_name
 
     def _create_skeleton(self, width, height, bb_thickness=0.05):
         """
@@ -459,37 +460,44 @@ class BusyBox(object):
         bb_thickness = 0.05
 
         # Sample number of mechanisms.
-        mechs = []
-        n_mech = np.random.randint(low=min_mech, high=max_mech+1)
-        for _ in range(n_mech):
-            # For each mechanism pick the type.
-            mech_class = np.random.choice(mech_types)
-            for _ in range(n_tries):
-                mech = mech_class.random(width, height, bb_thickness)
-                # Check for collisions.
-                if not BusyBox._check_collision(width, height, mechs, mech):
-                    mechs.append(mech)
-                    break
+        gen_bb = False
+        while not gen_bb:
+            mechs = []
+            n_mech = np.random.randint(low=min_mech, high=max_mech+1)
+            for _ in range(n_mech):
+                # For each mechanism pick the type.
+                mech_class = np.random.choice(mech_types)
+                for _ in range(n_tries):
+                    mech = mech_class.random(width, height, bb_thickness)
+                    # Check for collisions.
+                    if not BusyBox._check_collision(width, height, mechs, mech):
+                        mechs.append(mech)
+                        break
+            try:
+                mechs[0]
+                gen_bb = True
+            except:
+                if debug:
+                    print('generated a Busybox with no Mechanisms')
+                continue
 
-        bb = BusyBox(width, height, mechs, bb_thickness)
         bb_file = 'models/busybox' + urdf_tag + '.urdf'
+        bb = BusyBox(width, height, mechs, bb_thickness, bb_file)
+
         with open(bb_file, 'w') as handle:
             handle.write(bb.get_urdf())
-        model = p.loadURDF(bb_file, [0., -.3, 0.])
-        bb.set_mechanism_ids(model)
         return bb
 
     @staticmethod
-    def generate_busybox(width, height, mechs, bb_thickness=0.05, urdf_tag=''):
-        bb = BusyBox(width, height, mechs, bb_thickness)
+    def get_busybox(width, height, mechs, bb_thickness=0.05, urdf_tag=''):
+        bb_file = 'models/busybox' + urdf_tag + '.urdf'
+        bb = BusyBox(width, height, mechs, bb_thickness, bb_file)
         for mech in mechs:
             if BusyBox._check_collision(width, height, mechs, mech):
                 raise Exception('generated a BusyBox with collisions')
-        bb_file = 'models/busybox' + urdf_tag + '.urdf'
         with open(bb_file, 'w') as handle:
             handle.write(bb.get_urdf())
-        model = p.loadURDF(bb_file, [0., -.3, 0.])
-        bb.set_mechanism_ids(model)
+
         return bb
 
 if __name__ == '__main__':

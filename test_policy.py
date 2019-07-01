@@ -4,14 +4,17 @@ import argparse
 import pybullet as p
 from setup_pybullet import setup_env
 from actions import policies
-from gen.generator_busybox import Slider, Door
+from actions.gripper import Gripper
+from gen.generator_busybox import Slider, Door, BusyBox
 
 def test_policy(viz=False, debug=False, max_mech=6, random_policy=False, k=None, d=None,\
                     add_dist=None, p_err_thresh=None, p_delta=None, git_hash=None,\
-                    tag='', custom=False):
+                    tag=''):
 
-    bb, gripper, image_data = setup_env(viz, k, d, add_dist, p_err_thresh, max_mech,
-                    mech_types=[Door, Slider], debug=debug, urdf_tag=tag, custom=custom)
+    bb = BusyBox.generate_random_busybox(max_mech=max_mech, mech_types=[Door, Slider], urdf_tag=tag)
+    # setup env and get image before load gripper
+    image_data = setup_env(bb, viz=viz, debug=debug)
+    gripper = Gripper(bb.bb_id, k, d, add_dist, p_err_thresh)
 
     results = []
     for mech in bb._mechanisms:
@@ -49,13 +52,12 @@ if __name__ == '__main__':
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--max-mech', type=int, default=6)
     parser.add_argument('--random', action='store_true')
-    parser.add_argument('--custom', action='store_true')
     args = parser.parse_args()
 
     if args.debug:
         import pdb; pdb.set_trace()
 
-    test_policy(args.viz, args.debug, args.max_mech, args.random, custom=args.custom)
+    test_policy(args.viz, args.debug, args.max_mech, args.random)
     print('done testing policy')
     try:
         while True:
