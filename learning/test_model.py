@@ -6,15 +6,18 @@ from setup_pybullet import setup_env
 from scipy.optimize import minimize
 from learning.nn_disp_pol import DistanceRegressor as NNPol
 from learning.nn_disp_pol_vis import DistanceRegressor as NNPolVis
-from learning.dataloaders import parse_pickle_file
+from learning.dataloaders import parse_pickle_file, PolicyDataset
 import torch
 import torchvision.transforms as transforms
 from util import util
+import numpy as np
+import pybullet as p
+import pybullet_data
 
-def objective_func(x, k, image, model):
-    return -model.forward(k, x[0], x[1], image)
+def objective_func(x, policy_type, image_tensor, model):
+    return -model.forward(policy_type, torch.tensor([x[:-1]]).float(), torch.tensor([[x[-1]]]).float(), image_tensor)
 
-def test_random_env(model_path, model, viz, debug):
+def test_random_env(model, viz, debug):
     # TODO: ability to later visualize when testing max policy, but not during sampling phase
     bb, gripper, image_data = setup_env(viz=False, max_mech=1, debug=debug)
     if args.model == 'pol':
@@ -39,45 +42,49 @@ def test_random_env(model_path, model, viz, debug):
 
     for _ in range(n_samples):
         random_policy = policies.generate_random_policy(bb, mech)
+        policy_type = random_policy.type
         q = random_policy.generate_random_config()
         policy_tuple = random_policy.get_policy_tuple()
-        #mech_tuple = mech.get_mechanism_tuple()
-        data = [util.Result(None, policy_tuple, None, None, 0., None, None, q, image_data, None)]
-        tensor_data = parse_pickle_file(data=data)[0]
-        policy_type = random_policy.type
-        samples += [[(tensor_data['params'], tensor_data['config']), \
-                        model.forward(policy_type, tensor_data['params'], tensor_data['config'], tensor_data['image'])]]
+        results = [util.Result(None, policy_tuple, None, None, 0., None, None, q, image_data, None)]
+        data = parse_pickle_file(data=results)
+        dataset = PolicyDataset(data)
+        sample_disp = model.forward(policy_type,
+                                        dataset.tensors[0].unsqueeze(0),
+                                        dataset.configs[0].unsqueeze(0),
+                                        dataset.images[0])
+        samples.append(((policy_type, data[0]['params'], data[0]['config']), sample_disp))
 
-    (theta_max, q_max), max_output = max(samples, key=operator.itemgetter(1))
+    (policy_type, params_max, q_max), max_disp = max(samples, key=operator.itemgetter(1))
 
     # start optimization from here
     # assume you guessed the correct policy type, and optimize for params and configuration
-    x0 = np.array(theta_max, q_max)
-    res = minimize(fun=objective_func, x0=x0, args=(k_max, image, model),
+    x0 = np.array(params_max + [q_max])
+    res = minimize(fun=objective_func, x0=x0, args=(policy_type, dataset.images[0], model),
                 method='L-BFGS-B') #options={'eps': 10**-3})
     x_final = res['x']
 
     # test on busybox
-    policy_final = generate_policy(k_max, x_final[0])
-    config_final = x_final[1]
-    gripper.set_control_params(policy_final)
+    policy_final = policies.generate_policy(policy_type, x_final[:-1])
+    config_final = x_final[-1]
 
     # calculate trajectory
     p_handle_base_world = mech.get_pose_handle_base_world().p
-    traj = max_policy.generate_trajectory(p_handle_base_world, config_final, debug)
+    traj = policy_final.generate_trajectory(p_handle_base_world, config_final, debug)
 
     # execute trajectory
+    p.disconnect()
+    bb, gripper, image_data = setup_env(viz=True, debug=debug, bb=bb)
+    gripper.set_control_params(policy_final)
     gripper.execute_trajectory(traj, mech, debug=debug)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--viz', action='store_true')
     parser.add_argument('--debug', action='store_true')
-    parser.add_argument('--model-path', type=str)
     parser.add_argument('--model', choices=['pol', 'polvis'], default='pol')
     args = parser.parse_args()
 
     if args.debug:
         import pdb; pdb.set_trace()
 
-    test_random_env(args.model_path, args.model, args.viz, args.debug)
+    test_random_env(args.model, args.viz, args.debug)
