@@ -64,7 +64,7 @@ def test_random_env(model, viz, debug):
     x_final = res['x']
 
     # test on busybox
-    policy_final = policies.generate_policy(policy_type, x_final[:-1])
+    policy_final = policies.get_policy(policy_type, x_final[:-1])
     config_final = x_final[-1]
 
     # calculate trajectory

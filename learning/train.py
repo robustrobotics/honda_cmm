@@ -96,7 +96,11 @@ if __name__ == '__main__':
     parser.add_argument('--mode', choices=['ntrain', 'normal'], default='normal')
     parser.add_argument('--model', choices=['pol', 'polvis'], default='pol')
     parser.add_argument('--use-cuda', default=False, action='store_true')
+    parser.add_argument('--debug', action='store_true')
     args = parser.parse_args()
+
+    if args.debug:
+        import pdb; pdb.set_trace()
 
     if args.mode == 'normal':
         train_eval(args, 0, 'clean_data.pickle', pviz=True, use_cuda=args.use_cuda)
