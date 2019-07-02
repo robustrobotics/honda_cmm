@@ -29,7 +29,7 @@ class Policy(object):
         self.type = type
         self.p_delta = 0.01 if p_delta is None else p_delta
 
-    def generate_trajectory(self, p_handle_base_world, config_goal, debug=False):
+    def generate_trajectory(self, pose_handle_base_world, config_goal, debug=False):
         """ This method generates a trajectory of waypoints that the gripper tip should
         move through
         :param p_handle_base_world_init: util.Pose, initial pose of the base of the handle
@@ -37,7 +37,7 @@ class Policy(object):
         :param debug (optional): if True, display debug visualizations
         """
         # TODO: don't assume handle always starts at config = 0
-        config_curr = self._inverse_kinematics(p_handle_base_world, [0.0, 0.0, 0.0, 1.0])
+        config_curr = self._inverse_kinematics(*pose_handle_base_world)
         config_dir_unit = self._config_dir(config_curr, config_goal)
         config_delta = self.p_delta*config_dir_unit
 
@@ -194,7 +194,10 @@ class Revolute(Policy):
         return util.Pose(p_joint_world, q_joint_world)
 
     def _inverse_kinematics(self, p_joint_world, q_joint_world):
-        M_joint_world = util.pose_to_matrix(p_joint_world, q_joint_world)
+        # this is only used at the beginning of generate trajectory to get the initial
+        # configuration. for now hard code so starts at config=0 (when handle frame is
+        # aligned with rot center frame)
+        M_joint_world = util.pose_to_matrix(p_joint_world, self.rot_axis)
         M_joint_center = np.dot(np.linalg.inv(M_joint_world),self._M_center_world)
         # transformation from the radius in the center to the joint in the center
         M_radius_joint_center = np.dot(np.linalg.inv(self._M_radius_center),M_joint_center)
@@ -243,13 +246,15 @@ class Revolute(Policy):
     @staticmethod
     def _random(bb, mech, p_delta=None):
         """ This function generates a random Revolute policy. The ranges are
-        based on the data.generator range prismatic joints
+        based on the data.generator range revolute joints
         """
         rot_center = _random_p(bb)
-        p_handle_base_world = mech.get_pose_handle_base_world().p
-        rot_radius = np.subtract(p_handle_base_world, rot_center)
-        rot_axis = np.array([0.,0.,0.,1.])
-        rot_orientation = np.array([0.,0.,0.,1.])
+        rot_axis = util.random_quaternion()
+        pose_handle_base_world = mech.get_pose_handle_base_world()
+        p_handle_base_center_world = np.subtract(pose_handle_base_world.p, rot_center)
+        rot_radius = util.transformation(p_handle_base_center_world, [0.,0.,0.], rot_axis, inverse=True)
+        # assume no rotation between center frame and handle frame
+        rot_orientation = [0.,0.,0.,1.]
         return Revolute(rot_center, rot_axis, rot_radius, rot_orientation, p_delta)
 
 class Poke(Policy):

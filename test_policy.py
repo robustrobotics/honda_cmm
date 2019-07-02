@@ -28,8 +28,8 @@ def test_policy(viz=False, debug=False, max_mech=6, random_policy=False, k=None,
         pose_handle_world_init = p.getLinkState(bb.bb_id, mech.handle_id)[:2]
 
         # calculate trajectory
-        p_handle_base_world = mech.get_pose_handle_base_world().p
-        traj = policy.generate_trajectory(p_handle_base_world, config_goal, debug)
+        pose_handle_base_world = mech.get_pose_handle_base_world()
+        traj = policy.generate_trajectory(pose_handle_base_world, config_goal, debug)
 
         # execute trajectory
         waypoints_reached, duration, joint_motion, pose_handle_world_final = \
