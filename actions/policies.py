@@ -44,6 +44,8 @@ class Policy(object):
         poses = []
         for i in itertools.count():
             if self._past_goal_config(config_curr, config_goal, config_dir_unit):
+                pose_handle_base_world = self._forward_kinematics(config_goal)
+                poses += [pose_handle_base_world]
                 break
             pose_handle_base_world = self._forward_kinematics(config_curr)
             poses += [pose_handle_base_world]
