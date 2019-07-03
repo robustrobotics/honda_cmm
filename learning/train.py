@@ -33,7 +33,7 @@ def train_eval(args, n_train, data_file_name, model_file_name, pviz, use_cuda):
 
     best_val = 1000
     # Training loop.
-    for ex in range(args.n_epochs):
+    for ex in range(1,args.n_epochs+1):
         train_losses = []
         for bx, (k, x, q, im, y) in enumerate(train_set):
             if use_cuda:
@@ -110,7 +110,7 @@ if __name__ == '__main__':
         train_eval(args, 0, data_file_name, model_file_name, pviz=True, use_cuda=args.use_cuda)
     elif args.mode == 'ntrain':
         vals = []
-        ns = range(100, 1001, 100)
+        ns = range(100, 5001, 100)
         for n in ns:
             best_val = train_eval(args, n, data_file_name, model_file_name, pviz=False, use_cuda=args.use_cuda)
             vals.append(best_val)
