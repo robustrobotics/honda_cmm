@@ -4,7 +4,7 @@ import numpy as np
 from util import util
 import sys
 from util.util import Result
-from learning.test_model import SearchResult
+from learning.test_model import SearchResult, SampleResult
 
 class PlotFunc(object):
 
@@ -185,17 +185,18 @@ class SearchData(PlotFunc):
     def _plot(self, plot_data):
         data_bar = [[],[],[],[]]
 
-        for data_point in plot_data:
-            if data_point.mech_type == 'Door':
-                if data_point.policy_type == 'Revolute':
-                    data_bar[0] += [data_point.pred_motion]
-                if data_point.policy_type == 'Prismatic':
-                    data_bar[1] += [data_point.pred_motion]
-            if data_point.mech_type == 'Slider':
-                if data_point.policy_type == 'Revolute':
-                    data_bar[2] += [data_point.pred_motion]
-                if data_point.policy_type == 'Prismatic':
-                    data_bar[3] += [data_point.pred_motion]
+        for mechanism_samples in plot_data:
+            for sample in mechanism_samples.samples:
+                if mechanism_samples.mechanism.type == 'Door':
+                    if sample.policy.type == 'Revolute':
+                        data_bar[0] += [sample.pred_motion]
+                    if sample.policy.type == 'Prismatic':
+                        data_bar[1] += [sample.pred_motion]
+                if mechanism_samples.mechanism.type == 'Slider':
+                    if sample.policy.type == 'Revolute':
+                        data_bar[2] += [sample.pred_motion]
+                    if sample.policy.type == 'Prismatic':
+                        data_bar[3] += [sample.pred_motion]
         data_avg = [np.mean(p) for p in data_bar]
         plt.bar(range(4), data_avg)
         plt.xticks(range(4), ['Door, Revolute', 'Door, Prismatic', \
