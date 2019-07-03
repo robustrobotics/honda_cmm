@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from util import util
 import sys
+from util.util import Result
+from learning.test_model import SearchResult
 
 class PlotFunc(object):
 
@@ -170,9 +172,36 @@ class MechanismMotion(PlotFunc):
                                                         'Slider, Revolute', \
                                                         'Slider, Prismatic'])
         plt.xlabel('Motion')
-        plt.ylabel('Motion')
+        plt.ylabel('Frequency')
         plt.title('Motion of Mechanisms with Random Policies')
         plt.legend()
+
+class SearchData(PlotFunc):
+
+    @staticmethod
+    def description():
+        return 'Plot the average estimated motion for different mechanism-policy pairings'
+
+    def _plot(self, plot_data):
+        data_bar = [[],[],[],[]]
+
+        for data_point in plot_data:
+            if data_point.mech_type == 'Door':
+                if data_point.policy_type == 'Revolute':
+                    data_bar[0] += [data_point.pred_motion]
+                if data_point.policy_type == 'Prismatic':
+                    data_bar[1] += [data_point.pred_motion]
+            if data_point.mech_type == 'Slider':
+                if data_point.policy_type == 'Revolute':
+                    data_bar[2] += [data_point.pred_motion]
+                if data_point.policy_type == 'Prismatic':
+                    data_bar[3] += [data_point.pred_motion]
+        data_avg = [np.mean(p) for p in data_bar]
+        plt.bar(range(4), data_avg)
+        plt.xticks(range(4), ['Door, Revolute', 'Door, Prismatic', \
+                                'Slider, Revolute', 'Slider, Prismatic'])
+        plt.ylabel('Average Predicated Motion')
+        plt.title('Average Predicted Motion for '+str(len(plot_data)/10)+' Mechanism Images \nwith 10 Sample Points Each')
 
 def print_stats(data):
     stats = {}
@@ -190,7 +219,8 @@ def print_stats(data):
 
 def plot_results(file_name):
     data = util.read_from_file(file_name)
-    print_stats(data)
+    if type(data[0]) == Result:
+        print_stats(data)
 
     plot_funcs = PlotFunc.__subclasses__()
     for (i, func) in enumerate(plot_funcs):
