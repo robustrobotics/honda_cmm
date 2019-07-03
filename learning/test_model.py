@@ -16,9 +16,10 @@ import numpy as np
 import pybullet as p
 import pybullet_data
 from collections import namedtuple
+import sys
 
-SearchResult = namedtuple('SearchResult', 'mechanism samples')
-SampleResult = namedtuple('SampleResult', 'policy pred_motion')
+SearchResult = namedtuple('SearchResult', 'mechanism image_data samples start_sample end_sample')
+SampleResult = namedtuple('SampleResult', 'policy config_goal pred_motion')
 
 def objective_func(x, policy_type, image_tensor, model):
     return -model.forward(policy_type, torch.tensor([x[:-1]]).float(), torch.tensor([[x[-1]]]).float(), image_tensor)
@@ -45,10 +46,10 @@ def test_random_env(model, viz, debug):
                                         dataset.configs[0].unsqueeze(0),
                                         dataset.images[0].unsqueeze(0))
         samples.append(((policy_type, data[0]['params'], data[0]['config']), sample_disp))
-        sample_results.append(SampleResult(policy_tuple, sample_disp.detach().numpy()))
+        sample_results.append(SampleResult(policy_tuple, q, sample_disp.detach().numpy()))
 
     (policy_type_max, params_max, q_max), max_disp = max(samples, key=operator.itemgetter(1))
-
+    start_sample = SampleResult(policies.get_policy(policy_type_max, params_max).get_policy_tuple(), q_max, None)
     # start optimization from here
     # assume you guessed the correct policy type, and optimize for params and configuration
     x0 = np.array(params_max + [q_max])
@@ -57,18 +58,16 @@ def test_random_env(model, viz, debug):
     x_final = res['x']
 
     # test found policy on busybox
-    print('executing found policy')
     setup_env(bb, viz=viz, debug=debug)
     policy_final = policies.get_policy(policy_type_max, x_final[:-1])
+    end_sample = SampleResult(policy_final.get_policy_tuple(), x_final[-1], None)
     config_final = x_final[-1]
     pose_handle_base_world = mech.get_pose_handle_base_world()
-    print(policy_final.get_policy_tuple())
     traj = policy_final.generate_trajectory(pose_handle_base_world, config_final, True)
     gripper = Gripper(bb.bb_id)
     result = gripper.execute_trajectory(traj, mech, policy_type_max, False, debug=debug)
 
     # get what actual max disp is
-    print('executing model-based policy')
     setup_env(bb, viz=viz, debug=debug)
     policy_truth = policies.generate_model_based_policy(bb, mech)
     config_truth = policy_truth.generate_model_based_config(mech)
@@ -77,7 +76,7 @@ def test_random_env(model, viz, debug):
     gripper = Gripper(bb.bb_id)
     result_truth = gripper.execute_trajectory(traj, mech, policy_truth.type, False, debug=debug)
     p.disconnect()
-    return SearchResult(mech.get_mechanism_tuple(), sample_results)
+    return SearchResult(mech.get_mechanism_tuple(), image_data, sample_results, start_sample, end_sample)
 
 def test_random_envs(n_test, model_type, file_name, viz, debug, use_cuda):
     if model_type == 'pol':
@@ -99,8 +98,10 @@ def test_random_envs(n_test, model_type, file_name, viz, debug, use_cuda):
     model.eval()
 
     search_results = []
-    for _ in range(n_test):
+    for i in range(n_test):
+        sys.stdout.write("\rProcessing mechanism %i/%i" % (i+1, n_test))
         search_results.append(test_random_env(model, viz, debug))
+    print()
     return search_results
 
 if __name__ == '__main__':
@@ -109,16 +110,16 @@ if __name__ == '__main__':
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--model-type', choices=['pol', 'polvis'], default='pol')
     parser.add_argument('--n-test', type=int, default=10)
-    parser.add_argument('--fname', type=str) # model file
-    parser.add_argument('--save-search', action='store_true')
+    parser.add_argument('--model-fname', type=str)
+    parser.add_argument('--results-fname', type=str)
     parser.add_argument('--use-cuda', default=False)
     args = parser.parse_args()
 
     if args.debug:
         import pdb; pdb.set_trace()
 
-    file_name = args.fname + '.pt'
+    file_name = args.model_fname + '.pt'
     search_results = test_random_envs(args.n_test, args.model_type, file_name, args.viz, args.debug, args.use_cuda)
 
-    if args.save_search:
-        util.write_to_file('data/search_results', search_results)
+    if args.results_fname:
+        util.write_to_file(args.results_fname, search_results)
