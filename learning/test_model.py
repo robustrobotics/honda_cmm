@@ -57,20 +57,23 @@ def test_random_env(model, viz, debug):
     x_final = res['x']
 
     # test found policy on busybox
+    print('executing found policy')
+    setup_env(bb, viz=viz, debug=debug)
     policy_final = policies.get_policy(policy_type_max, x_final[:-1])
     config_final = x_final[-1]
     pose_handle_base_world = mech.get_pose_handle_base_world()
-    traj = policy_final.generate_trajectory(pose_handle_base_world, config_final, debug)
-    setup_env(bb, viz=viz, debug=debug)
+    print(policy_final.get_policy_tuple())
+    traj = policy_final.generate_trajectory(pose_handle_base_world, config_final, True)
     gripper = Gripper(bb.bb_id)
     result = gripper.execute_trajectory(traj, mech, policy_type_max, debug=debug)
 
     # get what actual max disp is
+    print('executing model-based policy')
+    setup_env(bb, viz=viz, debug=debug)
     policy_truth = policies.generate_model_based_policy(bb, mech)
     config_truth = policy_truth.generate_model_based_config(mech)
     pose_handle_base_world = mech.get_pose_handle_base_world()
-    traj = policy_truth.generate_trajectory(pose_handle_base_world, config_truth, debug)
-    setup_env(bb, viz=viz, debug=debug)
+    traj = policy_truth.generate_trajectory(pose_handle_base_world, config_truth, True)
     gripper = Gripper(bb.bb_id)
     result_truth = gripper.execute_trajectory(traj, mech, policy_truth.type, debug=debug)
     p.disconnect()
