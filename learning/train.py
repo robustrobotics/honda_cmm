@@ -78,11 +78,12 @@ def train_eval(args, n_train, data_file_name, model_file_name, pviz, use_cuda):
                 yhats += yhat.detach().numpy().tolist()
 
             if pviz:
-                viz.plot_y_yhat(ys, yhats, types, title='ImageOnly')
+                viz.plot_y_yhat(ys, yhats, types, title='PolVis')
 
             print('[Epoch {}] - Validation Loss: {}'.format(ex, np.mean(val_losses)))
             if np.mean(val_losses) < best_val:
                 best_val = np.mean(val_losses)
+    model_file_name = model_file_name + '_' + str(n) + '.pt'
     torch.save(net.state_dict(), model_file_name)
     return best_val
 
@@ -105,14 +106,14 @@ if __name__ == '__main__':
         import pdb; pdb.set_trace()
 
     data_file_name = args.data_fname + '.pickle'
-    model_file_name = args.model_fname + '.pt'
+    #model_file_name = args.model_fname + '.pt'
     if args.mode == 'normal':
-        train_eval(args, 0, data_file_name, model_file_name, pviz=True, use_cuda=args.use_cuda)
+        train_eval(args, 0, data_file_name, args.model_fname, pviz=True, use_cuda=args.use_cuda)
     elif args.mode == 'ntrain':
         vals = []
-        ns = range(100, 5001, 100)
+        ns = range(500, 10001, 500)
         for n in ns:
-            best_val = train_eval(args, n, data_file_name, model_file_name, pviz=False, use_cuda=args.use_cuda)
+            best_val = train_eval(args, n, data_file_name, args.model_fname, pviz=False, use_cuda=args.use_cuda)
             vals.append(best_val)
             print(n, best_val)
 
