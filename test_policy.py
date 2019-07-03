@@ -33,7 +33,7 @@ def test_policy(viz=False, debug=False, max_mech=6, random_policy=False, k=None,
 
         # execute trajectory
         waypoints_reached, duration, joint_motion, pose_handle_world_final = \
-                gripper.execute_trajectory(traj, mech, policy.type, debug=debug)
+                gripper.execute_trajectory(traj, mech, policy.type, random_policy, debug=debug)
 
         # save result data
         control_params = util.ControlParams(gripper.k, gripper.d, gripper.add_dist, gripper.p_err_thresh, policy.p_delta)

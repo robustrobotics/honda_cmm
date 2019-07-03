@@ -65,7 +65,7 @@ def test_random_env(model, viz, debug):
     print(policy_final.get_policy_tuple())
     traj = policy_final.generate_trajectory(pose_handle_base_world, config_final, True)
     gripper = Gripper(bb.bb_id)
-    result = gripper.execute_trajectory(traj, mech, policy_type_max, debug=debug)
+    result = gripper.execute_trajectory(traj, mech, policy_type_max, False, debug=debug)
 
     # get what actual max disp is
     print('executing model-based policy')
@@ -75,7 +75,7 @@ def test_random_env(model, viz, debug):
     pose_handle_base_world = mech.get_pose_handle_base_world()
     traj = policy_truth.generate_trajectory(pose_handle_base_world, config_truth, True)
     gripper = Gripper(bb.bb_id)
-    result_truth = gripper.execute_trajectory(traj, mech, policy_truth.type, debug=debug)
+    result_truth = gripper.execute_trajectory(traj, mech, policy_truth.type, False, debug=debug)
     p.disconnect()
     return SearchResult(mech.get_mechanism_tuple(), sample_results)
 
