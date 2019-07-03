@@ -78,6 +78,14 @@ def read_from_file(file_name):
         print('successfully read in '+fname)
     return data
 
+def merge_files(in_file_names, out_file_name):
+    results = []
+    for file_name in in_file_names:
+        result = read_from_file(file_name)
+        results += result
+    write_to_file(out_file_name, results)
+    return results
+
 def vis_frame(pos, quat, length=0.2, lifeTime=0.4):
     """ This function visualizes a coordinate frame for the supplied frame where the
     red,green,blue lines correpsond to the x,y,z axes.
@@ -207,3 +215,8 @@ def pose_to_matrix(point, q):
 def quaternion_from_matrix(matrix, isprecise=False):
     trans_q = trans.quaternion_from_matrix(matrix)
     return to_pyquat(trans_q)
+
+if __name__ == '__main__':
+    in_names = ['data/random_0_5000', 'data/random_1_5000']
+    out_name = 'data/random_10000'
+    merge_files(in_names, out_name)
