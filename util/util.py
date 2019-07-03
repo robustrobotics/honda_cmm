@@ -69,7 +69,7 @@ def write_to_file(file_name, data):
     fname = file_name + '.pickle'
     with open(fname, 'wb') as handle:
         pickle.dump(data, handle)
-    print('\nwrote dataset to '+fname)
+    print('wrote dataset to '+fname)
 
 def read_from_file(file_name):
     fname = file_name + '.pickle'
@@ -217,6 +217,6 @@ def quaternion_from_matrix(matrix, isprecise=False):
     return to_pyquat(trans_q)
 
 if __name__ == '__main__':
-    in_names = ['data/random_0_5000', 'data/random_1_5000']
-    out_name = 'data/random_10000'
+    in_names = ['data/datasets/clean_0_5000', 'data/datasets/clean_1_5000']
+    out_name = 'data/datasets/clean_10000'
     merge_files(in_names, out_name)
