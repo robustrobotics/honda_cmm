@@ -4,6 +4,7 @@ import pickle
 import util.transformations as trans
 import math
 from collections import namedtuple
+import os
 
 Pose = namedtuple('Pose', 'p q')
 """
@@ -65,6 +66,11 @@ class Recorder(object):
             pickle.dump(self.frames, handle)
 
 def write_to_file(file_name, data):
+    # make directory if doesn't exist
+    dir = '/'.join(file_name.split('/')[:-1])
+    if not os.path.isdir(dir):
+        os.mkdir(dir)
+
     # save to pickle
     with open(file_name, 'wb') as handle:
         pickle.dump(data, handle)

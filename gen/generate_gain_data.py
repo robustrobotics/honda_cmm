@@ -37,7 +37,7 @@ if __name__ == '__main__':
     parser.add_argument('--viz', action='store_true')
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--n-samples', type=int, default=5)
-    parser.add_argument('--fname', type=str, required=True) # give filename (without .pickle)
+    parser.add_argument('--fname', type=str, required=True) # give filename
     # if running multiple tests, give then a urdf_num so correct urdf read from/written to
     parser.add_argument('--urdf-num', type=int, default=0)
     args = parser.parse_args()
