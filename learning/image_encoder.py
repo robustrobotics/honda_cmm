@@ -39,7 +39,6 @@ class ImageEncoder(nn.Module):
             W = int((W - (2 - 1) - 1)/2.0 + 1)
 
         self.lin_input = H*W*hdim
-        print('lin_input:', self.lin_input)
         self.fc1 = nn.Linear(self.lin_input, hdim)
         self.fc2 = nn.Linear(hdim, hdim)
         self.RELU = nn.ReLU()

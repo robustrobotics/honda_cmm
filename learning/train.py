@@ -83,7 +83,7 @@ def train_eval(args, n_train, data_file_name, model_file_name, pviz, use_cuda):
             print('[Epoch {}] - Validation Loss: {}'.format(ex, np.mean(val_losses)))
             if np.mean(val_losses) < best_val:
                 best_val = np.mean(val_losses)
-    model_file_name = model_file_name + '_' + str(n) + '.pt'
+    model_file_name = '/data/models/'+model_file_name[:-3]+'_'+str(n_train)+'.pt'
     torch.save(net.state_dict(), model_file_name)
     return best_val
 
@@ -95,25 +95,27 @@ if __name__ == '__main__':
     parser.add_argument('--n-epochs', type=int, default=10)
     parser.add_argument('--val-freq', type=int, default=5)
     parser.add_argument('--mode', choices=['ntrain', 'normal'], default='normal')
-    parser.add_argument('--model', choices=['pol', 'polvis'], default='pol')
+    parser.add_argument('--model', choices=['pol', 'polvis'], default='polvis')
     parser.add_argument('--use-cuda', default=False, action='store_true')
     parser.add_argument('--debug', action='store_true')
-    parser.add_argument('--data-fname', type=str)
-    parser.add_argument('--model-fname', type=str)
+    parser.add_argument('--data-fname', type=str, required=True) # ending in .pickle in data/datasets
+    parser.add_argument('--model-fname', type=str, required=True) # ending in .pt
+    parser.add_argument('--ntrain', type=int, default=0)
     args = parser.parse_args()
 
     if args.debug:
         import pdb; pdb.set_trace()
 
-    data_file_name = args.data_fname + '.pickle'
-    #model_file_name = args.model_fname + '.pt'
+    data_file_name = args.data_fname
+
     if args.mode == 'normal':
-        train_eval(args, 0, data_file_name, args.model_fname, pviz=True, use_cuda=args.use_cuda)
+        train_eval(args, args.ntrain, data_file_name, args.model_fname, True, args.use_cuda)
     elif args.mode == 'ntrain':
         vals = []
-        ns = range(500, 10001, 500)
+        step = 500
+        ns = range(step, args.ntrain, step)
         for n in ns:
-            best_val = train_eval(args, n, data_file_name, args.model_fname, pviz=False, use_cuda=args.use_cuda)
+            best_val = train_eval(args, n, data_file_name, args.model_fname, False, args.use_cuda)
             vals.append(best_val)
             print(n, best_val)
 

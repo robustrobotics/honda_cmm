@@ -66,16 +66,14 @@ class Recorder(object):
 
 def write_to_file(file_name, data):
     # save to pickle
-    fname = file_name + '.pickle'
-    with open(fname, 'wb') as handle:
+    with open(file_name, 'wb') as handle:
         pickle.dump(data, handle)
-    print('wrote dataset to '+fname)
+    print('wrote dataset to '+file_name)
 
 def read_from_file(file_name):
-    fname = file_name + '.pickle'
-    with open(fname, 'rb') as handle:
+    with open(file_name, 'rb') as handle:
         data = pickle.load(handle)
-        print('successfully read in '+fname)
+        print('successfully read in '+file_name)
     return data
 
 def merge_files(in_file_names, out_file_name):
