@@ -1,6 +1,10 @@
-pybullet==2.3.2
 numpy==1.16.3
+pybullet==2.3.2
 aabbtree==2.3.1
 catkin-pkg==0.4.12
--e git+git://github.com/hauptmech/odio_urdf.git#egg=odio_urdf
+gitpython
+git+git://github.com/hauptmech/odio_urdf.git#egg=odio_urdf
 opencv-python==4.1.0.25
+torch==1.1.0
+torchvision==0.3.0
+matplotlib==3.0.2

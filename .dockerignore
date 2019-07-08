@@ -1,0 +1,6 @@
+# randomly generated URDFs
+models/*.urdf
+
+# generated pickle files
+/data/models
+/data/search
