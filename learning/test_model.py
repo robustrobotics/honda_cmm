@@ -108,8 +108,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--viz', action='store_true')
     parser.add_argument('--debug', action='store_true')
-    parser.add_argument('--model-type', choices=['pol', 'polvis'], default='pol')
-    parser.add_argument('--n-test', type=int, default=10)
+    parser.add_argument('--model-type', choices=['pol', 'polvis'], default='polvis')
+    parser.add_argument('--n-test', type=int, default=10) # how many mechanisms do you want to test
     parser.add_argument('--model-fname', type=str)
     parser.add_argument('--results-fname', type=str)
     parser.add_argument('--use-cuda', default=False)

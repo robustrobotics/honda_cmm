@@ -164,7 +164,10 @@ class MechanismMotion(PlotFunc):
                 else:
                     data_hist[key] = []
 
-        plt.hist(data_hist.values(), 20, histtype='bar', label=data_hist.keys())
+        colors = {'Slider, Prismatic': 'blue', 'Slider, Revolute': 'orange', \
+                    'Door, Prismatic': 'green', 'Door, Revolute': 'red'}
+        ordered_colors = [colors[key] for key in data_hist.keys()]
+        plt.hist(data_hist.values(), 20, histtype='bar', label=data_hist.keys(), color=ordered_colors)
         plt.xlabel('Motion')
         plt.ylabel('Frequency')
         plt.title('Motion of Mechanisms')
@@ -262,7 +265,6 @@ class SearchData(PlotFunc):
         # show image of mechanism is one of the subplots
         ax30.imshow(results.image_data[2])
 
-        #ax.set_title('Predicted Motion for Sampled Policies')
         ax_left.set_title('Prismatic Policies')
         ax_left.set_ylabel('Predicted Motion')
         ax_right.set_title('Revolute Policies')
