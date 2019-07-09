@@ -5,7 +5,7 @@ from util import util
 import sys
 from util.util import Result
 from learning.test_model import SearchResult, SampleResult
-from actions.policies import PrismaticParams, RevoluteParams
+from actions.policies import PrismaticParams, RevoluteParams, get_policy_params
 
 class PlotFunc(object):
 
@@ -223,13 +223,12 @@ class SearchData(PlotFunc):
         ax30.tick_params(labelcolor='w', top=False, bottom=False, left=False, right=False)
 
         for sample in results.samples:
+            plot_data = get_policy_params(sample.policy)
             if sample.policy.type == 'Prismatic':
-                plot_data = self._prism_data(sample.policy)
                 ax00.plot(sample.config_goal, sample.pred_motion, '.k')
                 ax10.plot(plot_data[0], sample.pred_motion, '.k')
                 ax20.plot(plot_data[1], sample.pred_motion, '.k')
             if sample.policy.type == 'Revolute':
-                plot_data = self._rev_data(sample.policy)
                 ax01.plot(sample.config_goal, sample.pred_motion, '.k')
                 ax11.plot(plot_data[0], sample.pred_motion, '.k')
                 ax21.plot(plot_data[1], sample.pred_motion, '.k')
@@ -238,12 +237,12 @@ class SearchData(PlotFunc):
         # plot initial search sample
         ys = [0,.11]
         if results.start_sample.policy.type == 'Prismatic':
-            plot_data = self._prism_data(results.start_sample.policy)
+            plot_data = get_policy_params(results.start_sample.policy)
             ax00.plot([results.start_sample.config_goal, results.start_sample.config_goal], ys, 'r')
             ax10.plot([plot_data[0], plot_data[0]], ys, 'r')
             ax20.plot([plot_data[1], plot_data[1]], ys, 'r')
         if results.start_sample.policy.type == 'Revolute':
-            plot_data = self._rev_data(results.start_sample.policy)
+            plot_data = get_policy_params(results.start_sample.policy)
             ax01.plot([results.start_sample.config_goal, results.start_sample.config_goal], ys, 'r')
             ax11.plot([plot_data[0], plot_data[0]], ys, 'r')
             ax21.plot([plot_data[1], plot_data[1]], ys, 'r')
@@ -251,12 +250,12 @@ class SearchData(PlotFunc):
 
         # plot final search sample
         if results.end_sample.policy.type == 'Prismatic':
-            plot_data = self._prism_data(results.end_sample.policy)
+            plot_data = get_policy_params(results.end_sample.policy)
             ax00.plot([results.end_sample.config_goal, results.end_sample.config_goal], ys, 'g--')
             ax10.plot([plot_data[0], plot_data[0]], ys, 'g--')
             ax20.plot([plot_data[1], plot_data[1]], ys, 'g--')
         if results.end_sample.policy.type == 'Revolute':
-            plot_data = self._rev_data(results.end_sample.policy)
+            plot_data = get_policy_params(results.end_sample.policy)
             ax01.plot([results.end_sample.config_goal, results.end_sample.config_goal], ys, 'g--')
             ax11.plot([plot_data[0], plot_data[0]], ys, 'g--')
             ax21.plot([plot_data[1], plot_data[1]], ys, 'g--')
@@ -276,19 +275,6 @@ class SearchData(PlotFunc):
         ax11.set_xlabel('Radius')
         ax21.set_xlabel('Roll')
         ax31.set_xlabel('Pitch')
-
-    def _prism_data(self, policy):
-        dir = policy.params.prismatic_dir
-        proj_x_z = [dir[0], 0., dir[2]]
-        roll = util.trans.angle_between_vectors([0.,0.,1.], proj_x_z, directed=False)
-        proj_y_z = [0., dir[1], dir[2]]
-        pitch = util.trans.angle_between_vectors([0.,0.,1.], proj_y_z, directed=False)
-        return roll, pitch
-
-    def _rev_data(self, policy):
-        radius = np.linalg.norm(policy.params.rot_radius)
-        roll, pitch, yaw = util.euler_from_quaternion(policy.params.rot_axis)
-        return radius, roll, pitch
 
 def print_stats(data):
     stats = {}

@@ -136,6 +136,14 @@ class Prismatic(Policy):
         prim_params = PrismaticParams(self.rigid_position, self.rigid_orientation, self.prismatic_dir)
         return PolicyParams(self.type, prim_params)
 
+    @staticmethod
+    def get_policy_params(prismatic_dir):
+        proj_x_z = [prismatic_dir[0], 0., prismatic_dir[2]]
+        roll = util.trans.angle_between_vectors([0.,0.,1.], proj_x_z, directed=False)
+        proj_y_z = [0., prismatic_dir[1], prismatic_dir[2]]
+        pitch = util.trans.angle_between_vectors([0.,0.,1.], proj_y_z, directed=False)
+        return roll, pitch
+
     def _draw_traj(self, traj):
         for i in range(len(traj)-1):
             # raise so can see above track
@@ -233,15 +241,20 @@ class Revolute(Policy):
             p.addUserDebugLine(traj[i].p, traj[i+1].p)
 
     @staticmethod
+    def get_policy_params(rot_radius, rot_axis):
+        radius = np.linalg.norm(rot_radius)
+        roll, pitch, yaw = util.euler_from_quaternion(rot_axis)
+        return radius, roll, pitch
+
+    @staticmethod
     def _model(bb, mech, p_delta=None):
         """ This function generates a Revolute policy from the mechanism model
         """
         rot_center = p.getLinkState(bb.bb_id, mech.door_base_id)[0]
-        p_handle_base_world = mech.get_pose_handle_base_world().p
-        # TODO: i think the rot_radius needs to be in the rot_center frame (rot_axis)
-        #       currently it is in the world frame
-        rot_radius = np.subtract(p_handle_base_world, rot_center)
         rot_axis = [0., 0., 0., 1.]
+        p_handle_base_world = mech.get_pose_handle_base_world().p
+        rot_radius_world = np.subtract(p_handle_base_world, rot_center)
+        rot_radius = util.transformation(rot_radius_world, [0.,0.,0.], rot_axis, inverse=True)
         rot_orientation = [0., 0., 0., 1.]
         return Revolute(rot_center, rot_axis, rot_radius, rot_orientation, p_delta)
 
@@ -287,6 +300,16 @@ def get_policy(type, params):
         return Revolute(params[:3], params[3:7], params[7:10], params[10:14])
     if type == 'Prismatic':
         return Prismatic(params[:3], params[3:7], params[7:10])
+
+def get_policy_params(policy):
+    if isinstance(policy, Prismatic):
+        return Prismatic.get_policy_params(policy.prismatic_dir)
+    elif isinstance(policy, PolicyParams) and policy.type=='Prismatic':
+        return Prismatic.get_policy_params(policy.params.prismatic_dir)
+    if isinstance(policy, Revolute):
+        return Revolute.get_policy_params(policy.rot_radius, policy.rot_axis)
+    elif isinstance(policy, PolicyParams) and policy.type=='Revolute':
+        return Revolute.get_policy_params(policy.params.rot_radius, policy.params.rot_axis)
 
 ## Helper Functions
 def _random_p(bb):
