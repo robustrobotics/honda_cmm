@@ -21,6 +21,5 @@ RUN xargs -n1 pip3 install --trusted-host pypi.python.org < requirements.txt
 VOLUME /honda_cmm
 
 # run with the following command
-# docker run --runtime=nvidia -itv $(pwd):/honda_cmm IMAGE bash
+# docker run --runtime=nvidia -itv PATH_TO_HONDA_CMM_REPO:/honda_cmm IMAGE bash
 # if in honda_cmm directory, can replace PATH_TO_HONDA_CMM_REPO with $(pwd)
-
