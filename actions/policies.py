@@ -120,11 +120,11 @@ class Prismatic(Policy):
         return np.dot(self.prismatic_dir, p_joint_origin)
 
     @staticmethod
-    def generate_model_based_config(mech, random=False):
-        if random:
-            return np.random.uniform(-mech.range/2.0, mech.range/2.0)
-        else:
+    def generate_model_based_config(mech, go_to_limit=False):
+        if go_to_limit:
             return np.random.choice([-mech.range/2.0, mech.range/2.0])
+        else:
+            return np.random.uniform(-mech.range, mech.range)
 
     def generate_random_config(self):
         """ This function generates a random prismatic joint configuration. The range is
