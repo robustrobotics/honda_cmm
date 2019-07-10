@@ -142,7 +142,6 @@ class Slider(Mechanism):
         self.handle_name = slider_handle_name
         self.track_name = slider_track_name
         self.handle_id = None
-        self.track_id = None
         self.bb_id = None
         self.origin = (x_offset, z_offset)
         self.range = range
@@ -406,10 +405,6 @@ class BusyBox(object):
                     break
                 if mech.mechanism_type == 'Door' and mech.door_base_name == link_name.decode("utf-8"):
                     mech.door_base_id = joint_info[0]
-                    set = True
-                    break
-                if mech.mechanism_type == 'Slider' and mech.track_name == link_name.decode("utf-8"):
-                    mech.track_id = joint_info[0]
                     set = True
                     break
         self.bb_id = bb_id
