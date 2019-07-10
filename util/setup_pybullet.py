@@ -1,6 +1,8 @@
 import pybullet as p
 import pybullet_data
 from util import util
+import numpy as np
+from gen.generator_busybox import Slider, Door, BusyBox
 
 def setup_env(bb, viz=False, debug=False):
 
@@ -50,21 +52,35 @@ def setup_env(bb, viz=False, debug=False):
     farPlane = 100
     fov = 60
     projection_matrix = p.computeProjectionMatrixFOV(fov, aspect, nearPlane, farPlane)
-
-    image_data_pybullet = p.getCameraImage(205, 154, shadow=0, renderer=p.ER_TINY_RENDERER, viewMatrix=view_matrix, projectionMatrix=projection_matrix)  # do before add gripper to world
+    # do before add gripper to world
+    image_data_pybullet = p.getCameraImage(205, 154, shadow=0, renderer=p.ER_TINY_RENDERER, viewMatrix=view_matrix, projectionMatrix=projection_matrix)
     image_data = util.ImageData(*image_data_pybullet[:3])
 
     p.stepSimulation()
     return image_data
 
-def custom_bb():
+def custom_bb_door():
     """ Generate a custom BusyBox environment
     """
     bb_width = 0.8
     bb_height = 0.4
-    door_offset = (.075, -0.09)
+    door_offset = (0.0, 0.0)
     door_size = (0.15, 0.15)
-    handle_offset = -0.15/2 +.015
+    handle_offset = 0.0
     flipped = True
     door = Door(door_offset, door_size, handle_offset, flipped, color=[1,0,0])
     return BusyBox.get_busybox(bb_width, bb_height, [door])
+
+def custom_bb_slider():
+    """ Generate a custom BusyBox environment
+    """
+    bb_width = 0.8
+    bb_height = 0.4
+    x_offset = 0.0
+    z_offset = 0.0
+    range = 0.3
+    angle = np.pi/4
+    axis = (np.cos(angle), np.sin(angle))
+    color = [1,0,0]
+    slider = Slider(x_offset, z_offset, range, axis, color)
+    return BusyBox.get_busybox(bb_width, bb_height, [slider])
