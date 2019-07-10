@@ -179,6 +179,7 @@ class Slider(Mechanism):
         color = (np.random.uniform(0, 1),
                  np.random.uniform(0, 1),
                  np.random.uniform(0, 1))
+        color = (1, 0, 0)
         return Slider(x_offset, z_offset, range, axis, color, bb_thickness)
 
 
@@ -442,7 +443,7 @@ class BusyBox(object):
             return False
 
     @staticmethod
-    def generate_random_busybox(min_mech=1, max_mech=6, mech_types=[Slider, Door], n_tries=25, urdf_tag='', debug=False):
+    def generate_random_busybox(min_mech=1, max_mech=6, mech_types=[Slider, Door], n_tries=10, urdf_tag='', debug=False):
         """
         :param min_mech: int, The minimum number of mechanisms to be included on the busybox.
         :param max_mech: int, The maximum number of classes to be included on the busybox.
@@ -453,6 +454,7 @@ class BusyBox(object):
         # Sample busybox dimensions.
         width = np.random.uniform(0.4, 0.8)
         height = np.random.uniform(0.2, 0.4)
+        width, height = 0.6, 0.3
         bb_thickness = 0.05
 
         # Sample number of mechanisms.
