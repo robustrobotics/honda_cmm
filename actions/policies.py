@@ -222,7 +222,7 @@ class Revolute(Policy):
     def get_policy_tuple(self):
         rev_params = RevoluteParams(self.rot_center, self.rot_axis_roll, \
                         self.rot_axis_pitch, self.rot_radius, self.rot_orientation)
-        delta_values = RevoluteDelta(self.delta_roll, self.delta_yaw, self.delta_radius_x, \
+        delta_values = RevoluteDelta(self.delta_roll, self.delta_pitch, self.delta_radius_x, \
                         self.delta_radius_z)
         return PolicyParams(self.type, rev_params, delta_values)
 

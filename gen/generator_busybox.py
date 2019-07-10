@@ -477,7 +477,7 @@ class BusyBox(object):
                     print('generated a Busybox with no Mechanisms')
                 continue
 
-        bb_file = 'models/busybox' + urdf_tag + '.urdf'
+        bb_file = 'models/busybox' + str(urdf_tag) + '.urdf'
         bb = BusyBox(width, height, mechs, bb_thickness, bb_file)
 
         with open(bb_file, 'w') as handle:
