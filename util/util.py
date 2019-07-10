@@ -104,6 +104,15 @@ def vis_frame(pos, quat, length=0.2, lifeTime=0.4):
     p.addUserDebugLine(pos, new_y, [0,1,0], lifeTime=lifeTime)
     p.addUserDebugLine(pos, new_z, [0,0,1], lifeTime=lifeTime)
 
+def pause():
+    try:
+        print('press any key to continue execution')
+        while True:
+            p.stepSimulation()
+    except KeyboardInterrupt:
+        print('trying to exit')
+        return
+
 def skew_symmetric(vec):
     """ Calculates the skew-symmetric matrix of the supplied 3 dimensional vector
     """
@@ -221,7 +230,7 @@ def quaternion_from_matrix(matrix, isprecise=False):
     return to_pyquat(trans_q)
 
 def quaternion_from_euler(roll, pitch, yaw):
-    trans_q = trans.quaternion_from_euler(roll, pitch, yaw)
+    trans_q = trans.quaternion_from_euler(roll, pitch, yaw, 'rxyz')
     return to_pyquat(trans_q)
 
 if __name__ == '__main__':
