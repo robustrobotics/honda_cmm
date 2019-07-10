@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from learning.policy_encoder import PolicyEncoder
-from learning.image_encoder import ImageEncoder, PoseCNN, ImageEncoderOrig
+from learning.image_encoder import ImageEncoder
 
 
 class DistanceRegressor(nn.Module):

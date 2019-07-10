@@ -39,7 +39,7 @@ class ImageEncoder(nn.Module):
             W = int((W - (2 - 1) - 1)/2.0 + 1)
 
         # I am currently just running the network to see what this size should be.
-        self.lin_input = self.hdim*3*11  #   H*W*hdim
+        self.lin_input = hdim*3*11  #   H*W*hdim
         self.fc1 = nn.Linear(self.lin_input, hdim)
         self.fc2 = nn.Linear(hdim, hdim)
         self.RELU = nn.ReLU()
