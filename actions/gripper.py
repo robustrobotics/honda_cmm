@@ -231,7 +231,7 @@ class Gripper:
             self.k = [2000.0,20.0]
         if policy_type == 'Prismatic':
             if not random:
-                self.k = [200.0,20.0]
+                self.k = [800.0,20.0]
 
     def execute_trajectory(self, traj, mech, policy_type, random, debug=False, callback=None, bb=None):
         self.set_control_params(policy_type, random)
