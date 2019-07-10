@@ -59,7 +59,7 @@ class Recorder(object):
 def write_to_file(file_name, data):
     # make directory if doesn't exist
     dir = '/'.join(file_name.split('/')[:-1])
-    if not os.path.isdir(dir):
+    if not os.path.isdir(dir) and dir !='':
         os.mkdir(dir)
 
     # save to pickle
