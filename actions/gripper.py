@@ -1,7 +1,6 @@
 import pybullet as p
 import numpy as np
 from util import util
-import time
 from collections import namedtuple
 import itertools
 import sys
@@ -41,7 +40,7 @@ _M - matrix form of a pose/transformation
 """
 
 class Gripper:
-    def __init__(self, bb_id, k=None, d=None, add_dist=None, p_err_thresh=None):
+    def __init__(self, bb_id, k=[2000.0,20.0], d=[0.45,0.45], add_dist=0.1, p_err_thresh=0.005):
         """
         This class defines the actions a gripper can take such as grasping a handle
         and executing PD control
@@ -71,10 +70,10 @@ class Gripper:
         self._mass = mass
 
         # control parameters
-        self.k = [2000.0,20.0] if k is None else k
-        self.d = [0.45,0.45] if d is None else d
-        self.add_dist = 0.1 if add_dist is None else add_dist
-        self.p_err_thresh = 0.005 if p_err_thresh is None else p_err_thresh
+        self.k = k
+        self.d = d
+        self.add_dist = add_dist
+        self.p_err_thresh = p_err_thresh
 
     def _get_p_tip_world(self):
         p_left_world = p.getLinkState(self._id, self._left_finger_tip_id)[0]
@@ -232,7 +231,7 @@ class Gripper:
         if policy_type == 'Prismatic':
             self.k = [800.0,20.0]
 
-    def execute_trajectory(self, traj, mech, policy_type, debug=False, callback=None, bb=None, logger=None):
+    def execute_trajectory(self, traj, mech, policy_type, debug):
         self.set_control_params(policy_type)
 
         # initial grasp pose
@@ -245,7 +244,6 @@ class Gripper:
         q_offset = util.quat_math(traj[0].q, pose_handle_base_world.q, True, False)
 
         self._grasp_handle(pose_tip_world_init, debug)
-        start_time = time.time()
         joint_motion = 0.0
         prev_pose_handle_base_world_des = None
         for (i, pose_handle_base_world_des) in enumerate(traj):
@@ -259,11 +257,8 @@ class Gripper:
                     p.addUserDebugLine(handle_base_ps[j], handle_base_ps[j+1], [0,0,1])
             if not finished:
                 break
-            if not callback is None:
-                callback(bb)
-        duration = np.subtract(time.time(), start_time)
         if self._in_contact(mech):
             pose_handle_world_final = util.Pose(*p.getLinkState(self._bb_id, mech.handle_id)[:2])
         else:
             pose_handle_world_final = None
-        return np.divide(i+1,len(traj)), duration, joint_motion, pose_handle_world_final
+        return joint_motion, pose_handle_world_final

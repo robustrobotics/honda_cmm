@@ -4,7 +4,7 @@ from util import util
 import numpy as np
 from gen.generator_busybox import Slider, Door, BusyBox
 
-def setup_env(bb, viz=False, debug=False):
+def setup_env(bb, viz, debug):
 
     # disconnect if already connected (may want to change viz from False to True)
     if p.getConnectionInfo()['isConnected']:
@@ -52,7 +52,6 @@ def setup_env(bb, viz=False, debug=False):
     farPlane = 100
     fov = 60
     projection_matrix = p.computeProjectionMatrixFOV(fov, aspect, nearPlane, farPlane)
-    # do before add gripper to world
     image_data_pybullet = p.getCameraImage(205, 154, shadow=0, renderer=p.ER_TINY_RENDERER, viewMatrix=view_matrix, projectionMatrix=projection_matrix)
     image_data = util.ImageData(*image_data_pybullet[:3])
 

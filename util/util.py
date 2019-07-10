@@ -13,21 +13,22 @@ Pose represents an SE(3) pose
 :param q: a vector of length 4, representing an (x,y,z,w) quaternion
 """
 
-Result = namedtuple('Result', 'control_params policy_params mechanism_params waypoints_reached \
-                        motion pose_joint_world_init pose_joint_world_final config_goal image_data git_hash')
+Result = namedtuple('Result', 'policy_params mechanism_params motion \
+                        pose_joint_world_init pose_joint_world_final config_goal \
+                        image_data git_hash randomness')
 """
 Result contains the performance information after the gripper tries to move a mechanism
-:param control_params: util.util.ControlParams
 :param policy_params: actions.policies.PolicyParams
 :param mechanism_params: gen.generator_busybox.MechanismParams
-:param waypoints_reached: scalar, percentage of waypoints reached when attempting to move mechanism
 :param motion: scalar, the cummulative distance the mechanism handle moved
 :param pose_joint_world_init: util.Pose object, the initial pose of the mechanism handle
 :param pose_joint_world_final: util.Pose object or None, the final pose of the mechanism handle if the
                     gripper tip is in contact with the mechanism at completion, else None
 :param config_goal: the goal configuration which the joint was attempting to reach
-:param image: util.util.ImageData
+:param image_data: util.util.ImageData
 :param git_hash: None or str representing the git hash when the data was collected
+:param randomness: float in [0,1] representing how far the policy is from the
+                    correct model-based policy
 """
 
 ImageData = namedtuple('ImageData', 'width height rgbPixels')
@@ -37,16 +38,6 @@ ImageData contains a subset of the image data returned by pybullet
 :param height: int, height image resolution in pixels (vertical)
 :param rgbPixels: list of [char RED,char GREEN,char BLUE, char ALPHA] [0..width*height],
                     list of pixel colors in R,G,B,A format, in range [0..255] for each color
-"""
-
-ControlParams = namedtuple('ControlParams', 'k d add_dist p_err_thresh p_delta')
-"""
-ControlParams contain all params that go into the PD controller
-:param k: actions.gripper.Gripper.k
-:param d: actions.gripper.Gripper.d
-:param add_dist: actions.gripper.Gripper.add_dist
-:param p_err_thresh: actions.gripper.Gripper.p_err_thresh
-:param p_delta: actions.policies.Policy.p_delta
 """
 
 class Recorder(object):
