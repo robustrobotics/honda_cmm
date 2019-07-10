@@ -14,9 +14,9 @@ Tuple for storing policy data
 :param params: one of {actions.policies.PrismaticParams, actions.policies.RevoluteParams}
 """
 
-PrismaticParams = namedtuple('PrismaticParams', 'rigid_position rigid_orientation prismatic_dir')
+PrismaticParams = namedtuple('PrismaticParams', 'rigid_position rigid_orientation roll pitch')
 
-RevoluteParams = namedtuple('RevoluteParams', 'rot_center rot_axis rot_radius rot_orientation')
+RevoluteParams = namedtuple('RevoluteParams', 'rot_center rot_roll rot_pitch rot_radius rot_orientation')
 
 class Policy(object):
     def __init__(self, type, p_delta=None):
@@ -56,7 +56,7 @@ class Policy(object):
         return poses
 
     @staticmethod
-    def generate_model_based_config(mech, random=False):
+    def generate_model_based_config(mech, go_to_limit=True):
         raise NotImplementedError('generate_model_based_config not implemented for policy type '+self.type)
 
     def generate_random_config(self):
@@ -86,41 +86,46 @@ class Policy(object):
         raise NotImplementedError('_model not implemented for policy type '+self.type)
 
 class Prismatic(Policy):
-    def __init__(self, pos, orn, dir, p_delta=None):
+    def __init__(self, pos, orn, roll, pitch, p_delta=None):
         """
         :param pos: vector of length 3, a rigid (x,y,z) position in the world frame
                     along the prismatic joint
         :param orn: vector of length 4, a rigid (x,y,z,w) quaternion in the world
                     frame representing the orientation of the handle in the world
-        :param dir: unit vector of length 3, the direction of the prismatic joint
-                    in the world frame
+        :param roll: scalar, roll between world frame and the direction of the prismatic joint
+        :param pitch: scalar, pitch between world frame and the direction of the prismatic joint
         :param p_delta (optional): scalar, the distance between waypoints in the generated
                         trajectories
         """
         self.rigid_position = pos
         self.rigid_orientation = orn
-        self.prismatic_dir = dir
+        self.roll = roll
+        self.pitch = pitch
 
         # derived
         self._M_origin_world = util.pose_to_matrix(self.rigid_position, self.rigid_orientation)
         super(Prismatic,self).__init__('Prismatic', p_delta)
 
     def _forward_kinematics(self, config):
-        p_joint_origin = np.multiply(config, self.prismatic_dir)
+        q_prismatic_dir = util.quaternion_from_euler(self.roll, self.pitch, 0.0)
+        prismatic_dir = util.transformation([1., 0., 0.], [0., 0., 0.], q_prismatic_dir)
+        p_joint_origin = np.multiply(config, prismatic_dir)
         p_joint_origin_4 = np.concatenate([p_joint_origin, [1.]])
         p_joint_world = np.dot(self._M_origin_world, p_joint_origin_4)[:3]
         q_joint_world = util.quaternion_from_matrix(self._M_origin_world)
         return util.Pose(p_joint_world, q_joint_world)
 
     def _inverse_kinematics(self, p_joint_world, q_joint_world):
+        q_prismatic_dir = util.quaternion_from_euler(self.roll, self.pitch, 0.0)
+        prismatic_dir = util.transformation([1., 0., 0.], [0., 0., 0.], q_prismatic_dir)
         M_joint_world = util.pose_to_matrix(p_joint_world, q_joint_world)
         M_world_origin = np.linalg.inv(self._M_origin_world)
         M_joint_origin = np.dot(M_world_origin, M_joint_world)
         p_joint_origin = M_joint_origin[:3,3]
-        return np.dot(self.prismatic_dir, p_joint_origin)
+        return np.dot(prismatic_dir, p_joint_origin)
 
     @staticmethod
-    def generate_model_based_config(mech, go_to_limit=False):
+    def generate_model_based_config(mech, go_to_limit=True):
         if go_to_limit:
             return np.random.choice([-mech.range/2.0, mech.range/2.0])
         else:
@@ -133,16 +138,8 @@ class Prismatic(Policy):
         return np.random.uniform(-0.5,0.5)
 
     def get_policy_tuple(self):
-        prim_params = PrismaticParams(self.rigid_position, self.rigid_orientation, self.prismatic_dir)
+        prim_params = PrismaticParams(self.rigid_position, self.rigid_orientation, self.roll, self.pitch)
         return PolicyParams(self.type, prim_params)
-
-    @staticmethod
-    def get_policy_params(prismatic_dir):
-        proj_x_z = [prismatic_dir[0], 0., prismatic_dir[2]]
-        roll = util.trans.angle_between_vectors([0.,0.,1.], proj_x_z, directed=False)
-        proj_y_z = [0., prismatic_dir[1], prismatic_dir[2]]
-        pitch = util.trans.angle_between_vectors([0.,0.,1.], proj_y_z, directed=False)
-        return roll, pitch
 
     def _draw_traj(self, traj):
         for i in range(len(traj)-1):
@@ -156,8 +153,9 @@ class Prismatic(Policy):
         p_track_world = p.getLinkState(bb.bb_id, mech.track_id)[0]
         rigid_position = bb.project_onto_backboard(p_track_world)
         rigid_orientation = [0., 0., 0., 1.]
-        prismatic_dir = [mech.axis[0], 0., mech.axis[1]]
-        return Prismatic(rigid_position, rigid_orientation, prismatic_dir, p_delta)
+        roll = 0.0
+        pitch = -np.arccos(mech.axis[0])
+        return Prismatic(rigid_position, rigid_orientation, roll, pitch, p_delta)
 
     @staticmethod
     def _random(bb, mech, p_delta=None):
@@ -167,31 +165,33 @@ class Prismatic(Policy):
         p_handle_world = p.getLinkState(bb.bb_id, mech.handle_id)[0]
         rigid_position = bb.project_onto_backboard(p_handle_world)
         rigid_orientation = np.array([0.,0.,0.,1.])
-        rotation = util.random_quaternion()
-        prismatic_dir = util.transformation([0.,0.,1.], [0., 0., 0.], rotation)
-        return Prismatic(rigid_position, rigid_orientation, prismatic_dir, p_delta)
+        roll = np.random.uniform(-np.pi/2, np.pi/2)
+        pitch = np.random.uniform(-np.pi/2, np.pi/2)
+        return Prismatic(rigid_position, rigid_orientation, roll, pitch, p_delta)
 
 class Revolute(Policy):
-    def __init__(self, center, axis, radius, orn, p_delta=None):
+    def __init__(self, center, axis_roll, axis_pitch, radius, orn, p_delta=None):
         """
         :param center: vector of length 3, a rigid (x,y,z) position in the world frame
                     of the center of rotation
-        :param axis: vector of length 4, a rigid (x,y,z,w) quaternion in the world
-                    frame representing the orientation of the center of rotation
+        :param axis_roll: scalar, roll angle between the world frame to the rotation frame
+        :param axis_pitch: scalar, pitch angle between the world frame to the rotation frame
         :param radius: vector of length 3, an (x,y,z) position of the radius/handle base
-                        in the util.Pose(center,axis) frame
+                        in the rotation frame
         :param orn: vector of length 4, a rigid (x,y,z,w) quaternion representing the
-                    rotataion from axis to the handle base frame
+                    rotataion from rotation frame to the handle base frame
         :param p_delta (optional): scalar, the distance between waypoints in the generated
                         trajectories
         """
         self.rot_center = center
-        self.rot_axis = axis
+        self.rot_axis_roll = axis_roll
+        self.rot_axis_pitch = axis_pitch
         self.rot_radius = radius
         self.rot_orientation = orn
 
         # derived
-        self._M_center_world = util.pose_to_matrix(self.rot_center, self.rot_axis)
+        rot_axis = util.quaternion_from_euler(self.rot_axis_roll, self.rot_axis_pitch, 0.0)
+        self._M_center_world = util.pose_to_matrix(self.rot_center, rot_axis)
         self._M_radius_center = util.pose_to_matrix(self.rot_radius, self.rot_orientation)
         super(Revolute,self).__init__('Revolute', p_delta)
 
@@ -207,7 +207,8 @@ class Revolute(Policy):
         # this is only used at the beginning of generate trajectory to get the initial
         # configuration. for now hard code so starts at config=0 (when handle frame is
         # aligned with rot center frame)
-        M_joint_world = util.pose_to_matrix(p_joint_world, self.rot_axis)
+        rot_axis = util.quaternion_from_euler(self.rot_axis_roll, self.rot_axis_pitch, 0.0)
+        M_joint_world = util.pose_to_matrix(p_joint_world, rot_axis)
         M_joint_center = np.dot(np.linalg.inv(M_joint_world),self._M_center_world)
         # transformation from the radius in the center to the joint in the center
         M_radius_joint_center = np.dot(np.linalg.inv(self._M_radius_center),M_joint_center)
@@ -215,17 +216,17 @@ class Revolute(Policy):
         return angle
 
     @staticmethod
-    def generate_model_based_config(mech, random=False):
-        if random:
-            if mech.flipped:
-                return np.random.uniform(0., -np.pi/2.0)
-            else:
-                return np.random.uniform(0., np.pi/2.0)
-        else:
+    def generate_model_based_config(mech, go_to_limit=True):
+        if go_to_limit:
             if mech.flipped:
                 return -np.pi/2.0
             else:
                 return np.pi/2.0
+        else:
+            if mech.flipped:
+                return np.random.uniform(0., -np.pi/2.0)
+            else:
+                return np.random.uniform(0., np.pi/2.0)
 
     def generate_random_config(self):
         """ This function generates a random revolute joint configuration
@@ -233,7 +234,8 @@ class Revolute(Policy):
         return np.random.uniform(-2*np.pi,2*np.pi)
 
     def get_policy_tuple(self):
-        prim_params =  RevoluteParams(self.rot_center, self.rot_axis, self.rot_radius, self.rot_orientation)
+        prim_params =  RevoluteParams(self.rot_center, self.rot_axis_roll, \
+                        self.rot_axis_pitch, self.rot_radius, self.rot_orientation)
         return PolicyParams(self.type, prim_params)
 
     def _draw_traj(self, traj):
@@ -241,36 +243,37 @@ class Revolute(Policy):
             p.addUserDebugLine(traj[i].p, traj[i+1].p)
 
     @staticmethod
-    def get_policy_params(rot_radius, rot_axis):
-        radius = np.linalg.norm(rot_radius)
-        roll, pitch, yaw = util.euler_from_quaternion(rot_axis)
-        return radius, roll, pitch
-
-    @staticmethod
     def _model(bb, mech, p_delta=None):
         """ This function generates a Revolute policy from the mechanism model
         """
-        rot_center = p.getLinkState(bb.bb_id, mech.door_base_id)[0]
-        rot_axis = [0., 0., 0., 1.]
+        rot_axis_roll = 0.0
+        rot_axis_pitch = 0.0
+        rot_axis = util.quaternion_from_euler(rot_axis_roll, rot_axis_pitch, 0.0)
         p_handle_base_world = mech.get_pose_handle_base_world().p
+        rot_center = p.getLinkState(bb.bb_id, mech.door_base_id)[0]
         rot_radius_world = np.subtract(p_handle_base_world, rot_center)
         rot_radius = util.transformation(rot_radius_world, [0.,0.,0.], rot_axis, inverse=True)
+        # assume no rotation between center frame and handle frame
         rot_orientation = [0., 0., 0., 1.]
-        return Revolute(rot_center, rot_axis, rot_radius, rot_orientation, p_delta)
+        return Revolute(rot_center, rot_axis_roll, rot_axis_pitch, rot_radius, rot_orientation, p_delta)
 
     @staticmethod
     def _random(bb, mech, p_delta=None):
         """ This function generates a random Revolute policy. The ranges are
         based on the data.generator range revolute joints
         """
+        rot_axis_roll = np.random.uniform(-np.pi/2, np.pi/2)
+        rot_axis_pitch = np.random.uniform(-np.pi/2, np.pi/2)
+        rot_axis = util.quaternion_from_euler(rot_axis_roll,rot_axis_pitch, 0.0)
+        p_handle_base_world = mech.get_pose_handle_base_world().p
         rot_center = _random_p(bb)
-        rot_axis = util.random_quaternion()
-        pose_handle_base_world = mech.get_pose_handle_base_world()
-        p_handle_base_center_world = np.subtract(pose_handle_base_world.p, rot_center)
-        rot_radius = util.transformation(p_handle_base_center_world, [0.,0.,0.], rot_axis, inverse=True)
+        #p_center_world = p.getLinkState(bb.bb_id, mech.door_base_id)[0]
+        # rot_center = uniform(p_center_world-delta_left, p_center_world+delta_right)
+        rot_radius_world = np.subtract(p_handle_base_world, rot_center)
+        rot_radius = util.transformation(rot_radius_world, [0.,0.,0.], rot_axis, inverse=True)
         # assume no rotation between center frame and handle frame
         rot_orientation = [0.,0.,0.,1.]
-        return Revolute(rot_center, rot_axis, rot_radius, rot_orientation, p_delta)
+        return Revolute(rot_center, rot_axis_roll, rot_axis_pitch, rot_radius, rot_orientation, p_delta)
 
 class Poke(Policy):
     def __init__(self, p_delta):
@@ -300,16 +303,6 @@ def get_policy(type, params):
         return Revolute(params[:3], params[3:7], params[7:10], params[10:14])
     if type == 'Prismatic':
         return Prismatic(params[:3], params[3:7], params[7:10])
-
-def get_policy_params(policy):
-    if isinstance(policy, Prismatic):
-        return Prismatic.get_policy_params(policy.prismatic_dir)
-    elif isinstance(policy, PolicyParams) and policy.type=='Prismatic':
-        return Prismatic.get_policy_params(policy.params.prismatic_dir)
-    if isinstance(policy, Revolute):
-        return Revolute.get_policy_params(policy.rot_radius, policy.rot_axis)
-    elif isinstance(policy, PolicyParams) and policy.type=='Revolute':
-        return Revolute.get_policy_params(policy.params.rot_radius, policy.params.rot_axis)
 
 ## Helper Functions
 def _random_p(bb):

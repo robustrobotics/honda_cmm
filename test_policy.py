@@ -24,7 +24,7 @@ def test_policy(viz=False, debug=False, max_mech=6, random_policy=False, k=None,
             config_goal = policy.generate_random_config()
         else:
             policy = policies.generate_model_based_policy(bb, mech, p_delta)
-            config_goal = policy.generate_model_based_config(mech, random=False)
+            config_goal = policy.generate_model_based_config(mech, go_to_limit=True)
         pose_handle_world_init = p.getLinkState(bb.bb_id, mech.handle_id)[:2]
 
         # calculate trajectory
