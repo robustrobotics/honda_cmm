@@ -220,6 +220,10 @@ def quaternion_from_matrix(matrix, isprecise=False):
     trans_q = trans.quaternion_from_matrix(matrix)
     return to_pyquat(trans_q)
 
+def quaternion_from_euler(roll, pitch, yaw):
+    trans_q = trans.quaternion_from_euler(roll, pitch, yaw)
+    return to_pyquat(trans_q)
+
 if __name__ == '__main__':
     in_names = ['data/datasets/clean_0_5000', 'data/datasets/clean_1_5000']
     out_name = 'data/datasets/clean_10000'
