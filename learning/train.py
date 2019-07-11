@@ -115,11 +115,18 @@ if __name__ == '__main__':
         vals = []
         step = 500
         ns = range(step, args.ntrain, step)
-        for n in ns:
-            best_val = train_eval(args, n, data_file_name, args.model_fname, False, args.use_cuda)
-            vals.append(best_val)
-            print(n, best_val)
+        try:
+            for n in ns:
+                best_val = train_eval(args, n, data_file_name, args.model_fname, False, args.use_cuda)
+                vals.append(best_val)
+                print(n, best_val)
+        except:
+            import matplotlib.pyplot as plt
+            plt.xlabel('n train')
+            plt.ylabel('Val MSE')
 
+            plt.plot(ns, vals)
+            plt.show()
         import matplotlib.pyplot as plt
         plt.xlabel('n train')
         plt.ylabel('Val MSE')
