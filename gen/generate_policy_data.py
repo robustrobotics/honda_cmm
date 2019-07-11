@@ -64,7 +64,7 @@ if __name__ == '__main__':
     parser.add_argument('--match-policies', action='store_true')
     parser.add_argument('--randomness', type=float, default=1.0)
     # desired goal config represented as a percentage of the max config
-    parser.add_argument('--goal-config', type=float, default=1.0)
+    parser.add_argument('--goal-config', type=float)
     args = parser.parse_args()
 
     if args.debug:
@@ -79,11 +79,8 @@ if __name__ == '__main__':
         except:
             print('install gitpython to save git hash to results')
             git_hash = None
-        goal_config = args.goal_config
-        if not goal_config:
-            goal_config = None
         generate_dataset(args.n_samples, args.viz, args.debug, git_hash, args.urdf_num, \
-                        args.match_policies, args.randomness, goal_config, \
+                        args.match_policies, args.randomness, args.goal_config, \
                         args.max_mech)
         util.write_to_file(args.fname, results)
     except KeyboardInterrupt:
