@@ -5,6 +5,9 @@ import util.transformations as trans
 import math
 from collections import namedtuple
 import os
+import torch
+from learning.nn_disp_pol import DistanceRegressor as NNPol
+from learning.nn_disp_pol_vis import DistanceRegressor as NNPolVis
 
 ### namedtuple Definitions ###
 Pose = namedtuple('Pose', 'p q')
@@ -42,7 +45,7 @@ ImageData contains a subset of the image data returned by pybullet
 """
 
 ### Model Testing Helper Functions ###
-def load_model(model_fname, model_type='polvis', use_cuda=True):
+def load_model(model_fname, model_type='polvis', use_cuda=False):
     if model_type == 'pol':
         model = NNPol(policy_names=['Prismatic', 'Revolute'],
                     policy_dims=[10, 14],

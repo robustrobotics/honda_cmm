@@ -5,7 +5,10 @@ from util import util
 import sys
 from util.util import Result
 from learning.test_model import SearchResult, SampleResult
-from actions.policies import PrismaticParams, RevoluteParams, get_policy_params
+from actions.policies import PrismaticParams, RevoluteParams
+from gen.generator_busybox import BusyBox, Slider, Door
+from gen.generate_policy_data import generate_samples
+from learning.dataloaders import parse_pickle_file, PolicyDataset
 
 class PlotFunc(object):
 
@@ -173,6 +176,95 @@ class MechanismMotion(PlotFunc):
         plt.title('Motion of Mechanisms')
         plt.legend()
 
+class MotionRandomness(PlotFunc):
+
+    @staticmethod
+    def description():
+        return 'Plot the randomness in a policy versus the motion generated'
+
+    def _plot(self, plot_data):
+        for data_point in plot_data:
+            if data_point.pose_joint_world_final is None:
+                plt.plot(data_point.randomness, data_point.motion, 'b.')
+            else:
+                plt.plot(data_point.randomness, data_point.motion, 'c.')
+        plt.xlabel('Randomness')
+        plt.ylabel('Motion')
+        plt.title('Randomness versus Motion for a '+data_point.mechanism_params.type)
+
+class SliderPolicyDelta(PlotFunc):
+
+    @staticmethod
+    def description():
+        return 'Plot the motion generated versus to distance from the true slider policy'
+
+    def _plot(self, plot_data):
+        cm = plt.cm.get_cmap('copper')
+
+        plt.figure()
+        delta_yaws = [data_point.policy_params.delta_values.delta_yaw for data_point in plot_data \
+                        if data_point.pose_joint_world_final is not None]
+        delta_pitches = [data_point.policy_params.delta_values.delta_pitch for data_point in plot_data \
+                        if data_point.pose_joint_world_final is not None]
+        motion = [data_point.motion for data_point in plot_data \
+                        if data_point.pose_joint_world_final is not None]
+        plt.scatter(delta_yaws, delta_pitches, c=motion, cmap=cm, s=2, vmin=min(motion), vmax=max(motion))
+
+        plt.xlabel('Delta Yaw')
+        plt.ylabel('Delta Pitch')
+        plt.title('Motion for Varying Prismatic Policy Values')
+
+class DoorPolicyDelta(PlotFunc):
+
+    @staticmethod
+    def description():
+        return 'Plot the motion generated versus to distance from the true door policy'
+
+    def _plot(self, plot_data):
+        plt.figure()
+        for data_point in plot_data:
+            if data_point.pose_joint_world_final is None:
+                c = 'b.'
+            else:
+                c = 'c.'
+            plt.plot(data_point.delta_values.delta_roll, data_point.motion, c)
+        plt.xlabel('Delta Axis Roll')
+        plt.ylabel('Motion')
+        plt.title('Distance from true axis roll value versus Motion for a '+data_point.mechanism_params.type)
+
+        plt.figure()
+        for data_point in plot_data:
+            if data_point.pose_joint_world_final is None:
+                c = 'b.'
+            else:
+                c = 'c.'
+            plt.plot(data_point.delta_values.delta_pitch, data_point.motion, c)
+        plt.xlabel('Delta Axis Pitch')
+        plt.ylabel('Motion')
+        plt.title('Distance from true axis pitch value versus Motion for a '+data_point.mechanism_params.type)
+
+        plt.figure()
+        for data_point in plot_data:
+            if data_point.pose_joint_world_final is None:
+                c = 'b.'
+            else:
+                c = 'c.'
+            plt.plot(data_point.delta_values.delta_radius_x, data_point.motion, c)
+        plt.xlabel('Delta Radius x')
+        plt.ylabel('Motion')
+        plt.title('Distance from true radius x value versus Motion for a '+data_point.mechanism_params.type)
+
+        plt.figure()
+        for data_point in plot_data:
+            if data_point.pose_joint_world_final is None:
+                c = 'b.'
+            else:
+                c = 'c.'
+            plt.plot(data_point.delta_values.delta_radius_z, data_point.motion, c)
+        plt.xlabel('Delta Radius z')
+        plt.ylabel('Motion')
+        plt.title('Distance from true radius z value versus Motion for a '+data_point.mechanism_params.type)
+'''
 class SearchData(PlotFunc):
 
     @staticmethod
@@ -275,6 +367,52 @@ class SearchData(PlotFunc):
         ax11.set_xlabel('Radius')
         ax21.set_xlabel('Roll')
         ax31.set_xlabel('Pitch')
+    '''
+
+## PLOTS THAT USE A MODEL FILE ##
+
+class YawPitchMotion(PlotFunc):
+
+    @staticmethod
+    def description():
+        return 'Plot a heatmap of the predicted motion for yaw versus pitch for several q values'
+
+    def _plot(self, model):
+        bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider])
+        n_policy_samples = 100
+        goal_configs = np.linspace(-1.2, 1.2, 5)
+        for goal_config in goal_configs:
+            fig = plt.figure()
+            ax_left = fig.add_subplot(121)
+            ax_right = fig.add_subplot(122)
+
+            # get ground truth motion for random policies
+            results = []
+            for _ in range(n_policy_samples):
+                result = generate_samples(False, False, 1, True, 1.0, goal_config, bb)[0]
+                results += [result]
+                ax_left.scatter([result.policy_params.params.yaw], [result.policy_params.params.pitch], \
+                                    c=[result.motion])
+
+            # get predicted motion for same policies
+            data = parse_pickle_file(data=results)
+            dataset = PolicyDataset(data)
+            for i in range(len(dataset.items)):
+                policy_type = dataset.items[i]['type']
+                policy_params = dataset.tensors[i].unsqueeze(0)
+                pred_motion = model.forward(policy_type,
+                                            policy_params,
+                                            dataset.configs[i].unsqueeze(0),
+                                            dataset.images[i].unsqueeze(0))
+                policy = policies.get_policy_from_params(policy_type, policy_params)
+                ax_right.scatter([policy.yaw], [policy.pitch], c=[pred_motion])
+
+        ax_left.set_xlabel('Pitch')
+        ax_left.set_ylabel('Yaw')
+        ax_right.set_xlabel('Pitch')
+        ax_right.set_ylabel('Yaw')
+        ax_left.set_title('True Motion')
+        ax_right.set_title('Predicted Motion')
 
 def print_stats(data):
     stats = {}
@@ -291,9 +429,15 @@ def print_stats(data):
         sys.stdout.write('  %s mech, %s policy: %i\n' % (*key, val))
 
 def plot_results(file_name):
-    data = util.read_from_file(file_name)
-    if type(data[0]) == Result:
-        print_stats(data)
+    if file_name[-3:] == '.pt':
+        data = util.load_model(file_name)
+    else:
+        data = util.read_from_file(file_name)
+    try:
+        if type(data[0]) == Result:
+            print_stats(data)
+    except:
+        pass
 
     plot_funcs = PlotFunc.__subclasses__()
     for (i, func) in enumerate(plot_funcs):
@@ -308,6 +452,12 @@ def plot_results(file_name):
     plt.show()
     input('hit [ENTER] to close plots')
 
+    # TODO: give each plt a figure number then use those to save multiple plots
+    '''
+    save_plots = input('save plots? [y/n]')
+    if save_plots == 'y':
+        plt.savefig('plots.png', bbox_inches='tight')
+    '''
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--debug', action='store_true')
