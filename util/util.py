@@ -6,6 +6,7 @@ import math
 from collections import namedtuple
 import os
 
+### namedtuple Definitions ###
 Pose = namedtuple('Pose', 'p q')
 """
 Pose represents an SE(3) pose
@@ -40,22 +41,28 @@ ImageData contains a subset of the image data returned by pybullet
                     list of pixel colors in R,G,B,A format, in range [0..255] for each color
 """
 
-class Recorder(object):
+### Model Testing Helper Functions ###
+def load_model(model_fname, model_type='polvis', use_cuda=True):
+    if model_type == 'pol':
+        model = NNPol(policy_names=['Prismatic', 'Revolute'],
+                    policy_dims=[10, 14],
+                    hdim=16)
+    else:
+        model = NNPolVis(policy_names=['Prismatic', 'Revolute'],
+                       policy_dims=[10, 14],
+                       hdim=16,
+                       im_h=154,
+                       im_w=205,
+                       kernel_size=5)
+    if use_cuda:
+        device = torch.device('cuda')
+    else:
+        device = torch.device('cpu')
+    model.load_state_dict(torch.load(model_fname, map_location=device))
+    model.eval()
+    return model
 
-    def __init__(self, height, width):
-        self.frames = []
-        self.height = height
-        self.width = width
-
-    def capture(self):
-        h, w, rgb, depth, seg = p.getCameraImage(self.width, self.height)
-        self.frames.append({'rgb': rgb,
-                            'depth': depth})
-
-    def save(self, fname):
-        with open(fname, 'wb') as handle:
-            pickle.dump(self.frames, handle)
-
+### Writing and Reading to File Helper Functions ###
 def write_to_file(file_name, data):
     # make directory if doesn't exist
     dir = '/'.join(file_name.split('/')[:-1])
@@ -81,6 +88,7 @@ def merge_files(in_file_names, out_file_name):
     write_to_file(out_file_name, results)
     return results
 
+### PyBullet Helper Functions ###
 def vis_frame(pos, quat, length=0.2, lifeTime=0.4):
     """ This function visualizes a coordinate frame for the supplied frame where the
     red,green,blue lines correpsond to the x,y,z axes.
@@ -104,6 +112,7 @@ def pause():
         print('trying to exit')
         return
 
+### Geometric Helper Functions ###
 def skew_symmetric(vec):
     """ Calculates the skew-symmetric matrix of the supplied 3 dimensional vector
     """
@@ -195,7 +204,6 @@ def random_quaternion(rand=None):
     trans_quat = trans.random_quaternion(rand)
     return to_pyquat(trans_quat)
 
-### mostly taken from transformations.py ###
 def pose_to_matrix(point, q):
     """Convert a pose to a transformation matrix
     """
