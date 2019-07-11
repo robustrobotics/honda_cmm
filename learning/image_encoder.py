@@ -19,17 +19,17 @@ class ImageEncoder(nn.Module):
         self.pool = nn.MaxPool2d(kernel_size=2,
                                  stride=2)
         self.conv21 = nn.Conv2d(in_channels=hdim,
-                               out_channels=hdim,
-                               kernel_size=kernel_size)
+                                out_channels=hdim,
+                                kernel_size=kernel_size)
         self.conv22 = nn.Conv2d(in_channels=hdim,
-                               out_channels=hdim,
-                               kernel_size=kernel_size)
+                                out_channels=hdim,
+                                kernel_size=kernel_size)
         self.conv31 = nn.Conv2d(in_channels=hdim,
-                               out_channels=hdim,
-                               kernel_size=kernel_size)
+                                out_channels=hdim,
+                                kernel_size=kernel_size)
         self.conv32 = nn.Conv2d(in_channels=hdim,
-                               out_channels=hdim,
-                               kernel_size=kernel_size)
+                                out_channels=hdim,
+                                kernel_size=kernel_size)
         self.conv4 = nn.Conv2d(in_channels=hdim,
                                out_channels=hdim,
                                kernel_size=kernel_size)
@@ -45,7 +45,7 @@ class ImageEncoder(nn.Module):
             W = int((W - (2 - 1) - 1)/2.0 + 1)
 
         # I am currently just running the network to see what this size should be.
-        self.lin_input = hdim*3*11  #   H*W*hdim
+        self.lin_input = hdim*3*11  # H*W*hdim
         self.fc1 = nn.Linear(self.lin_input, hdim)
         self.fc2 = nn.Linear(hdim, hdim)
         self.RELU = nn.ReLU()

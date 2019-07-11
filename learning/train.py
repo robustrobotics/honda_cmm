@@ -16,11 +16,11 @@ def train_eval(args, n_train, data_file_name, model_file_name, pviz, use_cuda):
     # Setup Model (TODO: Update the correct policy dims)
     if args.model == 'pol':
         net = NNPol(policy_names=['Prismatic', 'Revolute'],
-                    policy_dims=[10, 14],
+                    policy_dims=[9, 12],
                     hdim=args.hdim)
     else:
         net = NNPolVis(policy_names=['Prismatic', 'Revolute'],
-                       policy_dims=[10, 14],
+                       policy_dims=[9, 12],
                        hdim=args.hdim,
                        im_h=53,  # 154,
                        im_w=115,  # 205,
@@ -33,7 +33,7 @@ def train_eval(args, n_train, data_file_name, model_file_name, pviz, use_cuda):
 
     best_val = 1000
     # Training loop.
-    for ex in range(1,args.n_epochs+1):
+    for ex in range(1, args.n_epochs+1):
         train_losses = []
         net.train()
         for bx, (k, x, q, im, y) in enumerate(train_set):
