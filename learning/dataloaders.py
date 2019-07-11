@@ -82,7 +82,7 @@ class PolicyDataset(Dataset):
         self.images = []
         for item in items:
             w, h, im = item['image']
-            np_im = np.array(im, dtype=np.uint8).reshape(h, w, 4)[:, :, 0:3]
+            np_im = np.array(im, dtype=np.uint8).reshape(h, w, 3)[:, :, 0:3]
             self.images.append(tt(np_im))
         # imshow(torchvision.utils.make_grid(self.images[0:10]))
 
@@ -115,6 +115,7 @@ def parse_pickle_file(fname=None, data=None):
             pitch = [entry.policy_params.params.pitch]
             yaw = [entry.policy_params.params.yaw]
             policy_params = pos + orn + pitch + yaw
+            mech_params = [entry.mechanism_params.params.range]
         elif policy_type == 'Revolute':
             center = list(entry.policy_params.params.rot_center)
             roll = [entry.policy_params.params.rot_roll]
@@ -122,14 +123,18 @@ def parse_pickle_file(fname=None, data=None):
             orn = list(entry.policy_params.params.rot_orientation)
             radius = list(entry.policy_params.params.rot_radius)
             policy_params = center + roll + pitch + orn + radius
+            mech_params = []
         motion = entry.motion
+
+
 
         parsed_data.append({
             'type': policy_type,
             'params': policy_params,
             'config': entry.config_goal,
             'image': entry.image_data,
-            'y': motion
+            'y': motion,
+            'mech': mech_params
         })
 
     return parsed_data

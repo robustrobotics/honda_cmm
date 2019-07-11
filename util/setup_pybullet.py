@@ -1,8 +1,11 @@
 import pybullet as p
 import pybullet_data
+import numpy as np
 from util import util
 import numpy as np
 from gen.generator_busybox import Slider, Door, BusyBox
+import matplotlib.pyplot as plt
+
 
 def setup_env(bb, viz, debug):
 
@@ -54,6 +57,17 @@ def setup_env(bb, viz, debug):
     projection_matrix = p.computeProjectionMatrixFOV(fov, aspect, nearPlane, farPlane)
     image_data_pybullet = p.getCameraImage(205, 154, shadow=0, renderer=p.ER_TINY_RENDERER, viewMatrix=view_matrix, projectionMatrix=projection_matrix)
     image_data = util.ImageData(*image_data_pybullet[:3])
+
+    w, h, im = image_data_pybullet[:3]
+    np_im = np.array(im, dtype=np.uint8).reshape(h, w, 4)[:, :, 0:3]
+    np_im = np_im[37:90, 45:160, :]
+    w, h, im = np_im.shape[1], np_im.shape[0], np_im.flatten().tolist()
+    image_data = util.ImageData(w, h, im)
+
+    # Display the cropped image.
+    # np_im = np.array(im, dtype=np.uint8).reshape(h, w, 3)
+    # plt.imshow(np_im)
+    # plt.show()
 
     p.stepSimulation()
     return image_data

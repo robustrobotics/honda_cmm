@@ -6,7 +6,7 @@ from learning.image_encoder import ImageEncoder
 
 class DistanceRegressor(nn.Module):
 
-    def __init__(self, policy_names, policy_dims, hdim, im_h, im_w, kernel_size=11):
+    def __init__(self, policy_names, policy_dims, hdim, im_h, im_w, kernel_size=3):
         """
         This module will estimate the distance the end-effector will move
         when executing various policies. It will have a separate module for
@@ -50,6 +50,7 @@ class DistanceRegressor(nn.Module):
         """
         im = self.image_module(im)
         x = self.policy_modules[policy_type].forward(theta, q)
+
         x = torch.cat([im, x], dim=1)
         x = self.fc3(self.RELU(self.fc2(self.RELU(self.fc1(x)))))
         return x

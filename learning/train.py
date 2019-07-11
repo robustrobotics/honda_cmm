@@ -22,9 +22,9 @@ def train_eval(args, n_train, data_file_name, model_file_name, pviz, use_cuda):
         net = NNPolVis(policy_names=['Prismatic', 'Revolute'],
                        policy_dims=[9, 12],
                        hdim=args.hdim,
-                       im_h=154,
-                       im_w=205,
-                       kernel_size=5)
+                       im_h=53,  # 154,
+                       im_w=115,  # 205,
+                       kernel_size=3)
     if use_cuda:
         net = net.cuda()
 
@@ -33,15 +33,15 @@ def train_eval(args, n_train, data_file_name, model_file_name, pviz, use_cuda):
 
     best_val = 1000
     # Training loop.
-    for ex in range(1,args.n_epochs+1):
+    for ex in range(1, args.n_epochs+1):
         train_losses = []
+        net.train()
         for bx, (k, x, q, im, y) in enumerate(train_set):
             if use_cuda:
                 x = x.cuda()
                 q = q.cuda()
                 im = im.cuda()
                 y = y.cuda()
-
             optim.zero_grad()
             yhat = net.forward(k[0], x, q, im)
 
@@ -56,6 +56,7 @@ def train_eval(args, n_train, data_file_name, model_file_name, pviz, use_cuda):
 
         if ex % args.val_freq == 0:
             val_losses = []
+            net.eval()
 
             ys, yhats, types = [], [], []
             for bx, (k, x, q, im, y) in enumerate(val_set):
@@ -83,8 +84,8 @@ def train_eval(args, n_train, data_file_name, model_file_name, pviz, use_cuda):
             print('[Epoch {}] - Validation Loss: {}'.format(ex, np.mean(val_losses)))
             if np.mean(val_losses) < best_val:
                 best_val = np.mean(val_losses)
-    model_file_name = 'data/models/'+model_file_name[:-3]+'_'+str(n_train)+'.pt'
-    torch.save(net.state_dict(), model_file_name)
+                file_name = 'data/models/'+model_file_name[:-3]+'_'+str(n_train)+'.pt'
+                torch.save(net.state_dict(), file_name)
     return best_val
 
 
