@@ -9,6 +9,7 @@ from actions.policies import PrismaticParams, RevoluteParams
 from gen.generator_busybox import BusyBox, Slider, Door
 from gen.generate_policy_data import generate_samples
 from learning.dataloaders import parse_pickle_file, PolicyDataset
+import actions.policies as policies
 
 class PlotFunc(object):
 

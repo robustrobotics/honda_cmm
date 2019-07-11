@@ -77,11 +77,11 @@ if __name__ == '__main__':
 
     net = NNPolVis(policy_names=['Prismatic', 'Revolute'],
                    policy_dims=[9, 12],
-                   hdim=16,
+                   hdim=32,
                    im_h=53,
                    im_w=115,
                    kernel_size=3).cuda()
     device = torch.device('cuda')
-    net.load_state_dict(torch.load('data/models/best_prism_only_color._0.pt', map_location=device))
+    net.load_state_dict(torch.load('data/models/random_prism._0.pt', map_location=device))
     net.eval()
     plot_q_yhat(test_set, net)

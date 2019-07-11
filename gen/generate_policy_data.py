@@ -12,7 +12,7 @@ from gen.generator_busybox import Slider, Door, BusyBox
 def generate_samples(viz, debug, max_mech, match_policies, randomness,
                             goal_config, bb=None, git_hash=None, tag=''):
     if bb is None:
-        bb = BusyBox.generate_random_busybox(max_mech=max_mech, mech_types=[Door, Slider], urdf_tag=tag, debug=debug)
+        bb = BusyBox.generate_random_busybox(max_mech=max_mech, mech_types=[Slider], urdf_tag=tag, debug=debug)
 
     # setup env and get image before load gripper
     image_data = setup_env(bb, viz, debug)

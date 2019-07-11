@@ -85,11 +85,11 @@ def test_random_envs(n_test, model_type, file_name, viz, debug, use_cuda):
                     hdim=16)
     else:
         model = NNPolVis(policy_names=['Prismatic', 'Revolute'],
-                       policy_dims=[10, 14],
-                       hdim=16,
-                       im_h=154,
-                       im_w=205,
-                       kernel_size=5)
+                       policy_dims=[9, 12],
+                       hdim=32,
+                       im_h=53,
+                       im_w=115,
+                       kernel_size=3)
     if use_cuda:
         device = torch.device('cuda')
     else:
