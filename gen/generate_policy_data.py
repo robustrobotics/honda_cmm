@@ -49,7 +49,7 @@ def generate_dataset(n_samples, viz, debug, git_hash, urdf_num, match_policies, 
     for i in range(n_samples):
         sys.stdout.write("\rProcessing sample %i/%i" % (i+1, n_samples))
         results.extend(generate_samples(viz, debug, max_mech, match_policies, randomness,
-                                    goal_config, git_hash, urdf_num))
+                                    goal_config, None, git_hash, urdf_num))
     print()
 
 if __name__ == '__main__':
