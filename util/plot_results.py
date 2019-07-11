@@ -405,7 +405,7 @@ class YawPitchMotion(PlotFunc):
                                             policy_params,
                                             dataset.configs[i].unsqueeze(0),
                                             dataset.images[i].unsqueeze(0))
-                policy = policies.get_policy_from_params(policy_type, policy_params)
+                policy = policies.get_policy_from_params(policy_type, policy_params.numpy())
                 ax_right.scatter([policy.yaw], [policy.pitch], c=[pred_motion])
 
         ax_left.set_xlabel('Pitch')

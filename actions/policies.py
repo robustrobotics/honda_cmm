@@ -283,7 +283,7 @@ def get_policy_from_params(type, params):
     if type == 'Revolute':
         return Revolute(params[:3], params[3:7], params[7:10], params[10:14])
     if type == 'Prismatic':
-        return Prismatic(params[:3], params[3:7], params[7:10])
+        return Prismatic(params[0, :3], params[0, 3:7], params[0, 7], params[0, 8])
 
 ## Helper Functions
 def _random_p(bb):
