@@ -53,7 +53,7 @@ def load_model(model_fname, model_type='polvis', use_cuda=False):
     else:
         model = NNPolVis(policy_names=['Prismatic', 'Revolute'],
                        policy_dims=[9, 12],
-                       hdim=32,
+                       hdim=16,
                        im_h=53,
                        im_w=155,
                        kernel_size=3)
