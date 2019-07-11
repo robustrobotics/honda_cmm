@@ -16,11 +16,11 @@ def train_eval(args, n_train, data_file_name, model_file_name, pviz, use_cuda):
     # Setup Model (TODO: Update the correct policy dims)
     if args.model == 'pol':
         net = NNPol(policy_names=['Prismatic', 'Revolute'],
-                    policy_dims=[10, 14],
+                    policy_dims=[9, 12],
                     hdim=args.hdim)
     else:
         net = NNPolVis(policy_names=['Prismatic', 'Revolute'],
-                       policy_dims=[10, 14],
+                       policy_dims=[9, 12],
                        hdim=args.hdim,
                        im_h=154,
                        im_w=205,

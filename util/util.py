@@ -48,11 +48,11 @@ ImageData contains a subset of the image data returned by pybullet
 def load_model(model_fname, model_type='polvis', use_cuda=False):
     if model_type == 'pol':
         model = NNPol(policy_names=['Prismatic', 'Revolute'],
-                    policy_dims=[10, 14],
+                    policy_dims=[9, 12],
                     hdim=16)
     else:
         model = NNPolVis(policy_names=['Prismatic', 'Revolute'],
-                       policy_dims=[10, 14],
+                       policy_dims=[9, 12],
                        hdim=16,
                        im_h=154,
                        im_w=205,

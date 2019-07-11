@@ -281,9 +281,9 @@ def generate_policy(bb, mech, match_policies, randomness, policy_types=[Revolute
 
 def get_policy_from_params(type, params):
     if type == 'Revolute':
-        return Revolute(params[:3], params[3:7], params[7:10], params[10:14])
+        return Revolute(params[:3], params[3], params[4], params[5:9], params[9:12])
     if type == 'Prismatic':
-        return Prismatic(params[:3], params[3:7], params[7:10])
+        return Prismatic(params[:3], params[3:7], params[7], params[8])
 
 ## Helper Functions
 def _random_p(bb):
