@@ -58,7 +58,7 @@ class Policy(object):
         return poses
 
     @staticmethod
-    def generate_config(mech, go_to_limit):
+        def generate_config(mech, goal_config):
         raise NotImplementedError('generate_config not implemented for policy type '+self.type)
 
     def get_policy_tuple(self):
@@ -122,11 +122,11 @@ class Prismatic(Policy):
         return np.dot(prismatic_dir, p_joint_origin)
 
     @staticmethod
-    def generate_config(mech, go_to_limit):
-        if go_to_limit:
-            return np.random.choice([-mech.range/2.0, mech.range/2.0])
-        else:
+    def generate_config(mech, goal_config):
+        if goal_config is None:
             return np.random.uniform(-0.25,0.25) # from gen.generator_busybox range limits
+        else:
+            return goal_config*mech.range/2.0
 
     def get_policy_tuple(self):
         prism_params = PrismaticParams(self.rigid_position, self.rigid_orientation, self.pitch, self.yaw)
@@ -210,14 +210,11 @@ class Revolute(Policy):
         return angle
 
     @staticmethod
-    def generate_config(mech, go_to_limit):
-        if go_to_limit:
-            if mech.flipped:
-                return -np.pi/2.0
-            else:
-                return np.pi/2.0
-        else:
+    def generate_config(mech, goal_config):
+        if goal_config is None:
             return np.random.uniform(-np.pi/2,np.pi/2)
+        else:
+            return goal_config*np.pi/2.0
 
     def get_policy_tuple(self):
         rev_params = RevoluteParams(self.rot_center, self.rot_axis_roll, \

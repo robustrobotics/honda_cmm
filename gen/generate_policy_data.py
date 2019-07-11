@@ -10,8 +10,9 @@ from actions.gripper import Gripper
 from gen.generator_busybox import Slider, Door, BusyBox
 
 def generate_samples(viz, debug, max_mech, match_policies, randomness,
-                            go_to_limit, git_hash=None, tag=''):
-    bb = BusyBox.generate_random_busybox(max_mech=max_mech, mech_types=[Door, Slider], urdf_tag=tag, debug=debug)
+                            goal_config, bb=None, git_hash=None, tag=''):
+    if bb is None:
+        bb = BusyBox.generate_random_busybox(max_mech=max_mech, mech_types=[Door, Slider], urdf_tag=tag, debug=debug)
 
     # setup env and get image before load gripper
     image_data = setup_env(bb, viz, debug)
@@ -21,7 +22,7 @@ def generate_samples(viz, debug, max_mech, match_policies, randomness,
     for mech in bb._mechanisms:
         # generate either a random or model-based policy and goal configuration
         policy = policies.generate_policy(bb, mech, match_policies, randomness)
-        config_goal = policy.generate_config(mech, go_to_limit)
+        config_goal = policy.generate_config(mech, goal_config)
         pose_handle_world_init = p.getLinkState(bb.bb_id, mech.handle_id)[:2]
 
         # calculate trajectory
@@ -44,11 +45,11 @@ def generate_samples(viz, debug, max_mech, match_policies, randomness,
 
 results = []
 def generate_dataset(n_samples, viz, debug, git_hash, urdf_num, match_policies, \
-                        randomness, go_to_limit, max_mech):
+                        randomness, goal_config, max_mech):
     for i in range(n_samples):
         sys.stdout.write("\rProcessing sample %i/%i" % (i+1, n_samples))
         results.extend(generate_samples(viz, debug, max_mech, match_policies, randomness,
-                                    go_to_limit, git_hash, urdf_num))
+                                    goal_config, git_hash, urdf_num))
     print()
 
 if __name__ == '__main__':
@@ -62,7 +63,8 @@ if __name__ == '__main__':
     parser.add_argument('--urdf-num', type=int, default=0)
     parser.add_argument('--match-policies', action='store_true')
     parser.add_argument('--randomness', type=float, default=1.0)
-    parser.add_argument('--go-to-limit', action='store_true')
+    # desired goal config represented as a percentage of the max config
+    parser.add_argument('--goal-config', type=float, default=1.0)
     args = parser.parse_args()
 
     if args.debug:
@@ -77,8 +79,11 @@ if __name__ == '__main__':
         except:
             print('install gitpython to save git hash to results')
             git_hash = None
+        goal_config = args.goal_config
+        if not goal_config:
+            goal_config = None
         generate_dataset(args.n_samples, args.viz, args.debug, git_hash, args.urdf_num, \
-                        args.match_policies, args.randomness, args.go_to_limit, \
+                        args.match_policies, args.randomness, goal_config, \
                         args.max_mech)
         util.write_to_file(args.fname, results)
     except KeyboardInterrupt:
