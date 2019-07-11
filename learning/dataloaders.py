@@ -112,14 +112,16 @@ def parse_pickle_file(fname=None, data=None):
         if policy_type == 'Prismatic':
             pos = list(entry.policy_params.params.rigid_position)
             orn = list(entry.policy_params.params.rigid_orientation)
-            dir = list(entry.policy_params.params.prismatic_dir)
-            policy_params = pos + orn + dir
+            pitch = [entry.policy_params.params.pitch]
+            yaw = [entry.policy_params.params.yaw]
+            policy_params = pos + orn + pitch + yaw
         elif policy_type == 'Revolute':
             center = list(entry.policy_params.params.rot_center)
-            axis = list(entry.policy_params.params.rot_axis)
+            roll = [entry.policy_params.params.rot_roll]
+            pitch = [entry.policy_params.params.rot_pitch]
             orn = list(entry.policy_params.params.rot_orientation)
             radius = list(entry.policy_params.params.rot_radius)
-            policy_params = center + axis + orn + radius
+            policy_params = center + roll + pitch + orn + radius
         motion = entry.motion
 
         parsed_data.append({

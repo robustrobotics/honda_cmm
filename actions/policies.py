@@ -58,7 +58,7 @@ class Policy(object):
         return poses
 
     @staticmethod
-        def generate_config(mech, goal_config):
+    def generate_config(mech, goal_config):
         raise NotImplementedError('generate_config not implemented for policy type '+self.type)
 
     def get_policy_tuple(self):
