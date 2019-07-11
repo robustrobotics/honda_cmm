@@ -18,10 +18,16 @@ class ImageEncoder(nn.Module):
                                kernel_size=kernel_size)
         self.pool = nn.MaxPool2d(kernel_size=2,
                                  stride=2)
-        self.conv2 = nn.Conv2d(in_channels=hdim,
+        self.conv21 = nn.Conv2d(in_channels=hdim,
                                out_channels=hdim,
                                kernel_size=kernel_size)
-        self.conv3 = nn.Conv2d(in_channels=hdim,
+        self.conv22 = nn.Conv2d(in_channels=hdim,
+                               out_channels=hdim,
+                               kernel_size=kernel_size)
+        self.conv31 = nn.Conv2d(in_channels=hdim,
+                               out_channels=hdim,
+                               kernel_size=kernel_size)
+        self.conv32 = nn.Conv2d(in_channels=hdim,
                                out_channels=hdim,
                                kernel_size=kernel_size)
         self.conv4 = nn.Conv2d(in_channels=hdim,
@@ -47,11 +53,11 @@ class ImageEncoder(nn.Module):
     def forward(self, img):
         x = self.RELU(self.conv1(img))
         x = self.pool(x)
-        x = self.RELU(self.conv2(x))
-        x = self.RELU(self.conv2(x))
+        x = self.RELU(self.conv21(x))
+        x = self.RELU(self.conv22(x))
         x = self.pool(x)
-        x = self.RELU(self.conv3(x))
-        x = self.RELU(self.conv3(x))
+        x = self.RELU(self.conv31(x))
+        x = self.RELU(self.conv32(x))
         x = self.pool(x)
         x = x.view(-1, self.lin_input)
         x = self.RELU(self.fc1(x))

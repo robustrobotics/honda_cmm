@@ -82,6 +82,6 @@ if __name__ == '__main__':
                    im_w=115,
                    kernel_size=3).cuda()
     device = torch.device('cuda')
-    net.load_state_dict(torch.load('data/models/best_prism_only_color._1000.pt', map_location=device))
+    net.load_state_dict(torch.load('data/models/best_prism_only_color._5000.pt', map_location=device))
     net.eval()
     plot_q_yhat(test_set, net)
