@@ -428,6 +428,7 @@ class YawPitchMotion(PlotFunc):
             ax_right.set_title('Predicted Motion\nq='+str(round(goal_config, 2)))
             fig.colorbar(im_right, ax=ax_right)
             plt.axis('scaled')
+            plt.savefig('config_'+str(round(goal_config, 2))+'.png', bbox_inches='tight')
 
 def print_stats(data):
     stats = {}
