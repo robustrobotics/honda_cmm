@@ -392,13 +392,14 @@ class YawPitchMotion(PlotFunc):
             for _ in range(n_policy_samples):
                 result = generate_samples(False, False, 1, True, 1.0, goal_config, bb)[0]
                 results += [result]
-            true_yaws = [result.policy_params.params.yaw for result in results]
-            true_pitches = [result.policy_params.params.pitch for result in results]
+            true_yaws = [result.policy_params.delta_values.delta_yaw for result in results]
+            true_pitches = [result.policy_params.delta_values.delta_pitch for result in results]
             true_motions = [result.motion for result in results]
 
             # get predicted motion for same policies
             data = parse_pickle_file(data=results)
             dataset = PolicyDataset(data)
+
             pred_yaws = []
             pred_pitches = []
             pred_motions = []
@@ -410,13 +411,13 @@ class YawPitchMotion(PlotFunc):
                                             dataset.configs[i].unsqueeze(0),
                                             dataset.images[i].unsqueeze(0))]
                 policy = get_policy_from_params(policy_type, policy_params[0].numpy())
-                pred_yaws += [policy.yaw]
-                pred_pitches += [policy.pitch]
+                pred_yaws += [policy.delta_yaw]
+                pred_pitches += [policy.delta_pitch]
 
             min_c = min(min(true_motions), min(pred_motions))
             max_c = max(max(true_motions), max(pred_motions))
             im_left = ax_left.scatter(true_yaws, true_pitches, c=true_motions, vmin=min_c, vmax=max_c)
-            im_right = ax_right.scatter(pred_yaws, pred_pitches, c=pred_motions, vmin=min_c, vmax=max_c)
+            im_right = ax_right.scatter(true_yaws, true_pitches, c=pred_motions, vmin=min_c, vmax=max_c)
 
             ax_left.set_xlabel('Pitch')
             ax_left.set_ylabel('Yaw')
