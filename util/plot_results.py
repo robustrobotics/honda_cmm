@@ -380,55 +380,61 @@ class YawPitchMotion(PlotFunc):
 
     def _plot(self, model):
         bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider])
-        n_policy_samples = 500
-        goal_configs = np.linspace(-1.2, 1.2, 5)
-        for goal_config in goal_configs:
-            fig = plt.figure()
-            ax_left = fig.add_subplot(121, aspect='equal')
-            ax_right = fig.add_subplot(122, aspect='equal')
+        n_policy_samples = 2
+        n_configs = 5
+        n_mechs = 3
+        goal_configs = np.linspace(-1.2, 1.2, n_configs)
+        fig, axes = plt.add_subplots(n_configs, 2*n_mechs, aspect='equal')
+        max_motion = -"inf"
+        min_motion = "inf"
+        for m in range(n_mechs):
+            for (j, goal_config) in enumerate(goal_configs):
+                # get ground truth motion for random policies
+                results = []
+                for _ in range(n_policy_samples):
+                    result = generate_samples(False, False, 1, True, 1.0, goal_config, bb)[0]
+                    results += [result]
+                true_yaws = [result.policy_params.delta_values.delta_yaw for result in results]
+                true_pitches = [result.policy_params.delta_values.delta_pitch for result in results]
+                true_motions = [result.motion for result in results]
 
-            # get ground truth motion for random policies
-            results = []
-            for _ in range(n_policy_samples):
-                result = generate_samples(False, False, 1, True, 1.0, goal_config, bb)[0]
-                results += [result]
-            true_yaws = [result.policy_params.delta_values.delta_yaw for result in results]
-            true_pitches = [result.policy_params.delta_values.delta_pitch for result in results]
-            true_motions = [result.motion for result in results]
+                # get predicted motion for same policies
+                data = parse_pickle_file(data=results)
+                dataset = PolicyDataset(data)
+                pred_yaws = []
+                pred_pitches = []
+                pred_motions = []
+                for i in range(len(dataset.items)):
+                    policy_type = dataset.items[i]['type']
+                    policy_params = dataset.tensors[i].unsqueeze(0)
+                    pred_motions += [model.forward(policy_type,
+                                                policy_params,
+                                                dataset.configs[i].unsqueeze(0),
+                                                dataset.images[i].unsqueeze(0))]
+                    policy = get_policy_from_params(policy_type, policy_params[0].numpy())
+                    pred_yaws += [dataset.delta_vals[i].delta_yaw]
+                    pred_pitches += [dataset.delta_vals[i].delta_pitch]
 
-            # get predicted motion for same policies
-            data = parse_pickle_file(data=results)
-            dataset = PolicyDataset(data)
+                min_c = min(min(true_motions), min(pred_motions))
+                max_c = max(max(true_motions), max(pred_motions))
+                min_motion = min(min_motion, min_c)
+                max_motion = max(max_motion, max_c)
 
-            pred_yaws = []
-            pred_pitches = []
-            pred_motions = []
-            for i in range(len(dataset.items)):
-                policy_type = dataset.items[i]['type']
-                policy_params = dataset.tensors[i].unsqueeze(0)
-                pred_motions += [model.forward(policy_type,
-                                            policy_params,
-                                            dataset.configs[i].unsqueeze(0),
-                                            dataset.images[i].unsqueeze(0))]
-                policy = get_policy_from_params(policy_type, policy_params[0].numpy())
-                pred_yaws += [policy.delta_yaw]
-                pred_pitches += [policy.delta_pitch]
+                axes[j,m*2-1].scatter(true_yaws, true_pitches, c=true_motions)#, vmin=min_c, vmax=max_c)
+                axes[j,m*2].scatter(true_yaws, true_pitches, c=pred_motions)#, vmin=min_c, vmax=max_c)
 
-            min_c = min(min(true_motions), min(pred_motions))
-            max_c = max(max(true_motions), max(pred_motions))
-            im_left = ax_left.scatter(true_yaws, true_pitches, c=true_motions, vmin=min_c, vmax=max_c)
-            im_right = ax_right.scatter(true_yaws, true_pitches, c=pred_motions, vmin=min_c, vmax=max_c)
+                axes[j,m*2-1:m*2].set_xlabel('Delta Pitch')
+                axes[j,m*2-1:m*2].set_ylabel('Delta Yaw')
+                axes[j,m*2-1].set_title('True Motion\nq='+str(round(goal_config, 2)))
+                axes[j,m*2].set_title('Predicted Motion\nq='+str(round(goal_config, 2)))
 
-            ax_left.set_xlabel('Pitch')
-            ax_left.set_ylabel('Yaw')
-            ax_left.set_title('True Motion\nq='+str(round(goal_config, 2)))
-            fig.colorbar(im_left, ax=ax_left)
-            ax_right.set_xlabel('Pitch')
-            ax_right.set_ylabel('Yaw')
-            ax_right.set_title('Predicted Motion\nq='+str(round(goal_config, 2)))
-            fig.colorbar(im_right, ax=ax_right)
-            plt.axis('scaled')
-            plt.savefig('config_'+str(round(goal_config, 2))+'.png', bbox_inches='tight')
+                #ax_right.set_xlabel('Delta Pitch')
+                #ax_right.set_ylabel('Delta Yaw')
+                #ax_right.set_title('Predicted Motion\nq='+str(round(goal_config, 2)))
+                #fig.colorbar(im_right, ax=ax_right)
+        #fig.colorbar(im_left, ax=ax_left)
+        #plt.axis('scaled')
+        plt.savefig('test_prismatics.png', bbox_inches='tight')
 
 def print_stats(data):
     stats = {}
