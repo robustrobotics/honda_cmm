@@ -384,7 +384,8 @@ class YawPitchMotion(PlotFunc):
         n_configs = 5
         n_mechs = 3
         goal_configs = np.linspace(-1.2, 1.2, n_configs)
-        fig, axes = plt.add_subplots(n_configs, 2*n_mechs, aspect='equal')
+        fig, axes = plt.subplots(n_configs, 2*n_mechs, sharex=True, sharey=True)
+	plt.setp(axes.flat, aspect=1.0, adjustable='box-forced')
         max_motion = -"inf"
         min_motion = "inf"
         for m in range(n_mechs):
