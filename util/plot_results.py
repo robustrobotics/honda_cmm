@@ -379,16 +379,23 @@ class YawPitchMotion(PlotFunc):
         return 'Plot a heatmap of the predicted motion for yaw versus pitch for several q values'
 
     def _plot(self, model):
-        bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider])
-        n_policy_samples = 2
-        n_configs = 5
-        n_mechs = 3
+        n_policy_samples = 100
+        n_configs = 11
+        n_mechs = 1
         goal_configs = np.linspace(-1.2, 1.2, n_configs)
         fig, axes = plt.subplots(n_configs, 2*n_mechs, sharex=True, sharey=True)
-	plt.setp(axes.flat, aspect=1.0, adjustable='box-forced')
-        max_motion = -"inf"
-        min_motion = "inf"
+        #ax = fig.add_subplot(111)
+        #ax.spines['top'].set_color('none')
+        #ax.spines['bottom'].set_color('none')
+        #ax.spines['left'].set_color('none')
+        #ax.spines['right'].set_color('none')
+        #ax.tick_params(labelcolor='w', top=False, bottom=False, left=False, right=False)
+        #ax.set_title('True Motion (Left) and Predicted Motion (Right)')
+        plt.setp(axes.flat, aspect=1.0, adjustable='box-forced')
+        max_motion = -float('inf')
+        min_motion = float('inf')
         for m in range(n_mechs):
+            bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider])
             for (j, goal_config) in enumerate(goal_configs):
                 # get ground truth motion for random policies
                 results = []
@@ -421,13 +428,15 @@ class YawPitchMotion(PlotFunc):
                 min_motion = min(min_motion, min_c)
                 max_motion = max(max_motion, max_c)
 
-                axes[j,m*2-1].scatter(true_yaws, true_pitches, c=true_motions)#, vmin=min_c, vmax=max_c)
-                axes[j,m*2].scatter(true_yaws, true_pitches, c=pred_motions)#, vmin=min_c, vmax=max_c)
+                im = axes[j,m*2].scatter(true_yaws, true_pitches, c=true_motions)#, vmin=min_c, vmax=max_c)
+                im = axes[j,m*2+1].scatter(pred_yaws, pred_pitches, c=pred_motions)#, vmin=min_c, vmax=max_c)
 
-                axes[j,m*2-1:m*2].set_xlabel('Delta Pitch')
-                axes[j,m*2-1:m*2].set_ylabel('Delta Yaw')
-                axes[j,m*2-1].set_title('True Motion\nq='+str(round(goal_config, 2)))
-                axes[j,m*2].set_title('Predicted Motion\nq='+str(round(goal_config, 2)))
+                #axes[j,m*2-1].set_xlabel('Delta Pitch')
+                #axes[j,m*2].set_xlabel('Delta Pitch')
+                #axes[j,m*2-1].set_ylabel('Delta Yaw')
+                #axes[j,m*2].set_ylabel('Delta Yaw')
+                axes[j,m*2].set_title(str(round(goal_config, 2)))
+                axes[j,m*2+1].set_title(str(round(goal_config, 2)))
 
                 #ax_right.set_xlabel('Delta Pitch')
                 #ax_right.set_ylabel('Delta Yaw')
@@ -435,6 +444,8 @@ class YawPitchMotion(PlotFunc):
                 #fig.colorbar(im_right, ax=ax_right)
         #fig.colorbar(im_left, ax=ax_left)
         #plt.axis('scaled')
+        im.set_clim(min_motion, max_motion)
+        fig.colorbar(im, ax=axes.ravel().tolist())
         plt.savefig('test_prismatics.png', bbox_inches='tight')
 
 def print_stats(data):
