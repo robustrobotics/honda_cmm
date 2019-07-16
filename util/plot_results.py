@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from util import util
 import sys
-from util.util import Result
 from learning.test_model import SearchResult, SampleResult
 from actions.policies import PrismaticParams, RevoluteParams, get_policy_from_params
 from gen.generator_busybox import BusyBox, Slider, Door
@@ -47,6 +46,30 @@ class SliderRangeMotion(PlotFunc):
         plt.xlabel('Slider Range')
         plt.ylabel('Motion of Handle')
         plt.title('Motion of Sliders')
+
+class SliderConfigMotion(PlotFunc):
+
+    @staticmethod
+    def description():
+        return 'Plot the goal config percentage versus the joint motion for a slider'
+
+    def _plot(self, plot_data):
+        plt.figure()
+        for data_point in plot_data:
+            percentage = data_point.config_goal/(data_point.mechanism_params.params.range/2)
+            plt.plot(percentage, data_point.net_motion, 'b.')
+        print(plot_data[0].mechanism_params.params.range/2)
+        plt.xlabel('Goal Config (%)')
+        plt.ylabel('Motion of Handle')
+        plt.title('NET Motion of Sliders')
+
+        plt.figure()
+        for data_point in plot_data:
+            percentage = data_point.config_goal/(data_point.mechanism_params.params.range/2)
+            plt.plot(percentage, data_point.cumu_motion, 'b.')
+        plt.xlabel('Goal Config (%)')
+        plt.ylabel('Motion of Handle')
+        plt.title('CUMMULATIVE Motion of Sliders')
 
 class DoorRadiusWR(PlotFunc):
 
@@ -151,6 +174,36 @@ class WRKD(PlotFunc):
         fig0.colorbar(a)
         fig1.colorbar(b)
 
+class MotionKD(PlotFunc):
+
+    @staticmethod
+    def description():
+        return 'Plot a heatmap of the motion reached for varying k and d values (fixed q)'
+
+    def _plot(self, plot_data):
+        fig, ax = plt.subplots()
+        cm = plt.cm.get_cmap('viridis')
+
+        goal_config = plot_data[0].result.config_goal
+        ks = [p.k for p in plot_data]
+        ds = [p.d for p in plot_data]
+        motions = [p.result.net_motion for p in plot_data]
+        a = ax.scatter(ks, ds, c=motions, cmap=cm, s=4)
+        #for data_point in plot_data:
+            #if data_point.result.net_motion > .07 and data_point.result.net_motion < .08:
+        #    a = ax.scatter([data_point.k], [data_point.d], c=[data_point.result.net_motion],
+        #            cmap=cm, s=4)#, vmin=0.07, vmax=0.08)
+                #print(data_point.result.net_motion)
+        ax.set_xlabel('Linear K')
+        ax.set_ylabel('Linear D')
+        ax.set_title('Motion Generated, q_{goal}='+str(goal_config))
+        #ax.legend()
+        #ax.set_yscale('log')
+        #ax.set_xscale('log')
+        #ax.set_xlim(*np.power(10.,[2,6]))
+        #ax.set_ylim(*np.power(10.,[-5,5]))
+        fig.colorbar(a)
+
 class MechanismMotion(PlotFunc):
 
     @staticmethod
@@ -200,20 +253,24 @@ class SliderPolicyDelta(PlotFunc):
         return 'Plot the motion generated versus to distance from the true slider policy'
 
     def _plot(self, plot_data):
+        from mpl_toolkits.mplot3d import axes3d, Axes3D
         cm = plt.cm.get_cmap('copper')
 
-        plt.figure()
+        fig = plt.figure()
+        ax = Axes3D(fig)
         delta_yaws = [data_point.policy_params.delta_values.delta_yaw for data_point in plot_data \
                         if data_point.pose_joint_world_final is not None]
         delta_pitches = [data_point.policy_params.delta_values.delta_pitch for data_point in plot_data \
                         if data_point.pose_joint_world_final is not None]
+        goal_configs =  [data_point.config_goal for data_point in plot_data \
+                        if data_point.pose_joint_world_final is not None]
         motion = [data_point.motion for data_point in plot_data \
                         if data_point.pose_joint_world_final is not None]
-        plt.scatter(delta_yaws, delta_pitches, c=motion, cmap=cm, s=2, vmin=min(motion), vmax=max(motion))
-
-        plt.xlabel('Delta Yaw')
-        plt.ylabel('Delta Pitch')
-        plt.title('Motion for Varying Prismatic Policy Values')
+        im = ax.scatter(delta_yaws, delta_pitches, goal_configs, c=motion, cmap=cm, vmin=min(motion), vmax=max(motion))
+        fig.colorbar(im)
+        ax.set_xlabel('Delta Yaw')
+        ax.set_ylabel('Delta Pitch')
+        ax.set_title('Motion for Varying Prismatic Policy Values')
 
 class DoorPolicyDelta(PlotFunc):
 
@@ -265,110 +322,61 @@ class DoorPolicyDelta(PlotFunc):
         plt.xlabel('Delta Radius z')
         plt.ylabel('Motion')
         plt.title('Distance from true radius z value versus Motion for a '+data_point.mechanism_params.type)
-'''
-class SearchData(PlotFunc):
+
+class YawPitchMotionResults(PlotFunc):
 
     @staticmethod
     def description():
-        return 'Plot the predicted motion for mechanisms in search results dataset'
+        return 'Plot a heatmap of the predicted motion for yaw versus pitch for several q values 5 mechanism of 1000 results each'
 
-    def _plot(self, plot_data):
-        for mechanism_samples in plot_data:
-            self._plot_single_mechanism(mechanism_samples)
+    def _plot(self, data):
+        for m in range(1,6):
+            mech_data = data[(m-1)*1000:m*1000]
+            config_data = {}
+            for point in mech_data:
+                if point.config_goal not in config_data:
+                    config_data[point.config_goal] = [[] for _ in range(3)]
+            limit = mech_data[0].mechanism_params.params.range/2
+            for point in mech_data:
+                config = point.config_goal
+                if point.pose_joint_world_final is not None:
+                    config_data[config][0] += [point.policy_params.delta_values.delta_yaw]
+                    config_data[config][1] += [point.policy_params.delta_values.delta_pitch]
+                    config_data[config][2] += [point.cumu_motion]
+                '''
+                if round(config,2) == -.03 or round(config,2) == .03:
+                    if abs(point.policy_params.delta_values.delta_yaw) < .1:
+                        pitch = point.policy_params.delta_values.delta_pitch
+                        if abs(pitch) < .4 and abs(pitch) > .3:
+                            if point.net_motion > 0.0:
+                                print(point.policy_params.delta_values.delta_yaw)
+                                print(point.policy_params.delta_values.delta_pitch)
+                                util.replay_result(point)
+                #else:
+                #    util.replay_result(point)
+                '''
+            min_motion = min([min(config_data[config][2]) for config in config_data.keys()])
+            max_motion = max([max(config_data[config][2]) for config in config_data.keys()])
 
-    def _plot_single_mechanism(self, results):
-        fig = plt.figure()
-        # set up big subplots and turn of axis lines and ticks
-        ax = fig.add_subplot(111)
-        ax_left = fig.add_subplot(121)
-        ax_right = fig.add_subplot(122)
-        ax.spines['top'].set_color('none')
-        ax.spines['bottom'].set_color('none')
-        ax.spines['left'].set_color('none')
-        ax.spines['right'].set_color('none')
-        ax.tick_params(labelcolor='w', top=False, bottom=False, left=False, right=False)
-        ax_left.spines['top'].set_color('none')
-        ax_left.spines['bottom'].set_color('none')
-        ax_left.spines['left'].set_color('none')
-        ax_left.spines['right'].set_color('none')
-        ax_left.tick_params(labelcolor='w', top=False, bottom=False, left=False, right=False)
-        ax_right.spines['top'].set_color('none')
-        ax_right.spines['bottom'].set_color('none')
-        ax_right.spines['left'].set_color('none')
-        ax_right.spines['right'].set_color('none')
-        ax_right.tick_params(labelcolor='w', top=False, bottom=False, left=False, right=False)
-
-        # fill in small subplots
-        ax00 = fig.add_subplot(421)
-        ax10 = fig.add_subplot(423)
-        ax20 = fig.add_subplot(425)
-        ax30 = fig.add_subplot(427)
-        ax01 = fig.add_subplot(422)
-        ax11 = fig.add_subplot(424)
-        ax21 = fig.add_subplot(426)
-        ax31 = fig.add_subplot(428)
-
-        # turn of axes for missing plot
-        ax30.spines['top'].set_color('none')
-        ax30.spines['bottom'].set_color('none')
-        ax30.spines['left'].set_color('none')
-        ax30.spines['right'].set_color('none')
-        ax30.tick_params(labelcolor='w', top=False, bottom=False, left=False, right=False)
-
-        for sample in results.samples:
-            plot_data = get_policy_params(sample.policy)
-            if sample.policy.type == 'Prismatic':
-                ax00.plot(sample.config_goal, sample.pred_motion, '.k')
-                ax10.plot(plot_data[0], sample.pred_motion, '.k')
-                ax20.plot(plot_data[1], sample.pred_motion, '.k')
-            if sample.policy.type == 'Revolute':
-                ax01.plot(sample.config_goal, sample.pred_motion, '.k')
-                ax11.plot(plot_data[0], sample.pred_motion, '.k')
-                ax21.plot(plot_data[1], sample.pred_motion, '.k')
-                ax31.plot(plot_data[2], sample.pred_motion, '.k')
-
-        # plot initial search sample
-        ys = [0,.11]
-        if results.start_sample.policy.type == 'Prismatic':
-            plot_data = get_policy_params(results.start_sample.policy)
-            ax00.plot([results.start_sample.config_goal, results.start_sample.config_goal], ys, 'r')
-            ax10.plot([plot_data[0], plot_data[0]], ys, 'r')
-            ax20.plot([plot_data[1], plot_data[1]], ys, 'r')
-        if results.start_sample.policy.type == 'Revolute':
-            plot_data = get_policy_params(results.start_sample.policy)
-            ax01.plot([results.start_sample.config_goal, results.start_sample.config_goal], ys, 'r')
-            ax11.plot([plot_data[0], plot_data[0]], ys, 'r')
-            ax21.plot([plot_data[1], plot_data[1]], ys, 'r')
-            ax31.plot([plot_data[2], plot_data[2]], ys, 'r')
-
-        # plot final search sample
-        if results.end_sample.policy.type == 'Prismatic':
-            plot_data = get_policy_params(results.end_sample.policy)
-            ax00.plot([results.end_sample.config_goal, results.end_sample.config_goal], ys, 'g--')
-            ax10.plot([plot_data[0], plot_data[0]], ys, 'g--')
-            ax20.plot([plot_data[1], plot_data[1]], ys, 'g--')
-        if results.end_sample.policy.type == 'Revolute':
-            plot_data = get_policy_params(results.end_sample.policy)
-            ax01.plot([results.end_sample.config_goal, results.end_sample.config_goal], ys, 'g--')
-            ax11.plot([plot_data[0], plot_data[0]], ys, 'g--')
-            ax21.plot([plot_data[1], plot_data[1]], ys, 'g--')
-            ax31.plot([plot_data[2], plot_data[2]], ys, 'g--')
-
-        # show image of mechanism is one of the subplots
-        ax30.imshow(results.image_data[2])
-
-        ax_left.set_title('Prismatic Policies')
-        ax_left.set_ylabel('Predicted Motion')
-        ax_right.set_title('Revolute Policies')
-        ax_right.set_ylabel('Predicted Motion')
-        ax00.set_xlabel('Goal Config')
-        ax10.set_xlabel('Roll')
-        ax20.set_xlabel('Pitch')
-        ax01.set_xlabel('Goal Config')
-        ax11.set_xlabel('Radius')
-        ax21.set_xlabel('Roll')
-        ax31.set_xlabel('Pitch')
-    '''
+            configs = list(config_data.keys())
+            configs.sort()
+            n_configs = len(configs)
+            config_num = 0
+            lw = int(round(np.sqrt(n_configs)))
+            fig, axes = plt.subplots(lw, lw, sharex=True, sharey=True)
+            plt.setp(axes.flat, aspect=1.0, adjustable='box-forced')
+            for ax in axes.flatten():
+                if config_num < n_configs:
+                    im = ax.scatter(config_data[configs[config_num]][0],
+                                    config_data[configs[config_num]][1],
+                                    c=config_data[configs[config_num]][2],
+                                    vmin=min_motion, vmax=max_motion)
+                    ax.set_title(str(round(configs[config_num], 2))+', limit='+str(round(limit, 2)))
+                    config_num += 1
+            im.set_clim(min_motion, max_motion)
+            plt.xlabel('Delta Yaw')
+            plt.ylabel('Delta Pitch')
+            fig.colorbar(im, ax=axes.ravel().tolist())
 
 ## PLOTS THAT USE A MODEL FILE ##
 
@@ -380,10 +388,10 @@ class YawPitchMotion(PlotFunc):
 
     def _plot(self, model):
         n_policy_samples = 100
-        n_configs = 11
-        n_mechs = 1
+        n_configs = 9
+        n_mechs = 5
         goal_configs = np.linspace(-1.2, 1.2, n_configs)
-        fig, axes = plt.subplots(n_configs, 2*n_mechs, sharex=True, sharey=True)
+        fig, axes = plt.subplots(n_configs, n_mechs, sharex=True, sharey=True)
         #ax = fig.add_subplot(111)
         #ax.spines['top'].set_color('none')
         #ax.spines['bottom'].set_color('none')
@@ -392,20 +400,23 @@ class YawPitchMotion(PlotFunc):
         #ax.tick_params(labelcolor='w', top=False, bottom=False, left=False, right=False)
         #ax.set_title('True Motion (Left) and Predicted Motion (Right)')
         plt.setp(axes.flat, aspect=1.0, adjustable='box-forced')
-        max_motion = -float('inf')
-        min_motion = float('inf')
+        true_yaws = np.zeros((n_mechs, n_configs, n_policy_samples))
+        true_pitches = np.zeros((n_mechs, n_configs, n_policy_samples))
+        true_motions = np.zeros((n_mechs, n_configs, n_policy_samples))
+        mech_limits = []
         for m in range(n_mechs):
-            bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider])
+            bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider], urdf_tag='plot')
+            mech_limits += [bb._mechanisms[0].range/2]
             for (j, goal_config) in enumerate(goal_configs):
                 # get ground truth motion for random policies
                 results = []
                 for _ in range(n_policy_samples):
                     result = generate_samples(False, False, 1, True, 1.0, goal_config, bb)[0]
                     results += [result]
-                true_yaws = [result.policy_params.delta_values.delta_yaw for result in results]
-                true_pitches = [result.policy_params.delta_values.delta_pitch for result in results]
-                true_motions = [result.motion for result in results]
-
+                true_yaws[m,j,:] = [result.policy_params.delta_values.delta_yaw for result in results]
+                true_pitches[m,j,:] = [result.policy_params.delta_values.delta_pitch for result in results]
+                true_motions[m,j,:] = [result.cumu_motion for result in results]
+                '''
                 # get predicted motion for same policies
                 data = parse_pickle_file(data=results)
                 dataset = PolicyDataset(data)
@@ -422,26 +433,27 @@ class YawPitchMotion(PlotFunc):
                     policy = get_policy_from_params(policy_type, policy_params[0].numpy())
                     pred_yaws += [dataset.delta_vals[i].delta_yaw]
                     pred_pitches += [dataset.delta_vals[i].delta_pitch]
+                '''
+        #min_c = min(min(true_motions), min(pred_motions))
+        #max_c = max(max(true_motions), max(pred_motions))
+        min_motion = min(true_motions.flatten())
+        max_motion = max(true_motions.flatten())
+        for m in range(n_mechs):
+            for (j, goal_config) in enumerate(goal_configs):
+                im = axes[j,m].scatter(true_yaws[m,j,:], true_pitches[m,j,:], c=true_motions[m,j,:], vmin=min_motion, vmax=max_motion)
+                axes[j,m].set_title(str(round(goal_config, 2))+', limit='+str(round(mech_limits[m],2)))
+        #im = axes[j,m*2+1].scatter(pred_yaws, pred_pitches, c=pred_motions)#, vmin=min_c, vmax=max_c)
 
-                min_c = min(min(true_motions), min(pred_motions))
-                max_c = max(max(true_motions), max(pred_motions))
-                min_motion = min(min_motion, min_c)
-                max_motion = max(max_motion, max_c)
+        #axes[j,m*2-1].set_xlabel('Delta Pitch')
+        #axes[j,m*2].set_xlabel('Delta Pitch')
+        #axes[j,m*2-1].set_ylabel('Delta Yaw')
+        #axes[j,m*2].set_ylabel('Delta Yaw')
+        #axes[j,m*2+1].set_title(str(round(goal_config, 2)))
 
-                im = axes[j,m*2].scatter(true_yaws, true_pitches, c=true_motions)#, vmin=min_c, vmax=max_c)
-                im = axes[j,m*2+1].scatter(pred_yaws, pred_pitches, c=pred_motions)#, vmin=min_c, vmax=max_c)
-
-                #axes[j,m*2-1].set_xlabel('Delta Pitch')
-                #axes[j,m*2].set_xlabel('Delta Pitch')
-                #axes[j,m*2-1].set_ylabel('Delta Yaw')
-                #axes[j,m*2].set_ylabel('Delta Yaw')
-                axes[j,m*2].set_title(str(round(goal_config, 2)))
-                axes[j,m*2+1].set_title(str(round(goal_config, 2)))
-
-                #ax_right.set_xlabel('Delta Pitch')
-                #ax_right.set_ylabel('Delta Yaw')
-                #ax_right.set_title('Predicted Motion\nq='+str(round(goal_config, 2)))
-                #fig.colorbar(im_right, ax=ax_right)
+        #ax_right.set_xlabel('Delta Pitch')
+        #ax_right.set_ylabel('Delta Yaw')
+        #ax_right.set_title('Predicted Motion\nq='+str(round(goal_config, 2)))
+        #fig.colorbar(im_right, ax=ax_right)
         #fig.colorbar(im_left, ax=ax_left)
         #plt.axis('scaled')
         im.set_clim(min_motion, max_motion)
@@ -468,7 +480,7 @@ def plot_results(file_name):
     else:
         data = util.read_from_file(file_name)
     try:
-        if type(data[0]) == Result:
+        if type(data[0]) == util.Result:
             print_stats(data)
     except:
         pass
