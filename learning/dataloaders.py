@@ -126,7 +126,7 @@ def parse_pickle_file(fname=None, data=None):
             radius = list(entry.policy_params.params.rot_radius)
             policy_params = center + roll + pitch + orn + radius
             mech_params = []
-        motion = entry.motion
+        motion = entry.net_motion
 
 
 

@@ -110,7 +110,7 @@ if __name__ == '__main__':
     data_file_name = args.data_fname
 
     if args.mode == 'normal':
-        train_eval(args, args.ntrain, data_file_name, args.model_fname, True, args.use_cuda)
+        train_eval(args, args.ntrain, data_file_name, args.model_fname, False, args.use_cuda)
     elif args.mode == 'ntrain':
         vals = []
         step = 500
