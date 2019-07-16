@@ -2,12 +2,15 @@ import pybullet as p
 import numpy as np
 import pickle
 import util.transformations as trans
+from util import setup_pybullet
 import math
 from collections import namedtuple
 import os
 import torch
 from learning.nn_disp_pol import DistanceRegressor as NNPol
 from learning.nn_disp_pol_vis import DistanceRegressor as NNPolVis
+from actions import policies
+from actions.gripper import Gripper
 
 ### namedtuple Definitions ###
 Pose = namedtuple('Pose', 'p q')
@@ -17,7 +20,7 @@ Pose represents an SE(3) pose
 :param q: a vector of length 4, representing an (x,y,z,w) quaternion
 """
 
-Result = namedtuple('Result', 'policy_params mechanism_params motion \
+Result = namedtuple('Result', 'policy_params mechanism_params net_motion cumu_motion \
                         pose_joint_world_init pose_joint_world_final config_goal \
                         image_data git_hash randomness')
 """
@@ -92,6 +95,34 @@ def merge_files(in_file_names, out_file_name):
     return results
 
 ### PyBullet Helper Functions ###
+def replay_result(result):
+    bb = setup_pybullet.custom_bb_slider()
+    image_data = setup_pybullet.setup_env(bb, True, True)
+    gripper = Gripper(bb.bb_id)
+    mech = bb._mechanisms[0]
+    policy = policies.get_policy_from_tuple(result.policy_params)
+    config_goal = result.config_goal
+    pose_handle_world_init = Pose(*p.getLinkState(bb.bb_id, mech.handle_id)[:2])
+    pose_handle_base_world = mech.get_pose_handle_base_world()
+    traj = policy.generate_trajectory(pose_handle_base_world, config_goal, True)
+    joint_motion, pose_handle_world_final = \
+            gripper.execute_trajectory(traj, mech, policy.type, True)
+    p.disconnect()
+
+    bb = setup_pybullet.custom_bb_slider()
+    image_data = setup_pybullet.setup_env(bb, True, True)
+    gripper = Gripper(bb.bb_id)
+    mech = bb._mechanisms[0]
+    policy = policies.get_policy_from_tuple(result.policy_params)
+    policy.pitch += np.pi
+    config_goal = result.config_goal
+    pose_handle_world_init = Pose(*p.getLinkState(bb.bb_id, mech.handle_id)[:2])
+    pose_handle_base_world = mech.get_pose_handle_base_world()
+    traj = policy.generate_trajectory(pose_handle_base_world, config_goal, True)
+    joint_motion, pose_handle_world_final = \
+            gripper.execute_trajectory(traj, mech, policy.type, True)
+    p.disconnect()
+
 def vis_frame(pos, quat, length=0.2, lifeTime=0.4):
     """ This function visualizes a coordinate frame for the supplied frame where the
     red,green,blue lines correpsond to the x,y,z axes.

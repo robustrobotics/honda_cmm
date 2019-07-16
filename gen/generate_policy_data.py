@@ -4,7 +4,7 @@ from util import util
 import numpy as np
 import argparse
 import pybullet as p
-from util.setup_pybullet import setup_env
+from util.setup_pybullet import setup_env, custom_bb_door, custom_bb_slider
 from actions import policies
 from actions.gripper import Gripper
 from gen.generator_busybox import Slider, Door, BusyBox
@@ -23,21 +23,21 @@ def generate_samples(viz, debug, max_mech, match_policies, randomness,
         # generate either a random or model-based policy and goal configuration
         policy = policies.generate_policy(bb, mech, match_policies, randomness)
         config_goal = policy.generate_config(mech, goal_config)
-        pose_handle_world_init = p.getLinkState(bb.bb_id, mech.handle_id)[:2]
+        pose_handle_world_init = util.Pose(*p.getLinkState(bb.bb_id, mech.handle_id)[:2])
 
         # calculate trajectory
         pose_handle_base_world = mech.get_pose_handle_base_world()
         traj = policy.generate_trajectory(pose_handle_base_world, config_goal, debug)
 
         # execute trajectory
-        joint_motion, pose_handle_world_final = \
+        cumu_motion, net_motion, pose_handle_world_final = \
                 gripper.execute_trajectory(traj, mech, policy.type, debug)
 
         # save result data
         policy_params = policy.get_policy_tuple()
         mechanism_params = mech.get_mechanism_tuple()
-        results += [util.Result(policy_params, mechanism_params, joint_motion, \
-                    pose_handle_world_init, pose_handle_world_final, \
+        results += [util.Result(policy_params, mechanism_params, net_motion, \
+                    cumu_motion, pose_handle_world_init, pose_handle_world_final, \
                     config_goal, image_data, git_hash, randomness)]
 
     p.disconnect()

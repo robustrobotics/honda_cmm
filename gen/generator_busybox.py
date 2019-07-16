@@ -33,9 +33,9 @@ class Mechanism(object):
 
     def get_pose_handle_base_world(self):
         pose_handle_world = util.Pose(*p.getLinkState(self.bb_id, self.handle_id)[:2])
-        p_door_base_handle = [0., 0., self.handle_length/2]
-        p_door_base_world = util.transformation(p_door_base_handle, *pose_handle_world)
-        return util.Pose(p_door_base_world, pose_handle_world.q)
+        p_handle_base = [0., 0., self.handle_length/2]
+        p_handle_base_world = util.transformation(p_handle_base, *pose_handle_world)
+        return util.Pose(p_handle_base_world, pose_handle_world.q)
 
     def get_bounding_box(self):
         """ This method should return a bounding box of the 2-dimensional

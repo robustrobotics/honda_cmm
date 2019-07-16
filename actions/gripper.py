@@ -40,7 +40,7 @@ _M - matrix form of a pose/transformation
 """
 
 class Gripper:
-    def __init__(self, bb_id, k=[2000.0,20.0], d=[0.45,0.45], add_dist=0.1, p_err_thresh=0.005):
+    def __init__(self, bb_id, k=[2000.0,20.0], d=[0.45,0.45]):
         """
         This class defines the actions a gripper can take such as grasping a handle
         and executing PD control
@@ -49,9 +49,6 @@ class Gripper:
                     (stiffness) gain and the second entry is the angular position gain
         :param d: a vector of length 2 where the first entry is the linear derivative
                     (damping) gain and the second entry is the angular derivative gain
-        :param add_dist: scalar, the distance the PD controller is trying to control to
-        :param p_err_thresh: scalar, the allowable error before the controller moves
-                                to the next setpoint
         """
         self._id = p.loadSDF("../models/gripper/gripper_high_fric.sdf")[0]
         self._bb_id = bb_id
@@ -72,8 +69,6 @@ class Gripper:
         # control parameters
         self.k = k
         self.d = d
-        self.add_dist = add_dist
-        self.p_err_thresh = p_err_thresh
 
     def _get_p_tip_world(self):
         p_left_world = p.getLinkState(self._id, self._left_finger_tip_id)[0]
@@ -130,9 +125,9 @@ class Gripper:
         e_handle_base_world_err = util.euler_from_quaternion(q_handle_base_world_err)
         return p_handle_base_world_err, e_handle_base_world_err
 
-    def _at_des_handle_base_pose(self, pose_handle_base_world_des, q_offset, mech):
+    def _at_des_handle_base_pose(self, pose_handle_base_world_des, q_offset, mech, thresh):
         p_handle_base_world_err, _ = self._get_pose_handle_base_world_error(pose_handle_base_world_des, q_offset, mech)
-        return np.linalg.norm(p_handle_base_world_err) < self.p_err_thresh
+        return np.linalg.norm(p_handle_base_world_err) < thresh
 
     def _stable(self, handle_base_ps):
         if len(handle_base_ps) < 10:
@@ -182,13 +177,7 @@ class Gripper:
         p.setJointMotorControl2(self._id,5,p.POSITION_CONTROL,targetPosition=0,force=self._finger_force)
         p.stepSimulation()
 
-    def _move_PD(self, pose_handle_base_world_des, prev_pose_handle_base_world_des, q_offset, mech, last_traj_p, debug=False, timeout=100):
-        # move setpoint further away in a straight line between previous desired pose and current desired pose
-        dir = np.subtract(pose_handle_base_world_des.p, prev_pose_handle_base_world_des.p)
-        unit_dir = np.divide(dir,np.linalg.norm([dir]))
-        p_handle_base_world_des_far = np.add(prev_pose_handle_base_world_des.p, np.multiply(self.add_dist,unit_dir))
-        pose_handle_base_world_des_far = util.Pose(p_handle_base_world_des_far, pose_handle_base_world_des.q)
-
+    def _move_PD(self, pose_handle_base_world_des, q_offset, mech, last_traj_p, debug=False, timeout=100):
         finished = False
         handle_base_ps = []
         for i in itertools.count():
@@ -196,9 +185,9 @@ class Gripper:
                 p.addUserDebugLine(np.add(pose_handle_base_world_des.p, [0.,0.025,0.]), np.add(pose_handle_base_world_des.p, [0,.025,1]), lifeTime=.5)
             handle_base_ps.append(mech.get_pose_handle_base_world().p)
             self._control_fingers('close', debug=debug)
-            if (not last_traj_p) and self._at_des_handle_base_pose(pose_handle_base_world_des, q_offset, mech):
+            if (not last_traj_p) and self._at_des_handle_base_pose(pose_handle_base_world_des, q_offset, mech, 0.01):
                 return handle_base_ps, False
-            elif last_traj_p and self._at_des_handle_base_pose(pose_handle_base_world_des, q_offset, mech) and self._stable(handle_base_ps):
+            elif last_traj_p and self._at_des_handle_base_pose(pose_handle_base_world_des, q_offset, mech, 0.005) and self._stable(handle_base_ps):
                 return handle_base_ps, True
             elif self._stable(handle_base_ps) and (i > timeout):
                 if debug:
@@ -207,7 +196,7 @@ class Gripper:
 
             # get position error of the handle base, but velocity error of the
             # gripper COM
-            p_handle_base_world_err, e_handle_base_world_err = self._get_pose_handle_base_world_error(pose_handle_base_world_des_far, q_offset, mech, True)
+            p_handle_base_world_err, e_handle_base_world_err = self._get_pose_handle_base_world_error(pose_handle_base_world_des, q_offset, mech)
             v_tip_world_des = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
             lin_v_com_world_err, omega_com_world_err = self._get_v_com_world_error(v_tip_world_des)
 
@@ -227,8 +216,8 @@ class Gripper:
         if policy_type == 'Revolute':
             self.k = [2000.0,20.0]
         if policy_type == 'Prismatic':
-            self.k = [800.0,20.0]
-            self.d = [200.,0.45]
+            self.k = [3000.0,20.0]
+            self.d = [250.0,0.45]
 
     def execute_trajectory(self, traj, mech, policy_type, debug):
         self.set_control_params(policy_type)
@@ -241,14 +230,17 @@ class Gripper:
         # offset between the initial trajectory orientation and the initial handle orientation
         q_offset = util.quat_math(traj[0].q, mech.get_pose_handle_base_world().q, True, False)
         self._grasp_handle(pose_tip_world_init, debug)
-        joint_motion = 0.0
-        for i in range(len(traj[1:])):
-            last_traj_p = (i == len(traj[1:])-1)
-            handle_base_ps, finished = self._move_PD(traj[i], traj[i-1], q_offset, mech, last_traj_p, debug)
-            joint_motion = np.add(joint_motion, np.linalg.norm(np.subtract(handle_base_ps[-1],handle_base_ps[0])))
+        cumu_motion = 0.0
+        for i in range(len(traj)):
+            last_traj_p = (i == len(traj)-1)
+            handle_base_ps, finished = self._move_PD(traj[i], q_offset, mech, last_traj_p, debug)
+            cumu_motion = np.add(cumu_motion, np.linalg.norm(np.subtract(handle_base_ps[-1],handle_base_ps[0])))
             if finished:
                 break
         pose_handle_world_final = None
         if self._in_contact(mech):
             pose_handle_world_final = util.Pose(*p.getLinkState(self._bb_id, mech.handle_id)[:2])
-        return joint_motion, pose_handle_world_final
+        net_motion = 0.0
+        if pose_handle_world_final is not None:
+            net_motion = np.linalg.norm(np.subtract(pose_handle_world_final.p, pose_handle_world_init.p))
+        return cumu_motion, net_motion, pose_handle_world_final
