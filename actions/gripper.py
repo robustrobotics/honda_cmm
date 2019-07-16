@@ -134,6 +134,14 @@ class Gripper:
         p_handle_base_world_err, _ = self._get_pose_handle_base_world_error(pose_handle_base_world_des, q_offset, mech)
         return np.linalg.norm(p_handle_base_world_err) < self.p_err_thresh
 
+    def _stable(self, handle_base_ps):
+        if len(handle_base_ps) < 10:
+            return False
+        movement = 0.0
+        for i in range(-10,-1):
+            movement += np.linalg.norm(np.subtract(handle_base_ps[i], handle_base_ps[i+1]))
+        return movement < 0.005
+
     def _in_contact(self, mech):
         points = p.getContactPoints(self._id, self._bb_id, linkIndexB=mech.handle_id)
         if len(points)>0:
@@ -174,43 +182,32 @@ class Gripper:
         p.setJointMotorControl2(self._id,5,p.POSITION_CONTROL,targetPosition=0,force=self._finger_force)
         p.stepSimulation()
 
-    def _move_PD(self, pose_handle_base_world_des, prev_pose_handle_base_world_des, q_offset, mech, debug=False, timeout=100):
+    def _move_PD(self, pose_handle_base_world_des, prev_pose_handle_base_world_des, q_offset, mech, last_traj_p, debug=False, timeout=100):
         # move setpoint further away in a straight line between previous desired pose and current desired pose
-        if prev_pose_handle_base_world_des is None:
-            # TODO: could do something smarter here. this assumes initially want to move in +x direction
-            dir = [0,1,0]
-            unit_dir = np.divide(dir,np.linalg.norm([dir]))
-            p_handle_base_world_des_far = np.add(pose_handle_base_world_des.p, np.multiply(self.add_dist,unit_dir))
-        else:
-            dir = np.subtract(pose_handle_base_world_des.p, prev_pose_handle_base_world_des.p)
-            unit_dir = np.divide(dir,np.linalg.norm([dir]))
-            p_handle_base_world_des_far = np.add(prev_pose_handle_base_world_des.p, np.multiply(self.add_dist,unit_dir))
+        dir = np.subtract(pose_handle_base_world_des.p, prev_pose_handle_base_world_des.p)
+        unit_dir = np.divide(dir,np.linalg.norm([dir]))
+        p_handle_base_world_des_far = np.add(prev_pose_handle_base_world_des.p, np.multiply(self.add_dist,unit_dir))
         pose_handle_base_world_des_far = util.Pose(p_handle_base_world_des_far, pose_handle_base_world_des.q)
 
         finished = False
         handle_base_ps = []
-
-        if debug:
-            p.addUserDebugLine(pose_handle_base_world_des_far.p, np.add(pose_handle_base_world_des_far.p, [0,0,1]), lifeTime=.5)
         for i in itertools.count():
-            handle_base_ps.append(mech.get_pose_handle_base_world().p)
             if debug:
-                p.addUserDebugLine(mech.get_pose_handle_base_world().p, np.add(mech.get_pose_handle_base_world().p, [0,0,1]), lifeTime=1)
-            # keep fingers closed (doesn't seem to make a difference but should
-            # probably continually close fingers)
+                p.addUserDebugLine(np.add(pose_handle_base_world_des.p, [0.,0.025,0.]), np.add(pose_handle_base_world_des.p, [0,.025,1]), lifeTime=.5)
+            handle_base_ps.append(mech.get_pose_handle_base_world().p)
             self._control_fingers('close', debug=debug)
-
-            if self._at_des_handle_base_pose(pose_handle_base_world_des, q_offset, mech):
-                finished = True
-                break
-            if i>timeout:
+            if (not last_traj_p) and self._at_des_handle_base_pose(pose_handle_base_world_des, q_offset, mech):
+                return handle_base_ps, False
+            elif last_traj_p and self._at_des_handle_base_pose(pose_handle_base_world_des, q_offset, mech) and self._stable(handle_base_ps):
+                return handle_base_ps, True
+            elif self._stable(handle_base_ps) and (i > timeout):
                 if debug:
                     print('timeout limit reached. moving the next joint')
-                break
+                return handle_base_ps, True
 
             # get position error of the handle base, but velocity error of the
             # gripper COM
-            p_handle_base_world_err, e_handle_base_world_err = self._get_pose_handle_base_world_error(pose_handle_base_world_des_far, q_offset, mech)
+            p_handle_base_world_err, e_handle_base_world_err = self._get_pose_handle_base_world_error(pose_handle_base_world_des_far, q_offset, mech, True)
             v_tip_world_des = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
             lin_v_com_world_err, omega_com_world_err = self._get_v_com_world_error(v_tip_world_des)
 
@@ -218,18 +215,20 @@ class Gripper:
             f = np.multiply(self.k[0], p_handle_base_world_err) + np.multiply(self.d[0], lin_v_com_world_err)
             tau = np.multiply(self.k[1], e_handle_base_world_err) + np.multiply(self.d[1], omega_com_world_err)
             p_com_world, q_com_world = self._get_pose_com_('world')
+            if debug:
+                p.addUserDebugLine(p_com_world, np.add(p_com_world, p_handle_base_world_err), [1,0,0], lifeTime=.05)
             p.applyExternalForce(self._id, -1, f, p_com_world, p.WORLD_FRAME)
             # there is a bug in pyBullet. the link frame and world frame are inverted
             # this should be executed in the WORLD_FRAME
             p.applyExternalTorque(self._id, -1, tau, p.LINK_FRAME)
             p.stepSimulation()
-        return handle_base_ps, finished
 
     def set_control_params(self, policy_type):
         if policy_type == 'Revolute':
             self.k = [2000.0,20.0]
         if policy_type == 'Prismatic':
             self.k = [800.0,20.0]
+            self.d = [200.,0.45]
 
     def execute_trajectory(self, traj, mech, policy_type, debug):
         self.set_control_params(policy_type)
@@ -240,25 +239,16 @@ class Gripper:
         pose_tip_world_init = util.Pose(p_tip_world_init, self.pose_tip_world_reset.q)
 
         # offset between the initial trajectory orientation and the initial handle orientation
-        pose_handle_base_world = mech.get_pose_handle_base_world()
-        q_offset = util.quat_math(traj[0].q, pose_handle_base_world.q, True, False)
-
+        q_offset = util.quat_math(traj[0].q, mech.get_pose_handle_base_world().q, True, False)
         self._grasp_handle(pose_tip_world_init, debug)
         joint_motion = 0.0
-        prev_pose_handle_base_world_des = None
-        for (i, pose_handle_base_world_des) in enumerate(traj):
-            start_p_handle_world = p.getLinkState(self._bb_id, mech.handle_id)[0]
-            handle_base_ps, finished = self._move_PD(pose_handle_base_world_des, prev_pose_handle_base_world_des, q_offset, mech, debug)
-            prev_pose_handle_base_world_des = pose_handle_base_world_des
-            final_p_handle_world = p.getLinkState(self._bb_id, mech.handle_id)[0]
-            joint_motion = np.add(joint_motion, np.linalg.norm(np.subtract(final_p_handle_world,start_p_handle_world)))
-            if debug:
-                for j in range(len(handle_base_ps)-1):
-                    p.addUserDebugLine(handle_base_ps[j], handle_base_ps[j+1], [0,0,1])
-            if not finished:
+        for i in range(len(traj[1:])):
+            last_traj_p = (i == len(traj[1:])-1)
+            handle_base_ps, finished = self._move_PD(traj[i], traj[i-1], q_offset, mech, last_traj_p, debug)
+            joint_motion = np.add(joint_motion, np.linalg.norm(np.subtract(handle_base_ps[-1],handle_base_ps[0])))
+            if finished:
                 break
+        pose_handle_world_final = None
         if self._in_contact(mech):
             pose_handle_world_final = util.Pose(*p.getLinkState(self._bb_id, mech.handle_id)[:2])
-        else:
-            pose_handle_world_final = None
         return joint_motion, pose_handle_world_final
