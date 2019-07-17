@@ -124,7 +124,13 @@ class Prismatic(Policy):
     @staticmethod
     def generate_config(mech, goal_config):
         if goal_config is None:
-            return np.random.uniform(-0.25,0.25) # from gen.generator_busybox range limits
+            # TODO: make more general
+            # currently only samples up to 1.2 x joint limit
+            max_config = 1.2*mech.range/2
+            config_mag = util.discrete_sampler([0.0,max_config], 0.1)
+            dir = np.random.choice([-1,1])
+            return dir*config_mag
+            #return np.random.uniform(-max_config,max_config)
         else:
             return goal_config*mech.range/2.0
 
