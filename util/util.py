@@ -11,7 +11,7 @@ from learning.nn_disp_pol import DistanceRegressor as NNPol
 from learning.nn_disp_pol_vis import DistanceRegressor as NNPolVis
 from actions import policies
 from actions.gripper import Gripper
-
+from gen.generator_busybox import BusyBox
 ### namedtuple Definitions ###
 Pose = namedtuple('Pose', 'p q')
 """
@@ -96,7 +96,7 @@ def merge_files(in_file_names, out_file_name):
 
 ### PyBullet Helper Functions ###
 def replay_result(result):
-    bb = setup_pybullet.custom_bb_slider()
+    bb = BusyBox.bb_from_result(result)
     image_data = setup_pybullet.setup_env(bb, True, True)
     gripper = Gripper(bb.bb_id)
     mech = bb._mechanisms[0]
@@ -105,22 +105,7 @@ def replay_result(result):
     pose_handle_world_init = Pose(*p.getLinkState(bb.bb_id, mech.handle_id)[:2])
     pose_handle_base_world = mech.get_pose_handle_base_world()
     traj = policy.generate_trajectory(pose_handle_base_world, config_goal, True)
-    joint_motion, pose_handle_world_final = \
-            gripper.execute_trajectory(traj, mech, policy.type, True)
-    p.disconnect()
-
-    bb = setup_pybullet.custom_bb_slider()
-    image_data = setup_pybullet.setup_env(bb, True, True)
-    gripper = Gripper(bb.bb_id)
-    mech = bb._mechanisms[0]
-    policy = policies.get_policy_from_tuple(result.policy_params)
-    policy.pitch += np.pi
-    config_goal = result.config_goal
-    pose_handle_world_init = Pose(*p.getLinkState(bb.bb_id, mech.handle_id)[:2])
-    pose_handle_base_world = mech.get_pose_handle_base_world()
-    traj = policy.generate_trajectory(pose_handle_base_world, config_goal, True)
-    joint_motion, pose_handle_world_final = \
-            gripper.execute_trajectory(traj, mech, policy.type, True)
+    _, net_motion, _ = gripper.execute_trajectory(traj, mech, policy.type, True)
     p.disconnect()
 
 def vis_frame(pos, quat, length=0.2, lifeTime=0.4):
