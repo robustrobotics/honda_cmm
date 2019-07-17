@@ -79,7 +79,7 @@ def train_eval(args, n_train, data_file_name, model_file_name, pviz, use_cuda):
                 yhats += yhat.detach().numpy().tolist()
 
             if pviz:
-                viz.plot_y_yhat(ys, yhats, types, title='PolVis')
+                viz.plot_y_yhat(ys, yhats, types, ex, title='PolVis')
 
             print('[Epoch {}] - Validation Loss: {}'.format(ex, np.mean(val_losses)))
             if np.mean(val_losses) < best_val:
@@ -110,7 +110,7 @@ if __name__ == '__main__':
     data_file_name = args.data_fname
 
     if args.mode == 'normal':
-        train_eval(args, args.ntrain, data_file_name, args.model_fname, False, args.use_cuda)
+        train_eval(args, args.ntrain, data_file_name, args.model_fname, True, args.use_cuda)
     elif args.mode == 'ntrain':
         vals = []
         step = 500

@@ -4,7 +4,8 @@ import torch
 from learning.dataloaders import setup_data_loaders
 from learning.nn_disp_pol_vis import DistanceRegressor as NNPolVis
 
-def plot_y_yhat(y, yhat, types, title=''):
+def plot_y_yhat(y, yhat, types, epoch_num, title=''):
+    plt.figure()
     lookup = {'Revolute': 'r',
               'Prismatic': 'b'}
     plt.xlim([0, 0.25])
@@ -23,8 +24,9 @@ def plot_y_yhat(y, yhat, types, title=''):
         y2 = [yhat[ix] for ix, t in enumerate(types) if t == n]
         colors = [lookup[n]] * len(y1)
         plt.scatter(y1, y2, s=1, c=colors, label=n)
-
+    
     plt.legend()
+    plt.savefig('pred_err_'+str(epoch_num)+'.png', bbox_inches='tight')    
     plt.show()
 
 
