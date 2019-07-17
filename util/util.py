@@ -46,6 +46,22 @@ ImageData contains a subset of the image data returned by pybullet
 :param rgbPixels: list of [char RED,char GREEN,char BLUE, char ALPHA] [0..width*height],
                     list of pixel colors in R,G,B,A format, in range [0..255] for each color
 """
+### Sampling Helper Function
+# TODO: want the prob of bin 0 to go to 0 as the slope increases (currently doesn't do that)
+def discrete_sampler(range_vals, slope, n_bins=10):
+    probs = [slope*p for p in range(1,n_bins+1)]
+
+    # subtract diff from all the make area=1
+    diff = np.subtract(1.0, sum(probs))
+    diff_i = np.divide(diff, n_bins)
+    probs = np.subtract(diff_i, probs)
+
+    # then normalize (still some rounding error)
+    probs = np.divide(probs, sum(probs))
+    choice = np.random.choice([i for i in range(n_bins)], p=probs)
+    vals = np.linspace(range_vals[0], range_vals[1], n_bins+1)
+    val = np.random.uniform(vals[choice], vals[choice+1])
+    return val
 
 ### Model Testing Helper Functions ###
 def load_model(model_fname, model_type='polvis', use_cuda=False):
@@ -252,6 +268,21 @@ def quaternion_from_euler(roll, pitch, yaw):
     return to_pyquat(trans_q)
 
 if __name__ == '__main__':
-    in_names = ['data/datasets/clean_0_5000', 'data/datasets/clean_1_5000']
-    out_name = 'data/datasets/clean_10000'
-    merge_files(in_names, out_name)
+    # testing the sampler
+    import matplotlib.pyplot as plt
+    n_bins = 10
+    range_s = [0.,.25]
+    hist_data = {}
+    vals = np.linspace(range_s[0], range_s[1], n_bins+1)
+    keys = vals[:-1]
+    slope = .1
+    samples = []
+    for _ in range(1000):
+        samples += [discrete_sampler(range_s, slope, n_bins)]
+    plt.ion()
+    plt.hist(samples, n_bins)
+    plt.show()
+    input()
+    #in_names = ['data/datasets/clean_0_5000', 'data/datasets/clean_1_5000']
+    #out_name = 'data/datasets/clean_10000'
+    #merge_files(in_names, out_name)
