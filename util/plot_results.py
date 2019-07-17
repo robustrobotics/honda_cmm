@@ -395,13 +395,13 @@ class VisTraining(PlotFunc):
             limit = point.mechanism_params.params.range/2
             closest_lim = min(limits, key=lambda x: abs(x-limit))
             closest_lim_i = list(limits).index(closest_lim)
-            if closest_lim > limit:
+            if closest_lim > limit or closest_lim_i == n_limit_bins:
                 closest_lim_i -= 1
 
             q_perc = abs(point.config_goal/limit)
             closest_q_perc = min(q_percs, key=lambda x: abs(x-q_perc))
             closest_q_perc_i = list(q_percs).index(closest_q_perc)
-            if closest_q_perc > q_perc:
+            if closest_q_perc > q_perc or closest_q_perc_i == n_q_perc_bins:
                 closest_q_perc_i -= 1
 
             if (closest_lim_i, closest_q_perc_i) not in plot_data:
@@ -412,23 +412,22 @@ class VisTraining(PlotFunc):
                 plot_data[(closest_lim_i, closest_q_perc_i)][0] += [point.policy_params.delta_values.delta_yaw]
                 plot_data[(closest_lim_i, closest_q_perc_i)][1] += [point.policy_params.delta_values.delta_pitch]
                 plot_data[(closest_lim_i, closest_q_perc_i)][2] += [point.net_motion]
-
         fig, axes = plt.subplots(n_limit_bins, n_q_perc_bins)
-        plt.setp(axes.flat, aspect=1.0, adjustable='box-forced')
         for i in range(n_limit_bins):
             for j in range(n_q_perc_bins):
-                minm = min(plot_data[i,j][2])
-                maxm = max(plot_data[i,j][2])
-                im = axes[i,j].scatter(plot_data[i,j][0], plot_data[i,j][1], c=plot_data[i,j][2], vmin=minm, vmax=maxm)
-                if j==0:
-                    limit_min = str(round(limits[i],2))
-                    limit_max = str(round(limits[i+1],2))
-                    axes[i,j].set_ylabel('limit=['+limit_min+','+limit_max+']')
-                if i==0:
-                    q_perc_min = str(round(q_percs[j],2))
-                    q_perc_max = str(round(q_percs[j+1],2))
-                    axes[i,j].set_title('q%=['+q_perc_min+','+q_perc_max+']')
-                fig.colorbar(im, ax=axes[i,j])
+                if (i,j) in plot_data:
+                    minm = min(plot_data[i,j][2])
+                    maxm = max(plot_data[i,j][2])
+                    im = axes[i,j].scatter(plot_data[i,j][0], plot_data[i,j][1], c=plot_data[i,j][2], vmin=minm, vmax=maxm)
+                    if j==0:
+                        limit_min = str(round(limits[i],2))
+                        limit_max = str(round(limits[i+1],2))
+                        axes[i,j].set_ylabel('limit=['+limit_min+','+limit_max+']')
+                    if i==0:
+                        q_perc_min = str(round(q_percs[j],2))
+                        q_perc_max = str(round(q_percs[j+1],2))
+                        axes[i,j].set_title('q%=['+q_perc_min+','+q_perc_max+']')
+                    fig.colorbar(im, ax=axes[i,j])
 
 ## PLOTS THAT USE A MODEL FILE ##
 
