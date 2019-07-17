@@ -378,6 +378,58 @@ class YawPitchMotionResults(PlotFunc):
             plt.ylabel('Delta Pitch')
             fig.colorbar(im, ax=axes.ravel().tolist())
 
+class VisTraining(PlotFunc):
+
+    @staticmethod
+    def description():
+        return 'visualize training dataset'
+
+    def _plot(self, data):
+        n_q_perc_bins = 6
+        n_limit_bins = 4
+        q_percs = np.linspace(0, 1.2, n_q_perc_bins+1)
+        limits = np.linspace(0.05, 0.25, n_limit_bins+1)
+
+        plot_data = {}
+        for point in data:
+            limit = point.mechanism_params.params.range/2
+            closest_lim = min(limits, key=lambda x: abs(x-limit))
+            closest_lim_i = list(limits).index(closest_lim)
+            if closest_lim > limit:
+                closest_lim_i -= 1
+
+            q_perc = abs(point.config_goal/limit)
+            closest_q_perc = min(q_percs, key=lambda x: abs(x-q_perc))
+            closest_q_perc_i = list(q_percs).index(closest_q_perc)
+            if closest_q_perc > q_perc:
+                closest_q_perc_i -= 1
+
+            if (closest_lim_i, closest_q_perc_i) not in plot_data:
+                plot_data[(closest_lim_i, closest_q_perc_i)] = [[point.policy_params.delta_values.delta_yaw],
+                                                                [point.policy_params.delta_values.delta_pitch],
+                                                                [point.net_motion]]
+            else:
+                plot_data[(closest_lim_i, closest_q_perc_i)][0] += [point.policy_params.delta_values.delta_yaw]
+                plot_data[(closest_lim_i, closest_q_perc_i)][1] += [point.policy_params.delta_values.delta_pitch]
+                plot_data[(closest_lim_i, closest_q_perc_i)][2] += [point.net_motion]
+
+        fig, axes = plt.subplots(n_limit_bins, n_q_perc_bins)
+        plt.setp(axes.flat, aspect=1.0, adjustable='box-forced')
+        for i in range(n_limit_bins):
+            for j in range(n_q_perc_bins):
+                minm = min(plot_data[i,j][2])
+                maxm = max(plot_data[i,j][2])
+                im = axes[i,j].scatter(plot_data[i,j][0], plot_data[i,j][1], c=plot_data[i,j][2], vmin=minm, vmax=maxm)
+                if j==0:
+                    limit_min = str(round(limits[i],2))
+                    limit_max = str(round(limits[i+1],2))
+                    axes[i,j].set_ylabel('limit=['+limit_min+','+limit_max+']')
+                if i==0:
+                    q_perc_min = str(round(q_percs[j],2))
+                    q_perc_max = str(round(q_percs[j+1],2))
+                    axes[i,j].set_title('q%=['+q_perc_min+','+q_perc_max+']')
+                fig.colorbar(im, ax=axes[i,j])
+
 ## PLOTS THAT USE A MODEL FILE ##
 
 class YawPitchMotion(PlotFunc):
@@ -387,78 +439,73 @@ class YawPitchMotion(PlotFunc):
         return 'Plot a heatmap of the predicted motion for yaw versus pitch for several q values'
 
     def _plot(self, model):
-        n_policy_samples = 100
+        n_policy_samples = 200
         n_configs = 9
         n_mechs = 5
-        goal_configs = np.linspace(-1.2, 1.2, n_configs)
-        fig, axes = plt.subplots(n_configs, n_mechs, sharex=True, sharey=True)
-        #ax = fig.add_subplot(111)
-        #ax.spines['top'].set_color('none')
-        #ax.spines['bottom'].set_color('none')
-        #ax.spines['left'].set_color('none')
-        #ax.spines['right'].set_color('none')
-        #ax.tick_params(labelcolor='w', top=False, bottom=False, left=False, right=False)
-        #ax.set_title('True Motion (Left) and Predicted Motion (Right)')
-        plt.setp(axes.flat, aspect=1.0, adjustable='box-forced')
+        goal_configs_perc = np.linspace(-1.2, 1.2, n_configs)
+        goal_configs = np.zeros((n_mechs, n_configs))
         true_yaws = np.zeros((n_mechs, n_configs, n_policy_samples))
         true_pitches = np.zeros((n_mechs, n_configs, n_policy_samples))
         true_motions = np.zeros((n_mechs, n_configs, n_policy_samples))
+        pred_yaws = np.zeros((n_mechs, n_configs, n_policy_samples))
+        pred_pitches = np.zeros((n_mechs, n_configs, n_policy_samples))
+        pred_motions = np.zeros((n_mechs, n_configs, n_policy_samples))
         mech_limits = []
         for m in range(n_mechs):
             bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider], urdf_tag='plot')
             mech_limits += [bb._mechanisms[0].range/2]
-            for (j, goal_config) in enumerate(goal_configs):
+            for (j, goal_config_perc) in enumerate(goal_configs_perc):
                 # get ground truth motion for random policies
                 results = []
                 for _ in range(n_policy_samples):
-                    result = generate_samples(False, False, 1, True, 1.0, goal_config, bb)[0]
+                    result = generate_samples(False, False, 1, True, 1.0, goal_config_perc, bb)[0]
                     results += [result]
                 true_yaws[m,j,:] = [result.policy_params.delta_values.delta_yaw for result in results]
                 true_pitches[m,j,:] = [result.policy_params.delta_values.delta_pitch for result in results]
-                true_motions[m,j,:] = [result.cumu_motion for result in results]
-                '''
+                true_motions[m,j,:] = [result.net_motion for result in results]
+                goal_configs[m,j] = result.config_goal
                 # get predicted motion for same policies
                 data = parse_pickle_file(data=results)
                 dataset = PolicyDataset(data)
-                pred_yaws = []
-                pred_pitches = []
-                pred_motions = []
                 for i in range(len(dataset.items)):
                     policy_type = dataset.items[i]['type']
                     policy_params = dataset.tensors[i].unsqueeze(0)
-                    pred_motions += [model.forward(policy_type,
+                    pred_motions[m,j,i] = model.forward(policy_type,
                                                 policy_params,
                                                 dataset.configs[i].unsqueeze(0),
-                                                dataset.images[i].unsqueeze(0))]
+                                                dataset.images[i].unsqueeze(0))
                     policy = get_policy_from_params(policy_type, policy_params[0].numpy())
-                    pred_yaws += [dataset.delta_vals[i].delta_yaw]
-                    pred_pitches += [dataset.delta_vals[i].delta_pitch]
-                '''
-        #min_c = min(min(true_motions), min(pred_motions))
-        #max_c = max(max(true_motions), max(pred_motions))
-        min_motion = min(true_motions.flatten())
-        max_motion = max(true_motions.flatten())
+                    pred_yaws[m,j,i] = dataset.delta_vals[i].delta_yaw
+                    pred_pitches[m,j,i] = dataset.delta_vals[i].delta_pitch
+
+        lw = int(round(np.sqrt(n_configs)))
         for m in range(n_mechs):
-            for (j, goal_config) in enumerate(goal_configs):
-                im = axes[j,m].scatter(true_yaws[m,j,:], true_pitches[m,j,:], c=true_motions[m,j,:], vmin=min_motion, vmax=max_motion)
-                axes[j,m].set_title(str(round(goal_config, 2))+', limit='+str(round(mech_limits[m],2)))
-        #im = axes[j,m*2+1].scatter(pred_yaws, pred_pitches, c=pred_motions)#, vmin=min_c, vmax=max_c)
-
-        #axes[j,m*2-1].set_xlabel('Delta Pitch')
-        #axes[j,m*2].set_xlabel('Delta Pitch')
-        #axes[j,m*2-1].set_ylabel('Delta Yaw')
-        #axes[j,m*2].set_ylabel('Delta Yaw')
-        #axes[j,m*2+1].set_title(str(round(goal_config, 2)))
-
-        #ax_right.set_xlabel('Delta Pitch')
-        #ax_right.set_ylabel('Delta Yaw')
-        #ax_right.set_title('Predicted Motion\nq='+str(round(goal_config, 2)))
-        #fig.colorbar(im_right, ax=ax_right)
-        #fig.colorbar(im_left, ax=ax_left)
-        #plt.axis('scaled')
-        im.set_clim(min_motion, max_motion)
-        fig.colorbar(im, ax=axes.ravel().tolist())
-        plt.savefig('test_prismatics.png', bbox_inches='tight')
+            min_motion = min(min(true_motions[m,:,:].flatten()), min(pred_motions[m,:,:].flatten()))
+            max_motion = max(max(true_motions[m,:,:].flatten()), max(pred_motions[m,:,:].flatten()))
+            fig, axes = plt.subplots(lw, 2*lw, sharex=True, sharey=True)
+            plt.setp(axes.flat, aspect=1.0, adjustable='box-forced')
+            ax_left = axes[:,:lw]
+            ax_right = axes[:,lw:]
+            config_num = 0
+            for ax in ax_left.flatten():
+                if config_num < n_configs:
+                    im = ax.scatter(true_yaws[m,config_num,:],
+                                    true_pitches[m,config_num,:],
+                                    c=true_motions[m,config_num,:],
+                                    vmin=min_motion, vmax=max_motion)
+                    ax.set_title('q='+str(round(goal_configs[m,config_num],2))+', l='+str(round(mech_limits[m],2)))
+                    config_num += 1
+            config_num = 0
+            for ax in ax_right.flatten():
+                if config_num < n_configs:
+                    im = ax.scatter(pred_yaws[m,config_num,:],
+                                    pred_pitches[m,config_num,:],
+                                    c=pred_motions[m,config_num,:],
+                                    vmin=min_motion, vmax=max_motion)
+                    ax.set_title('q='+str(round(goal_configs[m,config_num],2))+', l='+str(round(mech_limits[m],2)))
+                    config_num += 1
+            im.set_clim(min_motion, max_motion)
+            fig.colorbar(im, ax=axes.ravel().tolist())
 
 def print_stats(data):
     stats = {}
