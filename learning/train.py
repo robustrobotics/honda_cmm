@@ -33,6 +33,7 @@ def train_eval(args, n_train, data_file_name, model_file_name, pviz, use_cuda):
 
     best_val = 1000
     # Training loop.
+    vals = []
     for ex in range(1, args.n_epochs+1):
         train_losses = []
         net.train()
@@ -84,10 +85,19 @@ def train_eval(args, n_train, data_file_name, model_file_name, pviz, use_cuda):
             print('[Epoch {}] - Validation Loss: {}'.format(ex, np.mean(val_losses)))
             if np.mean(val_losses) < best_val:
                 best_val = np.mean(val_losses)
-                file_name = 'data/models/'+model_file_name+'_'+str(n_train)+'.pt'
-                torch.save(net.state_dict(), file_name)
-    return best_val
+            file_name = 'data/models/'+model_file_name+'_'+str(n_train)+'.pt'
+            torch.save(net.state_dict(), file_name)
+            vals += [np.mean(val_losses)]
+    return best_val, vals
 
+def plot_val_error(ns, vals, type):
+        import matplotlib.pyplot as plt
+        plt.xlabel(type)
+        plt.ylabel('Val MSE')
+
+        plt.plot(ns, vals)
+        plt.savefig('val_error.png', bbox_inches='tight')
+        plt.show()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -110,7 +120,9 @@ if __name__ == '__main__':
     data_file_name = args.data_fname
 
     if args.mode == 'normal':
-        train_eval(args, args.ntrain, data_file_name, args.model_fname, True, args.use_cuda)
+        best_val, vals = train_eval(args, args.ntrain, data_file_name, args.model_fname, True, args.use_cuda)
+        xs = list(range(1, args.n_epochs+1))*args.val_freq
+        plot_val_error(xs, vals, 'epoch')
     elif args.mode == 'ntrain':
         vals = []
         step = 500
@@ -120,18 +132,6 @@ if __name__ == '__main__':
                 best_val = train_eval(args, n, data_file_name, args.model_fname, False, args.use_cuda)
                 vals.append(best_val)
                 print(n, best_val)
+            plot_val_error(ns, vals, 'n train')
         except:
-            import matplotlib.pyplot as plt
-            plt.xlabel('n train')
-            plt.ylabel('Val MSE')
-
-            plt.plot(ns, vals)
-            plt.show()
-            plt.savefig('val_error.png', bbox_inches='tight')
-        import matplotlib.pyplot as plt
-        plt.xlabel('n train')
-        plt.ylabel('Val MSE')
-
-        plt.plot(ns, vals)
-        plt.show()
-        plt.savefig('val_error.png', bbox_inches='tight')
+            plot_val_error(ns, vals, 'n train')
