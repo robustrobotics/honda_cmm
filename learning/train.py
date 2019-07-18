@@ -92,6 +92,7 @@ def train_eval(args, n_train, data_file_name, model_file_name, pviz, use_cuda):
 
 def plot_val_error(ns, vals, type):
         import matplotlib.pyplot as plt
+        plt.figure()
         plt.xlabel(type)
         plt.ylabel('Val MSE')
 
