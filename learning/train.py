@@ -122,7 +122,7 @@ if __name__ == '__main__':
 
     if args.mode == 'normal':
         best_val, vals = train_eval(args, args.ntrain, data_file_name, args.model_fname, True, args.use_cuda)
-        xs = list(range(1, args.n_epochs+1))*args.val_freq
+        xs = [x for x in range(args.val_freq,args.n_epochs+1,args.val_freq)]
         plot_val_error(xs, vals, 'epoch')
     elif args.mode == 'ntrain':
         vals = []
