@@ -25,7 +25,7 @@ def train_eval(args, hdim, batch_size, pviz):
     if args.use_cuda:
         net = net.cuda()
 
-    loss_fn = torch.nn.MSELoss()
+    loss_fn = torch.nn.MSELoss(reduction='none')
     optim = torch.optim.Adam(net.parameters())
 
     best_val = 1000
@@ -43,7 +43,10 @@ def train_eval(args, hdim, batch_size, pviz):
             optim.zero_grad()
             yhat = net.forward(k[0], x, q, im)
 
-            loss = loss_fn(yhat, y)
+            loss_tensor = loss_fn(yhat, y)
+            alpha = 1.0
+            weights = 1.0 + alpha*y
+            loss = torch.mean(weights*loss_tensor)
             loss.backward()
 
             optim.step()
