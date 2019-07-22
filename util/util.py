@@ -7,7 +7,6 @@ import math
 from collections import namedtuple
 import os
 import torch
-from learning.dataloaders import parse_pickle_file, PolicyDataset
 from learning.nn_disp_pol import DistanceRegressor as NNPol
 from learning.nn_disp_pol_vis import DistanceRegressor as NNPolVis
 from actions import policies
@@ -84,22 +83,6 @@ def load_model(model_fname, hdim=16, model_type='polvis', use_cuda=False):
     model.load_state_dict(torch.load(model_fname, map_location=device))
     model.eval()
     return model
-
-def get_pred_motions(data, model, ret_dataset=False):
-    data = parse_pickle_file(data=data)
-    dataset = PolicyDataset(data)
-    pred_motions = []
-    for i in range(len(dataset.items)):
-        policy_type = dataset.items[i]['type']
-        policy_params = dataset.tensors[i].unsqueeze(0)
-        pred_motions += [model.forward(policy_type,
-                                    policy_params,
-                                    dataset.configs[i].unsqueeze(0),
-                                    dataset.images[i].unsqueeze(0))]
-    if ret_dataset:
-        return pred_motions, dataset
-    else:
-        return pred_motions
 
 ### Writing and Reading to File Helper Functions ###
 def write_to_file(file_name, data):

@@ -21,6 +21,23 @@ import sys
 SearchResult = namedtuple('SearchResult', 'mechanism image_data samples start_sample end_sample')
 SampleResult = namedtuple('SampleResult', 'policy config_goal pred_motion')
 
+
+def get_pred_motions(data, model, ret_dataset=False):
+    data = parse_pickle_file(data=data)
+    dataset = PolicyDataset(data)
+    pred_motions = []
+    for i in range(len(dataset.items)):
+        policy_type = dataset.items[i]['type']
+        policy_params = dataset.tensors[i].unsqueeze(0)
+        pred_motions += [model.forward(policy_type,
+                                    policy_params,
+                                    dataset.configs[i].unsqueeze(0),
+                                    dataset.images[i].unsqueeze(0))]
+    if ret_dataset:
+        return pred_motions, dataset
+    else:
+        return pred_motions
+
 def objective_func(x, policy_type, image_tensor, model):
     return -model.forward(policy_type, torch.tensor([x[:-1]]).float(), torch.tensor([[x[-1]]]).float(), image_tensor)
 
@@ -40,7 +57,7 @@ def test_random_env(model, viz, debug):
         policy_tuple = random_policy.get_policy_tuple()
         results = [util.Result(policy_tuple, mech_tuple, 0.0, 0.0,
                                 None, None, q, image_data, None, 1.0)]
-        sample_disps, dataset = util.get_pred_motions(results, model, ret_dataset=True)
+        sample_disps, dataset = get_pred_motions(results, model, ret_dataset=True)
         samples.append(((policy_type,
                             dataset.tensors[0].detach().numpy(),
                             dataset.configs[0].detach().numpy()),

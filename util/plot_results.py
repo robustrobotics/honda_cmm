@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from util import util
 import sys
-from learning.test_model import SearchResult, SampleResult
+from learning.test_model import SearchResult, SampleResult, get_pred_motions
 from actions.policies import PrismaticParams, RevoluteParams, get_policy_from_params
 from gen.generator_busybox import BusyBox, Slider, Door
 from gen.generate_policy_data import generate_samples
@@ -312,7 +312,7 @@ class VisTrainingPerformance(PlotFunc):
         plot_data = {}
         for point in data:
             if model is not None:
-                pred_motion = util.get_pred_motions([point], model)[0]
+                pred_motion = get_pred_motions([point], model)[0]
                 plot_motion = abs(point.net_motion - pred_motion)
             else:
                 plot_motion = point.net_motion
