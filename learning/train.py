@@ -68,8 +68,10 @@ def train_eval(args, hdim, batch_size, pviz):
                     y = y.cuda()
 
                 yhat = net.forward(k[0], x, q, im)
-                loss = loss_fn(yhat, y)
-
+                loss_tensor = loss_fn(yhat, y)
+                alpha = 1.0
+                weights = 1.0 + alpha*y
+                loss = torch.mean(weights*loss_tensor)
                 val_losses.append(loss.item())
 
                 types += k
