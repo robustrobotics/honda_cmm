@@ -4,13 +4,16 @@ import torch
 from learning.nn_disp_pol_vis import DistanceRegressor as NNPolVis
 from learning.dataloaders import setup_data_loaders
 import learning.viz as viz
+from collections import namedtuple
+from util import util
 
+RunData = namedtuple('RunData', 'hdim batch_size run_num max_epoch best_epoch best_val_error')
 
 def train_eval(args, hdim, batch_size, pviz):
     # Load data
     train_set, val_set, test_set = setup_data_loaders(fname=args.data_fname,
                                                       batch_size=batch_size,
-                                                      small_train=args.ntrain)
+                                                      small_train=args.n_train)
 
     # Setup Model (TODO: Update the correct policy dims)
     net = NNPolVis(policy_names=['Prismatic', 'Revolute'],
@@ -85,9 +88,9 @@ def train_eval(args, hdim, batch_size, pviz):
     model_fname = args.model_prefix+'_hdim_'+str(hdim)+'_bs_'+str(batch_size)+'_epoch_'+str(best_epoch)
     full_path = 'data/models/'+model_fname+'.pt'
     torch.save(net.state_dict(), full_path)
-    return vals
+    return vals, best_epoch
 
-def plot_val_error(ns, vals, type, fname=None):
+def plot_val_error(ns, vals, type, fname=None, viz=False):
         import matplotlib.pyplot as plt
         plt.figure()
         plt.xlabel(type)
@@ -95,7 +98,8 @@ def plot_val_error(ns, vals, type, fname=None):
 
         plt.plot(ns, vals)
         plt.savefig('val_error_'+fname+'.png', bbox_inches='tight')
-        plt.show()
+        if viz:
+            plt.show()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -109,7 +113,9 @@ if __name__ == '__main__':
     parser.add_argument('--data-fname', type=str, required=True)
     parser.add_argument('--model-prefix', type=str, default='model')
     # if 0 then use all samples in dataset, else use ntrain number of samples
-    parser.add_argument('--ntrain', type=int, default=0)
+    parser.add_argument('--n-train', type=int, default=0)
+    parser.add_argument('--n-runs', type=int, default=1)
+    parser.add_argument('--results-fname', type=str, default='results')
     args = parser.parse_args()
 
     if args.debug:
@@ -119,26 +125,30 @@ if __name__ == '__main__':
     if args.hdim:
         hdims = [args.hdim]
     else:
-        hdims = [16, 32, 64, 128]
+        hdims = [16, 32]
     if args.batch_size:
         batch_sizes = [args.batch_size]
     else:
-        batch_sizes = [16, 32, 64, 128]
+        batch_sizes = [16, 32]
 
     if args.mode == 'normal':
-        for hdim in hdims:
-            for batch_size in batch_sizes:
-                all_vals_epochs = train_eval(args, hdim, batch_size, False)
-                es = [v[0] for v in all_vals_epochs]
-                vals = [v[1] for v in all_vals_epochs]
-                fname = args.model_prefix+'_hdim_'+str(hdim)+'_bs_'+str(batch_size)
-                plot_val_error(es, vals, 'epoch', fname)
+        run_data = []
+        for n in range(args.n_runs):
+            for hdim in hdims:
+                for batch_size in batch_sizes:
+                    all_vals_epochs, best_epoch = train_eval(args, hdim, batch_size, False)
+                    es = [v[0] for v in all_vals_epochs]
+                    vals = [v[1] for v in all_vals_epochs]
+                    fname = args.model_prefix+'_hdim_'+str(hdim)+'_bs_'+str(batch_size)+'_epoch_'+str(best_epoch)
+                    plot_val_error(es, vals, 'epoch', fname)
+                    run_data += [RunData(hdim, batch_size, n, args.n_epochs, best_epoch, min(vals))]
+        util.write_to_file(args.results_fname, run_data)
     elif args.mode == 'ntrain':
         vals = []
         step = 500
-        ns = range(step, args.ntrain+1, step)
+        ns = range(step, args.n_train+1, step)
         for n in ns:
-            all_vals_epochs = train_eval(args, args.hdim, args.batch_size, False)
+            all_vals_epochs, best_epoch = train_eval(args, args.hdim, args.batch_size, False)
             best_val = min([ve[1] for ve in all_vals_epochs])
             vals.append(best_eval)
         plot_val_error(ns, vals, 'n train', 'ntrain')
