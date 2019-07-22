@@ -17,7 +17,7 @@ def train_eval(args, hdim, batch_size, pviz):
 
     # Setup Model (TODO: Update the correct policy dims)
     net = NNPolVis(policy_names=['Prismatic', 'Revolute'],
-                       policy_dims=[9, 12],
+                       policy_dims=[2, 12],
                        hdim=hdim,
                        im_h=53,  # 154,
                        im_w=115,  # 205,

@@ -65,7 +65,9 @@ def test_random_env(model, viz, debug):
         sample_results.append(SampleResult(policy_tuple, q, sample_disps[0].detach().numpy()))
 
     (policy_type_max, params_max, q_max), max_disp = max(samples, key=operator.itemgetter(1))
-    start_sample = SampleResult(policies.get_policy_from_params(policy_type_max, params_max).get_policy_tuple(), q_max, None)
+    pose_handle_base_world = mech.get_pose_handle_base_world()
+    policy_list = list(pose_handle_base_world.p)+list(pose_handle_base_world.q)+list(params_max)
+    start_sample = SampleResult(policies.get_policy_from_params(policy_type_max, policy_list).get_policy_tuple(), q_max, None)
     # start optimization from here
     # assume you guessed the correct policy type, and optimize for params and configuration
     x0 = np.concatenate([params_max, q_max])
@@ -75,10 +77,10 @@ def test_random_env(model, viz, debug):
 
     # test found policy on busybox
     setup_env(bb, viz=viz, debug=debug)
-    policy_final = policies.get_policy_from_params(policy_type_max, x_final[:-1])
+    policy_list = list(pose_handle_base_world.p)+list(pose_handle_base_world.q)+list(x_final[:-1])
+    policy_final = policies.get_policy_from_params(policy_type_max, policy_list)
     end_sample = SampleResult(policy_final.get_policy_tuple(), x_final[-1], None)
     config_final = x_final[-1]
-    pose_handle_base_world = mech.get_pose_handle_base_world()
     traj = policy_final.generate_trajectory(pose_handle_base_world, config_final, True)
     gripper = Gripper(bb.bb_id)
     gripper.execute_trajectory(traj, mech, policy_type_max, debug)

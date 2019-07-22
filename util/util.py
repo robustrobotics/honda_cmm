@@ -64,14 +64,14 @@ def discrete_sampler(range_vals, slope, n_bins=10):
     return val
 
 ### Model Testing Helper Functions ###
-def load_model(model_fname, hdim=16, model_type='polvis', use_cuda=False):
+def load_model(model_fname, hdim=32, model_type='polvis', use_cuda=False):
     if model_type == 'pol':
         model = NNPol(policy_names=['Prismatic', 'Revolute'],
-                    policy_dims=[9, 12],
+                    policy_dims=[2, 12],
                     hdim=hdim)
     else:
         model = NNPolVis(policy_names=['Prismatic', 'Revolute'],
-                       policy_dims=[9, 12],
+                       policy_dims=[2, 12],
                        hdim=hdim,
                        im_h=53,
                        im_w=155,
