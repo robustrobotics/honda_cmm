@@ -1,3 +1,4 @@
+import torch
 import argparse
 import matplotlib.pyplot as plt
 import numpy as np
@@ -256,18 +257,7 @@ class YawPitchMotionResults(PlotFunc):
                     config_data[config][0] += [point.policy_params.delta_values.delta_yaw]
                     config_data[config][1] += [point.policy_params.delta_values.delta_pitch]
                     config_data[config][2] += [point.cumu_motion]
-                '''
-                if round(config,2) == -.03 or round(config,2) == .03:
-                    if abs(point.policy_params.delta_values.delta_yaw) < .1:
-                        pitch = point.policy_params.delta_values.delta_pitch
-                        if abs(pitch) < .4 and abs(pitch) > .3:
-                            if point.net_motion > 0.0:
-                                print(point.policy_params.delta_values.delta_yaw)
-                                print(point.policy_params.delta_values.delta_pitch)
-                                util.replay_result(point)
-                #else:
-                #    util.replay_result(point)
-                '''
+
             min_motion = min([min(config_data[config][2]) for config in config_data.keys()])
             max_motion = max([max(config_data[config][2]) for config in config_data.keys()])
 
@@ -302,7 +292,6 @@ class VisTrainingPerformance(PlotFunc):
         self._plot_data(train_data, 'Training Data')
         self._plot_data(val_data, 'Validation Prediction Error', model)
         self._plot_data(test_data, 'Test Prediction Error', model)
-        #self._run_sims()
 
     def _plot_data(self, data, title, model=None):
         n_q_perc_bins = 6
@@ -368,85 +357,77 @@ class VisTrainingPerformance(PlotFunc):
                         fig.colorbar(im, ax=axes[i,j])
         if model is not None:
             fig.colorbar(im, ax=axes.ravel().tolist())
-        ax.set_title(title)
-        #plt.tight_layout()
 
-## PLOTS THAT USE A MODEL FILE ##
-
-class YawPitchMotion(PlotFunc):
+class TestMechs(PlotFunc):
 
     @staticmethod
     def description():
-        return 'Plot a heatmap of the predicted motion for yaw versus pitch for several q values'
+        return 'show model performance on test mechanisms'
 
-    def _plot(self, model):
-        n_policy_samples = 200
-        n_configs = 9
-        n_mechs = 5
-        goal_configs_perc = np.linspace(-1.2, 1.2, n_configs)
-        goal_configs = np.zeros((n_mechs, n_configs))
-        true_yaws = np.zeros((n_mechs, n_configs, n_policy_samples))
-        true_pitches = np.zeros((n_mechs, n_configs, n_policy_samples))
-        true_motions = np.zeros((n_mechs, n_configs, n_policy_samples))
-        pred_yaws = np.zeros((n_mechs, n_configs, n_policy_samples))
-        pred_pitches = np.zeros((n_mechs, n_configs, n_policy_samples))
-        pred_motions = np.zeros((n_mechs, n_configs, n_policy_samples))
-        mech_limits = []
-        for m in range(n_mechs):
-            bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider], urdf_tag='plot')
-            mech_limits += [bb._mechanisms[0].range/2]
-            for (j, goal_config_perc) in enumerate(goal_configs_perc):
-                # get ground truth motion for random policies
-                results = []
-                for _ in range(n_policy_samples):
-                    result = generate_samples(False, False, 1, True, 1.0, goal_config_perc, bb)[0]
-                    results += [result]
-                true_yaws[m,j,:] = [result.policy_params.delta_values.delta_yaw for result in results]
-                true_pitches[m,j,:] = [result.policy_params.delta_values.delta_pitch for result in results]
-                true_motions[m,j,:] = [result.net_motion for result in results]
-                goal_configs[m,j] = result.config_goal
-                # get predicted motion for same policies
-                data = parse_pickle_file(data=results)
-                dataset = PolicyDataset(data)
-                for i in range(len(dataset.items)):
-                    policy_type = dataset.items[i]['type']
-                    policy_params = dataset.tensors[i].unsqueeze(0)
-                    pred_motions[m,j,i] = model.forward(policy_type,
-                                                policy_params,
-                                                dataset.configs[i].unsqueeze(0),
-                                                dataset.images[i].unsqueeze(0))
-                    policy = get_policy_from_params(policy_type, policy_params[0].numpy())
-                    pred_yaws[m,j,i] = dataset.delta_vals[i].delta_yaw
-                    pred_pitches[m,j,i] = dataset.delta_vals[i].delta_pitch
+    def _plot(self, data, model):
+        n_mechs = 9
+        n_samples = 500
+        delta_yaws = np.zeros((n_mechs, n_samples))
+        delta_pitches = np.zeros((n_mechs, n_samples))
+        motions = np.zeros((n_mechs, n_samples))
+        limits = []
+        for i in range(n_mechs):
+            bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider])
+            image_data = util.setup_pybullet.setup_env(bb, False, False)
+            mech = bb._mechanisms[0]
+            limits += [mech.range/2.0]
+            mech_tuple = mech.get_mechanism_tuple()
+            for j in range(n_samples):
+                random_policy = policies.generate_policy(bb, mech, True, 1.0)
+                policy_type = random_policy.type
+                policy_tuple = random_policy.get_policy_tuple()
+                delta_yaws[i,j] = policy_tuple.delta_values.delta_yaw
+                delta_pitches[i,j] = policy_tuple.delta_values.delta_pitch
+                sample = util.Result(policy_tuple, mech_tuple, 0.0, 0.0,
+                                        None, None, limits[i], image_data, None, 1.0)
+                pred_motion = get_pred_motions([sample], model)
+                motions[i,j] = pred_motion[0].detach().numpy()
 
-        lw = int(round(np.sqrt(n_configs)))
-        for m in range(n_mechs):
-            min_motion = min(min(true_motions[m,:,:].flatten()), min(pred_motions[m,:,:].flatten()))
-            max_motion = max(max(true_motions[m,:,:].flatten()), max(pred_motions[m,:,:].flatten()))
-            fig, axes = plt.subplots(lw, 2*lw, sharex=True, sharey=True)
-            plt.setp(axes.flat, aspect=1.0, adjustable='box-forced')
-            ax_left = axes[:,:lw]
-            ax_right = axes[:,lw:]
-            config_num = 0
-            for ax in ax_left.flatten():
-                if config_num < n_configs:
-                    im = ax.scatter(true_yaws[m,config_num,:],
-                                    true_pitches[m,config_num,:],
-                                    c=true_motions[m,config_num,:],
-                                    vmin=min_motion, vmax=max_motion)
-                    ax.set_title('q='+str(round(goal_configs[m,config_num],2))+', l='+str(round(mech_limits[m],2)))
-                    config_num += 1
-            config_num = 0
-            for ax in ax_right.flatten():
-                if config_num < n_configs:
-                    im = ax.scatter(pred_yaws[m,config_num,:],
-                                    pred_pitches[m,config_num,:],
-                                    c=pred_motions[m,config_num,:],
-                                    vmin=min_motion, vmax=max_motion)
-                    ax.set_title('q='+str(round(goal_configs[m,config_num],2))+', l='+str(round(mech_limits[m],2)))
-                    config_num += 1
-            im.set_clim(min_motion, max_motion)
-            fig.colorbar(im, ax=axes.ravel().tolist())
+        lw = int(round(np.sqrt(n_mechs)))
+        fig, axes = plt.subplots(lw, lw, sharex=True, sharey=True)
+        plt.setp(axes.flat, aspect=1.0, adjustable='box-forced')
+        for (n, ax) in enumerate(axes.flatten()):
+            if n < n_mechs:
+                min_motion = min(motions[n,:])
+                max_motion = max(motions[n,:])
+                im = ax.scatter(delta_yaws[n,:],
+                                delta_pitches[n,:],
+                                c=motions[n,:],
+                                vmin=min_motion, vmax=max_motion)
+                ax.set_title('limit = '+str(round(limits[n], 2)))
+                fig.colorbar(im, ax=ax)
+                ax.set_xlabel('Delta Yaw')
+                ax.set_ylabel('Delta Pitch')
+
+class ValError(PlotFunc):
+
+    @staticmethod
+    def description():
+        return 'plot validation prediction error scatterplot'
+
+    def _plot(self, data, model):
+        train_data, val_data, test_data = create_data_splits(data)
+        self._plot_data(val_data, model)
+
+    def _plot_data(self, data, model):
+        from learning import viz
+        loss_fn = torch.nn.MSELoss()
+        val_losses = []
+        ys, yhats, types = [], [], []
+        for point in data:
+            yhat = get_pred_motions([point], model)[0]
+            y = point.net_motion
+            loss = loss_fn(yhat, y)
+            val_losses.append(loss.item())
+            types += [point.policy_params.type]
+            ys += y.numpy().tolist()
+            yhats += yhat.detach().numpy().tolist()
+        viz.plot_y_yhat(ys, yhats, types, ex, title='PolVis')
 
 def print_stats(data):
     stats = {}
@@ -463,8 +444,10 @@ def print_stats(data):
         sys.stdout.write('  %s mech, %s policy: %i\n' % (*key, val))
 
 def plot_results(file_name, model):
-    data = util.read_from_file(file_name)
-    print_stats(data)
+    data = None
+    if file_name:
+        data = util.read_from_file(file_name)
+        print_stats(data)
     if model is not None:
         model = util.load_model(model)
 
@@ -481,16 +464,10 @@ def plot_results(file_name, model):
     plt.show()
     input('hit [ENTER] to close plots')
 
-    # TODO: give each plt a figure number then use those to save multiple plots
-    '''
-    save_plots = input('save plots? [y/n]')
-    if save_plots == 'y':
-        plt.savefig('plots.png', bbox_inches='tight')
-    '''
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--debug', action='store_true')
-    parser.add_argument('--fname', type=str, required=True) # give filename (without .pickle)
+    parser.add_argument('--fname', type=str)
     parser.add_argument('--model', type=str)
     args = parser.parse_args()
 
