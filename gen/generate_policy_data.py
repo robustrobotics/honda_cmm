@@ -58,7 +58,7 @@ if __name__ == '__main__':
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--n-samples', type=int, default=5) # number bbs to generate
     parser.add_argument('--max-mech', type=int, default=1) # mechanisms per bb
-    parser.add_argument('--fname', type=str, required=True) # give filename
+    parser.add_argument('--fname', type=str) # give filename
     # if running multiple gens, give then a urdf_num so the correct urdf is read from/written to
     parser.add_argument('--urdf-num', type=int, default=0)
     parser.add_argument('--match-policies', action='store_true')
@@ -82,14 +82,17 @@ if __name__ == '__main__':
         generate_dataset(args.n_samples, args.viz, args.debug, git_hash, args.urdf_num, \
                         args.match_policies, args.randomness, args.goal_config, \
                         args.max_mech)
-        util.write_to_file(args.fname, results)
+        if args.fname:
+            util.write_to_file(args.fname, results)
     except KeyboardInterrupt:
         # if Ctrl+C write to pickle
-        util.write_to_file(args.fname, results)
+        if args.fname:
+            util.write_to_file(args.fname, results)
         print('Exiting...')
     except:
         # if crashes write to pickle
-        util.write_to_file(args.fname, results)
+        if args.fname:
+            util.write_to_file(args.fname, results)
 
         # for post-mortem debugging since can't run module from command line in pdb.pm() mode
         import traceback, pdb, sys
