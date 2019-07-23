@@ -5,7 +5,6 @@ change in configuration. It outputs an encoded version of the policy.
 import torch
 import torch.nn as nn
 
-
 class PolicyEncoder(nn.Module):
 
     def __init__(self, n_params, n_q, n_layer, n_hidden):

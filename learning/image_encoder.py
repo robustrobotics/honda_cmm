@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class ImageEncoder(nn.Module):
@@ -16,8 +17,6 @@ class ImageEncoder(nn.Module):
         self.conv1 = nn.Conv2d(in_channels=3,
                                out_channels=hdim,
                                kernel_size=kernel_size)
-        self.pool = nn.MaxPool2d(kernel_size=2,
-                                 stride=2)
         self.conv21 = nn.Conv2d(in_channels=hdim,
                                 out_channels=hdim,
                                 kernel_size=kernel_size)
@@ -48,19 +47,18 @@ class ImageEncoder(nn.Module):
         self.lin_input = hdim*3*11  # H*W*hdim
         self.fc1 = nn.Linear(self.lin_input, hdim)
         self.fc2 = nn.Linear(hdim, hdim)
-        self.RELU = nn.ReLU()
 
     def forward(self, img):
-        x = self.RELU(self.conv1(img))
-        x = self.pool(x)
-        x = self.RELU(self.conv21(x))
-        x = self.RELU(self.conv22(x))
-        x = self.pool(x)
-        x = self.RELU(self.conv31(x))
-        x = self.RELU(self.conv32(x))
-        x = self.pool(x)
+        x = F.relu(self.conv1(img))
+        x = F.max_pool2d(x, kernel_size=2, stride=2)
+        x = F.relu(self.conv21(x))
+        x = F.relu(self.conv22(x))
+        x = F.max_pool2d(x, kernel_size=2, stride=2)
+        x = F.relu(self.conv31(x))
+        x = F.relu(self.conv32(x))
+        x = F.max_pool2d(x, kernel_size=2, stride=2)
         x = x.view(-1, self.lin_input)
-        x = self.RELU(self.fc1(x))
+        x = F.relu(self.fc1(x))
         x = self.fc2(x)
         return x
 

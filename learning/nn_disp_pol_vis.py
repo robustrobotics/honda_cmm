@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from learning.policy_encoder import PolicyEncoder
 from learning.image_encoder import ImageEncoder
+import torch.nn.functional as F
 
 
 class DistanceRegressor(nn.Module):
@@ -36,7 +37,6 @@ class DistanceRegressor(nn.Module):
         self.fc2 = nn.Linear(hdim, hdim)
         self.fc3 = nn.Linear(hdim, 1)
 
-        self.RELU = nn.ReLU()
         # SoftPLUS didn't work well... probably because our outputs are such small numbers.
         self.SOFTPLUS = nn.Softplus()
 
@@ -48,9 +48,13 @@ class DistanceRegressor(nn.Module):
         :param q: How long the policy is executed for.
         :return:
         """
+        if policy_type.item() == 0:
+            policy_type = 'Prismatic'
+        else:
+            policy_type = 'Revolute'
         im = self.image_module(im)
         x = self.policy_modules[policy_type].forward(theta, q)
 
         x = torch.cat([im, x], dim=1)
-        x = self.fc3(self.RELU(self.fc2(self.RELU(self.fc1(x)))))
+        x = self.fc3(F.relu(self.fc2(F.relu(self.fc1(x)))))
         return x

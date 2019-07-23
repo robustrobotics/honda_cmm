@@ -5,6 +5,7 @@ from learning.nn_disp_pol import DistanceRegressor as NNPol
 from learning.nn_disp_pol_vis import DistanceRegressor as NNPolVis
 from learning.dataloaders import setup_data_loaders
 import learning.viz as viz
+from torch.utils.tensorboard import SummaryWriter
 
 
 def train_eval(args, n_train, data_file_name, model_file_name, pviz, use_cuda):
@@ -14,6 +15,7 @@ def train_eval(args, n_train, data_file_name, model_file_name, pviz, use_cuda):
                                                       small_train=n_train)
 
     # Setup Model (TODO: Update the correct policy dims)
+    name_lookup = {'Prismatic': 0, 'Revolute': 1}
     if args.model == 'pol':
         net = NNPol(policy_names=['Prismatic', 'Revolute'],
                     policy_dims=[9, 12],
@@ -31,6 +33,15 @@ def train_eval(args, n_train, data_file_name, model_file_name, pviz, use_cuda):
     loss_fn = torch.nn.MSELoss()
     optim = torch.optim.Adam(net.parameters())
 
+    # Add the graph to TensorBoard viz,
+    writer = SummaryWriter()
+    k, x, q, im, y = train_set.dataset[0]
+    if use_cuda:
+        x = x.cuda().unsqueeze(0)
+        q = q.cuda().unsqueeze(0)
+        im = im.cuda().unsqueeze(0)
+    writer.add_graph(net, (torch.Tensor([0]).cuda(), x, q, im), operator_export_type="RAW")
+
     best_val = 1000
     # Training loop.
     for ex in range(1, args.n_epochs+1):
@@ -43,7 +54,7 @@ def train_eval(args, n_train, data_file_name, model_file_name, pviz, use_cuda):
                 im = im.cuda()
                 y = y.cuda()
             optim.zero_grad()
-            yhat = net.forward(k[0], x, q, im)
+            yhat = net.forward(torch.Tensor([name_lookup[k[0]]]).cuda(), x, q, im)
 
             loss = loss_fn(yhat, y)
             loss.backward()
@@ -66,7 +77,7 @@ def train_eval(args, n_train, data_file_name, model_file_name, pviz, use_cuda):
                     im = im.cuda()
                     y = y.cuda()
 
-                yhat = net.forward(k[0], x, q, im)
+                yhat = net.forward(torch.Tensor([name_lookup[k[0]]]).cuda(), x, q, im)
                 loss = loss_fn(yhat, y)
 
                 val_losses.append(loss.item())
