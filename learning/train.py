@@ -27,7 +27,7 @@ def train_eval(args, hdim, batch_size, pviz):
     if args.use_cuda:
         net = net.cuda()
 
-    loss_fn = torch.nn.MSELoss(reduction='none')
+    loss_fn = torch.nn.MSELoss()
     optim = torch.optim.Adam(net.parameters())
 
     # Add the graph to TensorBoard viz,
@@ -58,10 +58,7 @@ def train_eval(args, hdim, batch_size, pviz):
             optim.zero_grad()
             yhat = net.forward(pol, x, q, im)
 
-            loss_tensor = loss_fn(yhat, y)
-            alpha = 1.0
-            weights = 1.0 + alpha*y
-            loss = torch.mean(weights*loss_tensor)
+            loss = loss_fn(yhat, y)
             loss.backward()
 
             optim.step()
@@ -85,10 +82,7 @@ def train_eval(args, hdim, batch_size, pviz):
                     pol = pol.cuda()
 
                 yhat = net.forward(pol, x, q, im)
-                loss_tensor = loss_fn(yhat, y)
-                alpha = 1.0
-                weights = 1.0 + alpha*y
-                loss = torch.mean(weights*loss_tensor)
+                loss = loss_fn(yhat, y)
                 val_losses.append(loss.item())
 
                 types += k
