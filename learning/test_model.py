@@ -17,6 +17,7 @@ import pybullet as p
 import pybullet_data
 from collections import namedtuple
 import sys
+from learning.train import name_lookup
 
 SearchResult = namedtuple('SearchResult', 'mechanism image_data samples start_sample end_sample')
 SampleResult = namedtuple('SampleResult', 'policy config_goal pred_motion')
@@ -28,9 +29,8 @@ def get_pred_motions(data, model, ret_dataset=False):
     pred_motions = []
     for i in range(len(dataset.items)):
         policy_type = dataset.items[i]['type']
-        policy_params = dataset.tensors[i].unsqueeze(0)
-        pred_motions += [model.forward(policy_type,
-                                    policy_params,
+        pred_motions += [model.forward(torch.Tensor([name_lookup[policy_type]]),
+                                    dataset.tensors[i].unsqueeze(0),
                                     dataset.configs[i].unsqueeze(0),
                                     dataset.images[i].unsqueeze(0))]
     if ret_dataset:

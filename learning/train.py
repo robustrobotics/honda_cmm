@@ -9,6 +9,7 @@ from collections import namedtuple
 from util import util
 
 RunData = namedtuple('RunData', 'hdim batch_size run_num max_epoch best_epoch best_val_error')
+name_lookup = {'Prismatic': 0, 'Revolute': 1}
 
 def train_eval(args, hdim, batch_size, pviz):
     # Load data
@@ -17,7 +18,6 @@ def train_eval(args, hdim, batch_size, pviz):
                                                       small_train=args.n_train)
 
     # Setup Model (TODO: Update the correct policy dims)
-    name_lookup = {'Prismatic': 0, 'Revolute': 1}
     net = NNPolVis(policy_names=['Prismatic', 'Revolute'],
                    policy_dims=[2, 12],
                    hdim=hdim,
@@ -33,13 +33,13 @@ def train_eval(args, hdim, batch_size, pviz):
     # Add the graph to TensorBoard viz,
     writer = SummaryWriter()
     k, x, q, im, y = train_set.dataset[0]
-    pol = torch.Tensor([name_lookup[k]]).cuda()
+    pol = torch.Tensor([name_lookup[k]])
     if args.use_cuda:
         x = x.cuda().unsqueeze(0)
         q = q.cuda().unsqueeze(0)
         im = im.cuda().unsqueeze(0)
         pol = pol.cuda()
-    writer.add_graph(net, (pol, x, q, im), operator_export_type="RAW")
+        writer.add_graph(net, (pol, x, q, im), operator_export_type="RAW")
 
     best_val = 1000
     # Training loop.
