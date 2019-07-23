@@ -282,11 +282,18 @@ def generate_policy(bb, mech, match_policies, randomness, policy_types=[Revolute
         policy_type = np.random.choice(policy_types)
         return policy_type._gen(bb, mech, randomness)
 
-def get_policy_from_params(type, params):
+def get_policy_from_params(type, params, mech=None):
     if type == 'Revolute':
         return Revolute(params[:3], params[3], params[4], params[5:9], params[9:12])
     if type == 'Prismatic':
-        return Prismatic(params[:3], params[3:7], params[7], params[8])
+        pitch = params[7]
+        yaw = params[8]
+        if mech:
+            delta_pitch = pitch + np.arccos(mech.axis[0])
+            delta_yaw = yaw
+        else:
+            delta_pitch, delta_yaw = None, None
+        return Prismatic(params[:3], params[3:7], pitch, yaw, delta_pitch, delta_yaw)
 
 def get_policy_from_tuple(policy_params):
     type = policy_params.type
