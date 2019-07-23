@@ -2,13 +2,16 @@ import pybullet as p
 import numpy as np
 import pickle
 import util.transformations as trans
+from util import setup_pybullet
 import math
 from collections import namedtuple
 import os
 import torch
 from learning.nn_disp_pol import DistanceRegressor as NNPol
 from learning.nn_disp_pol_vis import DistanceRegressor as NNPolVis
-
+from actions import policies
+from actions.gripper import Gripper
+from gen.generator_busybox import BusyBox
 ### namedtuple Definitions ###
 Pose = namedtuple('Pose', 'p q')
 """
@@ -17,7 +20,7 @@ Pose represents an SE(3) pose
 :param q: a vector of length 4, representing an (x,y,z,w) quaternion
 """
 
-Result = namedtuple('Result', 'policy_params mechanism_params motion \
+Result = namedtuple('Result', 'policy_params mechanism_params net_motion cumu_motion \
                         pose_joint_world_init pose_joint_world_final config_goal \
                         image_data git_hash randomness')
 """
@@ -43,17 +46,33 @@ ImageData contains a subset of the image data returned by pybullet
 :param rgbPixels: list of [char RED,char GREEN,char BLUE, char ALPHA] [0..width*height],
                     list of pixel colors in R,G,B,A format, in range [0..255] for each color
 """
+### Sampling Helper Function
+# TODO: want the prob of bin 0 to go to 0 as the slope increases (currently doesn't do that)
+def discrete_sampler(range_vals, slope, n_bins=10):
+    probs = [slope*p for p in range(1,n_bins+1)]
+
+    # subtract diff from all the make area=1
+    diff = np.subtract(1.0, sum(probs))
+    diff_i = np.divide(diff, n_bins)
+    probs = np.subtract(diff_i, probs)
+
+    # then normalize (still some rounding error)
+    probs = np.divide(probs, sum(probs))
+    choice = np.random.choice([i for i in range(n_bins)], p=probs)
+    vals = np.linspace(range_vals[0], range_vals[1], n_bins+1)
+    val = np.random.uniform(vals[choice], vals[choice+1])
+    return val
 
 ### Model Testing Helper Functions ###
-def load_model(model_fname, model_type='polvis', use_cuda=False):
+def load_model(model_fname, hdim=32, model_type='polvis', use_cuda=False):
     if model_type == 'pol':
         model = NNPol(policy_names=['Prismatic', 'Revolute'],
-                    policy_dims=[9, 12],
-                    hdim=16)
+                    policy_dims=[2, 12],
+                    hdim=hdim)
     else:
         model = NNPolVis(policy_names=['Prismatic', 'Revolute'],
-                       policy_dims=[9, 12],
-                       hdim=16,
+                       policy_dims=[2, 12],
+                       hdim=hdim,
                        im_h=53,
                        im_w=155,
                        kernel_size=3)
@@ -92,6 +111,19 @@ def merge_files(in_file_names, out_file_name):
     return results
 
 ### PyBullet Helper Functions ###
+def replay_result(result):
+    bb = BusyBox.bb_from_result(result)
+    image_data = setup_pybullet.setup_env(bb, True, True)
+    gripper = Gripper(bb.bb_id)
+    mech = bb._mechanisms[0]
+    policy = policies.get_policy_from_tuple(result.policy_params)
+    config_goal = result.config_goal
+    pose_handle_world_init = Pose(*p.getLinkState(bb.bb_id, mech.handle_id)[:2])
+    pose_handle_base_world = mech.get_pose_handle_base_world()
+    traj = policy.generate_trajectory(pose_handle_base_world, config_goal, True)
+    _, net_motion, _ = gripper.execute_trajectory(traj, mech, policy.type, True)
+    p.disconnect()
+
 def vis_frame(pos, quat, length=0.2, lifeTime=0.4):
     """ This function visualizes a coordinate frame for the supplied frame where the
     red,green,blue lines correpsond to the x,y,z axes.
@@ -236,6 +268,21 @@ def quaternion_from_euler(roll, pitch, yaw):
     return to_pyquat(trans_q)
 
 if __name__ == '__main__':
-    in_names = ['data/datasets/clean_0_5000', 'data/datasets/clean_1_5000']
-    out_name = 'data/datasets/clean_10000'
-    merge_files(in_names, out_name)
+    # testing the sampler
+    import matplotlib.pyplot as plt
+    n_bins = 10
+    range_s = [0.,.25]
+    hist_data = {}
+    vals = np.linspace(range_s[0], range_s[1], n_bins+1)
+    keys = vals[:-1]
+    slope = .1
+    samples = []
+    for _ in range(1000):
+        samples += [discrete_sampler(range_s, slope, n_bins)]
+    plt.ion()
+    plt.hist(samples, n_bins)
+    plt.show()
+    input()
+    #in_names = ['data/datasets/clean_0_5000', 'data/datasets/clean_1_5000']
+    #out_name = 'data/datasets/clean_10000'
+    #merge_files(in_names, out_name)

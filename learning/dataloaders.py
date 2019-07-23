@@ -76,7 +76,6 @@ class PolicyDataset(Dataset):
         self.tensors = [torch.tensor(item['params']) for item in items]
         self.configs = [torch.tensor([item['config']]) for item in items]
         self.ys = [torch.tensor([item['y']]) for item in items]
-
         tt = transforms.Compose([transforms.ToTensor(),
                                 transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
         self.images = []
@@ -85,6 +84,9 @@ class PolicyDataset(Dataset):
             np_im = np.array(im, dtype=np.uint8).reshape(h, w, 3)[:, :, 0:3]
             self.images.append(tt(np_im))
         # imshow(torchvision.utils.make_grid(self.images[0:10]))
+
+        # this is just for plotting, not learning
+        self.delta_vals = [item['delta_vals'] for item in items]
 
     def __getitem__(self, index):
         return self.items[index]['type'], self.tensors[index], self.configs[index], self.images[index], self.ys[index]
@@ -110,11 +112,9 @@ def parse_pickle_file(fname=None, data=None):
             continue
         policy_type = entry.policy_params.type
         if policy_type == 'Prismatic':
-            pos = list(entry.policy_params.params.rigid_position)
-            orn = list(entry.policy_params.params.rigid_orientation)
             pitch = [entry.policy_params.params.pitch]
             yaw = [entry.policy_params.params.yaw]
-            policy_params = pos + orn + pitch + yaw
+            policy_params = pitch + yaw
             mech_params = [entry.mechanism_params.params.range]
         elif policy_type == 'Revolute':
             center = list(entry.policy_params.params.rot_center)
@@ -124,7 +124,7 @@ def parse_pickle_file(fname=None, data=None):
             radius = list(entry.policy_params.params.rot_radius)
             policy_params = center + roll + pitch + orn + radius
             mech_params = []
-        motion = entry.motion
+        motion = entry.net_motion
 
 
 
@@ -134,7 +134,8 @@ def parse_pickle_file(fname=None, data=None):
             'config': entry.config_goal,
             'image': entry.image_data,
             'y': motion,
-            'mech': mech_params
+            'mech': mech_params,
+            'delta_vals': entry.policy_params.delta_values
         })
 
     return parsed_data

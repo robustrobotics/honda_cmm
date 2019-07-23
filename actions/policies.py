@@ -124,7 +124,10 @@ class Prismatic(Policy):
     @staticmethod
     def generate_config(mech, goal_config):
         if goal_config is None:
-            return np.random.uniform(-0.25,0.25) # from gen.generator_busybox range limits
+            # TODO: make more general
+            # currently only samples up to 1.2 x joint limit
+            max_config = 1.2*mech.range/2
+            return np.random.uniform(-max_config,max_config)
         else:
             return goal_config*mech.range/2.0
 
@@ -136,7 +139,7 @@ class Prismatic(Policy):
     def _draw_traj(self, traj):
         for i in range(len(traj)-1):
             # raise so can see above track
-            p.addUserDebugLine(np.add(traj[i].p, [0., .025, 0.]), np.add(traj[i+1].p, [0., .025, 0.]))
+            p.addUserDebugLine(np.add(traj[i].p, [0., .025, 0.]), np.add(traj[i+1].p, [0., .025, 0.]), [0,0,1])
 
     @staticmethod
     def _gen(bb, mech, randomness):
@@ -225,7 +228,7 @@ class Revolute(Policy):
 
     def _draw_traj(self, traj):
         for i in range(len(traj)-1):
-            p.addUserDebugLine(traj[i].p, traj[i+1].p)
+            p.addUserDebugLine(traj[i].p, traj[i+1].p, [0,0,1])
 
     @staticmethod
     def _gen(bb, mech, randomness):
@@ -284,6 +287,19 @@ def get_policy_from_params(type, params):
         return Revolute(params[:3], params[3], params[4], params[5:9], params[9:12])
     if type == 'Prismatic':
         return Prismatic(params[:3], params[3:7], params[7], params[8])
+
+def get_policy_from_tuple(policy_params):
+    type = policy_params.type
+    params = policy_params.params
+    delta_values = policy_params.delta_values
+    if policy_params.type == 'Revolute':
+        return Revolute(params.center, params.axis_roll, params.axis_pitch,
+                        params.radius, params.orn, delta_values.delta_roll,
+                        delta_values.delta_pitch, delta_values.delta_radius_x,
+                        delta_values.delta_radius_z)
+    if policy_params.type == 'Prismatic':
+        return Prismatic(params.rigid_position, params.rigid_orientation, params.pitch,
+                        params.yaw, delta_values.delta_pitch, delta_values.delta_yaw)
 
 ## Helper Functions
 def _random_p(bb):
