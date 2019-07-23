@@ -135,16 +135,19 @@ def test_random_env(model, viz, debug):
         closest_q_i -= 1
     axes[closest_q_i].plot(policy_final.delta_yaw, policy_final.delta_pitch, 'r.')
     plt.show()
+    if not viz:
+        input('press enter to close plot')
 
     traj = policy_final.generate_trajectory(pose_handle_base_world, config_final, True)
     gripper = Gripper(bb.bb_id)
     gripper.execute_trajectory(traj, mech, policy_type_max, debug)
-    try:
-        while True:
-            # so can look at trajectory and interact with sim
-            p.stepSimulation()
-    except KeyboardInterrupt:
-        p.disconnect()
+    if viz:
+        try:
+            while True:
+                # so can look at trajectory and interact with sim
+                p.stepSimulation()
+        except KeyboardInterrupt:
+            p.disconnect()
 
 def test_random_envs(n_test, file_name, hdim, viz, debug):
     model = util.load_model(file_name, hdim)
