@@ -101,9 +101,9 @@ def train_eval(args, hdim, batch_size, pviz):
             if curr_val < best_val:
                 best_val = curr_val
                 best_epoch = ex
-    model_fname = args.model_prefix+'_hdim_'+str(hdim)+'_bs_'+str(batch_size)+'_epoch_'+str(best_epoch)
-    full_path = 'data/models/'+model_fname+'.pt'
-    torch.save(net.state_dict(), full_path)
+                model_fname = args.model_prefix+'_hdim_'+str(hdim)+'_bs_'+str(batch_size)+'_epoch_'+str(best_epoch)
+                full_path = 'data/models/'+model_fname+'.pt'
+                torch.save(net.state_dict(), full_path)
     return vals, best_epoch
 
 
