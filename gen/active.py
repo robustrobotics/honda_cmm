@@ -9,9 +9,9 @@ from actions import policies
 from actions.gripper import Gripper
 from gen.generator_busybox import Slider, Door, BusyBox
 from collections import namedtuple
-from learning.gp_learner import GPLearner
 from copy import copy
 import operator
+import matplotlib.pyplot as plt
 
 Point = namedtuple('Point', 'x z')
 Dims = namedtuple('Dims', 'width height')
@@ -19,22 +19,34 @@ AttemptedGoal = namedtuple('AttemptedGoal', 'goal competence')
 
 # THIS IS ONLY MADE FOR PRISMATIC POLICIES
 
+# params
+g_max = 10  # max samples per region
+R = 0.05    # region to sample for low competence
+n_max = 5   # maximum number of samples in a region to calc interest
+m = 100      # number of samples used to find optimal split
 class ActivePolicyLearner(object):
 
-    def __init__(self, bb, viz, debug):
+    def __init__(self, bb, viz_sim, debug, viz_plot=True):
         self.bb = bb
         self.mech = self.bb._mechanisms[0]
         self.debug = debug
-        self.viz = viz
-        self.image_data = setup_env(self.bb, viz, self.debug)
+        self.viz_sim = viz_sim
+        self.viz_plot = viz_plot
+        self.image_data = setup_env(self.bb, self.viz_sim, self.debug)
+        self.start_pos = p.getLinkState(self.mech.bb_id, self.mech.handle_id)[0]
         self.gripper = Gripper(self.bb.bb_id)
         self.max_region = self.get_max_region()
         self.regions = [copy(self.max_region)]
         self.interactions = []
 
-    def explore(self):
-        g_max = 10
-        while not self.done():
+        if self.viz_plot:
+            self.fig, self.ax = plt.subplots()
+            plt.ion()
+            self.reset_plot()
+            self.made_colorbar = False
+
+    def explore(self, n_samples):
+        for _ in range(n_samples):
             if self.debug:
                 for region in self.regions:
                     region.draw(self.bb)
@@ -51,12 +63,16 @@ class ActivePolicyLearner(object):
             interact_result = self.execute_interaction(policy, config_goal)
             self.interactions += [interact_result]
             competence = self.calc_competence(goal_pos, interact_result)
+            if self.viz_plot:
+                self.update_plot((goal, competence))
             region.update(goal, competence)
             self.interactions += [interact_result]
             if len(region.attempted_goals) > g_max:
                 new_regions = region.split(self.bb)
                 self.regions.remove(region)
                 self.regions += new_regions
+                if self.viz_plot:
+                    self.update_plot()
             self.reset()
 
     def get_max_region(self):
@@ -67,10 +83,13 @@ class ActivePolicyLearner(object):
                                     Dims(self.bb.width, self.bb.height))
         return start_region
 
+    def region_probs(self):
+        total_interest = sum([region.interest for region in self.regions])
+        return [region.interest/total_interest for region in self.regions]
+
     def select_goal(self):
         def interesting_region():
-            total_interest = sum([region.interest for region in self.regions])
-            probs = [region.interest/total_interest for region in self.regions]
+            probs = self.region_probs()
             return np.random.choice(self.regions, p=probs)
 
         if len(self.regions) > 1:
@@ -115,21 +134,57 @@ class ActivePolicyLearner(object):
         competence = -np.divide(dist_to_goal, init_dist_to_goal)
         return competence
 
-    def done(self):
-        # done when not interested in any regions
-        n_interactions = len(self.interactions)
-        thresh = 0.005
-        overall_interest = sum([region.interest for region in self.regions])
-        return overall_interest < thresh and n_interactions > 10
-
     def reset(self):
-        setup_env(self.bb, self.viz, self.debug)
+        setup_env(self.bb, self.viz_sim, self.debug)
         self.gripper = Gripper(self.bb.bb_id)
 
     def get_goal_region(self, goal):
         for region in self.regions:
             if region.goal_inside(goal, self.bb):
                 return region
+
+    def plot_mech(self):
+        center = [self.start_pos[0], self.start_pos[2]]
+        endpoint0 = np.add(center, np.multiply(self.mech.range/2, self.mech.axis))
+        endpoint1 = np.add(center, np.multiply(-self.mech.range/2, self.mech.axis))
+        self.ax.plot([-endpoint0[0], -endpoint1[0]], [endpoint0[1], endpoint1[1]], '--r')
+
+    def update_plot(self, element=None):
+        def draw_goal(goal):
+            im =  self.ax.scatter([-goal[0].x], [goal[0].z], c=[goal[1]], s=4, vmin=-1, vmax=0)
+            if not self.made_colorbar:
+                self.fig.colorbar(im)
+                self.made_colorbar = True
+        # is a goal
+        if element:
+            draw_goal(element)
+        # just split region, redraw everything
+        else:
+            # clear figure
+            plt.cla()
+            self.reset_plot()
+            interest_probs = self.region_probs()
+            for (region, prob) in zip(self.regions, interest_probs):
+                # draw regions
+                corner_coords = region.get_corner_coords()+[region.coord]
+                for i in range(4):
+                    # flip since axes are reversed in pybullet
+                    self.ax.plot(np.multiply(-1,[corner_coords[i].x, corner_coords[i+1].x]),
+                                    [corner_coords[i].z, corner_coords[i+1].z], 'k')
+                    self.ax.fill_between([-corner_coords[0].x, -corner_coords[1].x],
+                                            [corner_coords[0].z, corner_coords[1].z],
+                                            [corner_coords[2].z, corner_coords[3].z],
+                                            color=str(prob), alpha=.3)
+                # redraw goals
+                for goal in region.attempted_goals:
+                    draw_goal(goal)
+        plt.draw()
+        plt.pause(0.01)
+
+    def reset_plot(self):
+        self.ax.set_xlim(-self.max_region.coord.x, -1*(self.max_region.coord.x-self.max_region.dims.width))
+        self.ax.set_ylim(self.max_region.coord.z, self.max_region.coord.z+self.max_region.dims.height)
+        self.plot_mech()
 
 class Region(object):
     def __init__(self, coord, dims):
@@ -144,7 +199,6 @@ class Region(object):
         return rand_x, rand_z
 
     def sample_goal(self, type):
-        R = 0.05
         if type == 'random':
             return Point(*self.random_coord())
         if type == 'biased':
@@ -159,7 +213,6 @@ class Region(object):
         self.update_interest()
 
     def update_interest(self):
-        n_max = 5
         n_goals = len(self.attempted_goals)
         range_max = min(n_max, n_goals)
         self.interest = 0.0
@@ -169,8 +222,6 @@ class Region(object):
             self.interest = self.interest/(range_max-1)
 
     def split(self, bb):
-        #print('     splitting region!')
-        m = 50
         splits = []
         # randomly generate splits (half xs half zs)
         for dim in range(2):
@@ -187,69 +238,61 @@ class Region(object):
                 region_0 = Region(self.coord, Dims(width_left, self.dims.height))
                 region_1 = Region(coord_right, Dims(width_right, self.dims.height))
             elif dim == 1: #z
-                #print('calc z')
                 coord_up = Point(self.coord.x, dim_coord)
                 height_down = coord_up.z - self.coord.z
                 height_up = self.dims.height - height_down
                 region_0 = Region(self.coord, Dims(self.dims.width, height_down))
                 region_1 = Region(coord_up, Dims(self.dims.width, height_up))
 
-            #region_0.draw(bb)
-            #region_1.draw(bb)
-            #print(len(self.attempted_goals))
             for goal_comp in self.attempted_goals:
                 if region_0.goal_inside(goal_comp[0], bb):
                     region_0.attempted_goals += [goal_comp]
                 else:
                     region_1.attempted_goals += [goal_comp]
-                #print('break')
 
             region_0.update_interest()
             region_1.update_interest()
-            #print(region_0.interest)
-            #print(region_1.interest)
             quality = len(region_0.attempted_goals)*len(region_1.attempted_goals)*\
                         abs(region_0.interest-region_1.interest)
-            print(dim, dim_coord, quality)
             quality_values += [((dim, dim_coord, region_0, region_1), quality)]
 
         # select the split with the highest quality value
         (dim, dim_coord, region_0, region_1), _ = max(quality_values, key=operator.itemgetter(1))
-        print('orig goals=', len(self.attempted_goals), 'new0=', len(region_0.attempted_goals),
-                    'new1=', len(region_1.attempted_goals))
         return region_0, region_1
+
+    def get_corner_coords(self):
+        ll_pos = self.coord
+        lr_pos = Point(*np.add(ll_pos, [-self.dims.width,0.0]))
+        ur_pos = Point(*np.add(ll_pos, [-self.dims.width,self.dims.height]))
+        ul_pos = Point(*np.add(ll_pos, [0.0,self.dims.height]))
+        return [ll_pos, lr_pos, ur_pos, ul_pos]
 
     def draw(self, bb, color=[255,255,255], lifeTime=0):
         lift = 0.01
-        ll_pos = np.add(bb.project_onto_backboard([self.coord.x, 0.0, self.coord.z]), [0., lift, 0.0])
-        lr_pos = np.add(ll_pos, [-self.dims.width,0.0,0.])
-        ul_pos = np.add(ll_pos, [0.,0.0,self.dims.height])
-        ur_pos = np.add(ll_pos, [-self.dims.width,0.0,self.dims.height])
-        p.addUserDebugLine(ll_pos, lr_pos, color, lifeTime=lifeTime)
-        p.addUserDebugLine(lr_pos, ur_pos, color, lifeTime=lifeTime)
-        p.addUserDebugLine(ur_pos, ul_pos, color, lifeTime=lifeTime)
-        p.addUserDebugLine(ul_pos, ll_pos, color, lifeTime=lifeTime)
+        poses = self.get_corner_coords()+[self.coord]
+        y_pos = np.add(bb.project_onto_backboard([self.coord.x, 0.0, self.coord.z]), [0., lift, 0.0])[1]
+        for i in range(4):
+            pose_i = poses[i][0], y_pos, poses[i][1]
+            pose_ip1 = poses[i+1][0], y_pos, poses[i+1][1]
+            p.addUserDebugLine(pose_i, pose_ip1, lifeTime=lifeTime)
 
     def goal_inside(self, goal, bb):
         goal_pos = bb.project_onto_backboard([goal[0], 0.0, goal[1]])
-        #util.vis_frame(goal_pos, [0., 0., 0., 1.], lifeTime=.5, length=.1)
-        #self.draw(bb, [1,0,0])
         inside = False
         if goal.x < self.coord.x:
             if goal.x > (self.coord.x - self.dims.width):
                 if goal.z > self.coord.z:
                     if goal.z < (self.coord.z + self.dims.height):
                         inside = True
-        #print(inside)
         return inside
 
 results = []
-def generate_dataset(n_samples, viz, debug, urdf_num, max_mech):
-    for i in range(n_samples):
+def generate_dataset(n_bbs, n_samples, viz, debug, urdf_num, max_mech):
+    for i in range(n_bbs):
         sys.stdout.write("\rProcessing sample %i/%i" % (i+1, n_samples))
         bb = BusyBox.generate_random_busybox(max_mech=max_mech, mech_types=[Slider], urdf_tag=urdf_num, debug=debug)
         active_learner = ActivePolicyLearner(bb, viz, debug)
-        active_learner.explore()
+        active_learner.explore(n_samples)
         results.extend(active_learner.interactions)
         p.disconnect()
     return results
@@ -259,7 +302,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--viz', action='store_true')
     parser.add_argument('--debug', action='store_true')
-    parser.add_argument('--n-samples', type=int, default=5) # number bbs to generate
+    parser.add_argument('--n-bbs', type=int, default=5) # number bbs to generate
+    parser.add_argument('--n-samples', type=int, default=5) # number samples per bb to generate
     parser.add_argument('--max-mech', type=int, default=1) # mechanisms per bb
     parser.add_argument('--fname', type=str) # give filename
     # if running multiple gens, give then a urdf_num so the correct urdf is read from/written to
@@ -271,7 +315,7 @@ if __name__ == '__main__':
         import pdb; pdb.set_trace()
 
     try:
-        generate_dataset(args.n_samples, args.viz, args.debug, args.urdf_num, args.max_mech)
+        generate_dataset(args.n_bbs, args.n_samples, args.viz, args.debug, args.urdf_num, args.max_mech)
         if args.fname:
             util.write_to_file(args.fname, results)
     except KeyboardInterrupt:
