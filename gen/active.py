@@ -26,7 +26,7 @@ n_max = 5   # maximum number of samples in a region to calc interest
 m = 100      # number of samples used to find optimal split
 class ActivePolicyLearner(object):
 
-    def __init__(self, bb, viz_sim, debug, viz_plot=True):
+    def __init__(self, bb, viz_sim, debug, viz_plot):
         self.bb = bb
         self.mech = self.bb._mechanisms[0]
         self.debug = debug
@@ -46,7 +46,7 @@ class ActivePolicyLearner(object):
             self.made_colorbar = False
 
     def explore(self, n_samples):
-        for _ in range(n_samples):
+        for n in range(n_samples):
             if self.debug:
                 for region in self.regions:
                     region.draw(self.bb)
@@ -66,14 +66,14 @@ class ActivePolicyLearner(object):
             if self.viz_plot:
                 self.update_plot((goal, competence))
             region.update(goal, competence)
-            self.interactions += [interact_result]
             if len(region.attempted_goals) > g_max:
                 new_regions = region.split(self.bb)
                 self.regions.remove(region)
                 self.regions += new_regions
                 if self.viz_plot:
                     self.update_plot()
-            self.reset()
+            if n != n_samples-1:
+                self.reset()
 
     def get_max_region(self):
         # for now regions are just in the x-z plane. will need to move to 3d with doors
@@ -296,14 +296,13 @@ class Region(object):
         return inside
 
 results = []
-def generate_dataset(n_bbs, n_samples, viz, debug, urdf_num, max_mech):
+def generate_dataset(n_bbs, n_samples, viz, debug, urdf_num, max_mech, viz_plot):
     for i in range(n_bbs):
-        sys.stdout.write("\rProcessing sample %i/%i" % (i+1, n_samples))
+        sys.stdout.write("\rProcessing % samples for busybox %i/%i" % (n_samples, i+1, n_bbs))
         bb = BusyBox.generate_random_busybox(max_mech=max_mech, mech_types=[Slider], urdf_tag=urdf_num, debug=debug)
-        active_learner = ActivePolicyLearner(bb, viz, debug)
+        active_learner = ActivePolicyLearner(bb, viz, debug, viz_plot)
         active_learner.explore(n_samples)
         results.extend(active_learner.interactions)
-        p.disconnect()
     return results
     print()
 
@@ -318,13 +317,14 @@ if __name__ == '__main__':
     # if running multiple gens, give then a urdf_num so the correct urdf is read from/written to
     parser.add_argument('--urdf-num', type=int, default=0)
     parser.add_argument('--match-policies', action='store_true')
+    parser.add_argument('--viz-plot', action='store_true')
     args = parser.parse_args()
 
     if args.debug:
         import pdb; pdb.set_trace()
 
     try:
-        generate_dataset(args.n_bbs, args.n_samples, args.viz, args.debug, args.urdf_num, args.max_mech)
+        generate_dataset(args.n_bbs, args.n_samples, args.viz, args.debug, args.urdf_num, args.max_mech, args.viz_plot)
         if args.fname:
             util.write_to_file(args.fname, results)
     except KeyboardInterrupt:
