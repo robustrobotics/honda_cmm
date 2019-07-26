@@ -69,8 +69,8 @@ if __name__ == '__main__':
     parser.add_argument('--goal-config', type=float)
     args = parser.parse_args()
 
-    #if args.debug:
-    import pdb; pdb.set_trace()
+    if args.debug:
+        import pdb; pdb.set_trace()
 
     try:
         try:
