@@ -121,17 +121,26 @@ class ActivePolicyLearner(object):
                     config_goal, self.image_data, None, 1.0)
 
     def calc_competence(self, goal_pos, result):
-        # competence is the (negative) percentage of how much closer you are to
-        # the goal than when started
+        # competence is how much you moved towards the goal over how far you were
+        # initially from the goal
         init_pos = result.pose_joint_world_init.p
         # if gripper flew off, say the handle didn't move
         if result.pose_joint_world_final is None:
             final_pos = init_pos
         else:
             final_pos = result.pose_joint_world_final.p
-        dist_to_goal = np.linalg.norm(np.subtract(goal_pos, final_pos))
         init_dist_to_goal = np.linalg.norm(np.subtract(goal_pos, init_pos))
-        competence = -np.divide(dist_to_goal, init_dist_to_goal)
+        goal_pos_handle = np.subtract(goal_pos, init_pos)
+        final_pos_handle = np.subtract(final_pos, init_pos)
+        if np.linalg.norm(final_pos_handle) == 0.0:
+            if np.linalg.norm(goal_pos_handle) == 0.0:
+                return 1.0
+            else:
+                return 0.0
+        coeff = np.divide(np.dot(final_pos_handle, final_pos_handle), np.linalg.norm(goal_pos_handle)**2)
+        motion_proj_handle = np.dot(coeff, goal_pos_handle)
+        motion_towards_goal = np.linalg.norm(motion_proj_handle)
+        competence = np.divide(motion_towards_goal, init_dist_to_goal)
         return competence
 
     def reset(self):
@@ -151,7 +160,7 @@ class ActivePolicyLearner(object):
 
     def update_plot(self, element=None):
         def draw_goal(goal):
-            im =  self.ax.scatter([-goal[0].x], [goal[0].z], c=[goal[1]], s=4, vmin=-1, vmax=0)
+            im =  self.ax.scatter([-goal[0].x], [goal[0].z], c=[goal[1]], s=4, vmin=0, vmax=1)
             if not self.made_colorbar:
                 self.fig.colorbar(im)
                 self.made_colorbar = True
@@ -272,8 +281,8 @@ class Region(object):
         poses = self.get_corner_coords()+[self.coord]
         y_pos = np.add(bb.project_onto_backboard([self.coord.x, 0.0, self.coord.z]), [0., lift, 0.0])[1]
         for i in range(4):
-            pose_i = poses[i][0], y_pos, poses[i][1]
-            pose_ip1 = poses[i+1][0], y_pos, poses[i+1][1]
+            pose_i = [poses[i][0], y_pos, poses[i][1]]
+            pose_ip1 = [poses[i+1][0], y_pos, poses[i+1][1]]
             p.addUserDebugLine(pose_i, pose_ip1, lifeTime=lifeTime)
 
     def goal_inside(self, goal, bb):
