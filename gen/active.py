@@ -41,6 +41,7 @@ class ActivePolicyLearner(object):
 
         if self.viz_plot:
             self.fig, self.ax = plt.subplots()
+            self.ax.set_aspect('equal')
             plt.ion()
             self.reset_plot()
             self.made_colorbar = False
