@@ -136,7 +136,6 @@ if __name__ == '__main__':
     # if 0 then use all samples in dataset, else use ntrain number of samples
     parser.add_argument('--n-train', type=int, default=0)
     parser.add_argument('--n-runs', type=int, default=1)
-    parser.add_argument('--results-fname', type=str, default='results')
     args = parser.parse_args()
 
     if args.debug:
@@ -166,10 +165,11 @@ if __name__ == '__main__':
         util.write_to_file(fname+'_results', run_data)
     elif args.mode == 'ntrain':
         vals = []
-        step = 500
+        step = 5000
         ns = range(step, args.n_train+1, step)
         for n in ns:
-            all_vals_epochs, best_epoch = train_eval(args, args.hdim, args.batch_size, False)
+            fname = args.model_prefix+'_ntrain_'+str(n)
+            all_vals_epochs, best_epoch = train_eval(args, args.hdim, args.batch_size, True, fname)
             best_val = min([ve[1] for ve in all_vals_epochs])
             vals.append(best_val)
         plot_val_error(ns, vals, 'n train', 'ntrain')
