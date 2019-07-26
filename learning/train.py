@@ -11,7 +11,7 @@ from util import util
 RunData = namedtuple('RunData', 'hdim batch_size run_num max_epoch best_epoch best_val_error')
 name_lookup = {'Prismatic': 0, 'Revolute': 1}
 
-def train_eval(args, hdim, batch_size, pviz):
+def train_eval(args, hdim, batch_size, pviz, fname):
     # Load data
     train_set, val_set, test_set = setup_data_loaders(fname=args.data_fname,
                                                       batch_size=batch_size,
@@ -73,7 +73,7 @@ def train_eval(args, hdim, batch_size, pviz):
 
             ys, yhats, types = [], [], []
             for bx, (k, x, q, im, y) in enumerate(val_set):
-                pol = torch.Tensor([name_lookup[k[0]]]).cuda()
+                pol = torch.Tensor([name_lookup[k[0]]])
                 if args.use_cuda:
                     x = x.cuda()
                     q = q.cuda()
@@ -92,18 +92,21 @@ def train_eval(args, hdim, batch_size, pviz):
                 ys += y.numpy().tolist()
                 yhats += yhat.detach().numpy().tolist()
 
-            if pviz:
-                viz.plot_y_yhat(ys, yhats, types, ex, title='PolVis')
-
             curr_val = np.mean(val_losses)
             vals += [[ex, curr_val]]
             print('[Epoch {}] - Validation Loss: {}'.format(ex, curr_val))
             if curr_val < best_val:
                 best_val = curr_val
                 best_epoch = ex
-                model_fname = args.model_prefix+'_hdim_'+str(hdim)+'_bs_'+str(batch_size)+'_epoch_'+str(best_epoch)
+
+                # save model
+                model_fname = fname+'_epoch_'+str(best_epoch)
                 full_path = 'data/models/'+model_fname+'.pt'
                 torch.save(net.state_dict(), full_path)
+
+                # save plot of prediction error
+                if pviz:
+                    viz.plot_y_yhat(ys, yhats, types, ex, fname, title='PolVis')
     return vals, best_epoch
 
 
@@ -154,13 +157,13 @@ if __name__ == '__main__':
         for n in range(args.n_runs):
             for hdim in hdims:
                 for batch_size in batch_sizes:
-                    all_vals_epochs, best_epoch = train_eval(args, hdim, batch_size, False)
+                    fname = args.model_prefix+'_nrun_'+str(n)
+                    all_vals_epochs, best_epoch = train_eval(args, hdim, batch_size, True, fname)
                     es = [v[0] for v in all_vals_epochs]
                     vals = [v[1] for v in all_vals_epochs]
-                    fname = args.model_prefix+'_hdim_'+str(hdim)+'_bs_'+str(batch_size)+'_epoch_'+str(best_epoch)
                     plot_val_error(es, vals, 'epoch', fname)
                     run_data += [RunData(hdim, batch_size, n, args.n_epochs, best_epoch, min(vals))]
-        util.write_to_file(args.results_fname, run_data)
+        util.write_to_file(fname+'_results', run_data)
     elif args.mode == 'ntrain':
         vals = []
         step = 500
