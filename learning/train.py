@@ -172,4 +172,4 @@ if __name__ == '__main__':
             all_vals_epochs, best_epoch = train_eval(args, args.hdim, args.batch_size, True, fname)
             best_val = min([ve[1] for ve in all_vals_epochs])
             vals.append(best_val)
-        plot_val_error(ns, vals, 'n train', 'ntrain')
+        plot_val_error(ns, vals, 'n train', args.model_prefix+'ntrain')
