@@ -96,6 +96,8 @@ class Prismatic(Policy):
         self.rigid_orientation = orn
         self.pitch = pitch
         self.yaw = yaw
+
+        # should calc delta pitch from mech params and pitch, yaw
         self.delta_pitch = delta_pitch
         self.delta_yaw = delta_yaw
 
@@ -146,12 +148,11 @@ class Prismatic(Policy):
         """ This function generates a Prismatic policy. The ranges are
         based on the data.generator range prismatic joints
         """
-        p_handle_world = p.getLinkState(bb.bb_id, mech.handle_id)[0]
-        rigid_position = bb.project_onto_backboard(p_handle_world)
+        rigid_position = mech.get_pose_handle_base_world().p
         rigid_orientation = np.array([0., 0., 0., 1.])
         if mech.mechanism_type == 'Slider':
             # TODO: see if this should be -np.arctan2(axis[1], axis[0])
-            pitch = -np.arccos(mech.axis[0])
+            pitch = np.arccos(mech.axis[0])
             yaw = 0.0
         else:
             raise NotImplementedError('Still need to implement random Prismatic for Door')
@@ -161,25 +162,28 @@ class Prismatic(Policy):
                 yaw+delta_yaw, delta_pitch, delta_yaw)
 
     @staticmethod
+    # TODO: this isn't calculating the correct delta pitch values
     def get_policy_from_goal(bb, mech, handle_pose, goal_pos):
         direction3d = np.subtract(goal_pos, handle_pose.p)
         direction = [direction3d[0], direction3d[2]]
         dist = np.linalg.norm(direction)
         axis = np.divide(direction, dist)
+        # mechs all have positive z axis
+        if axis[1] < 1:
+            axis = -1*axis
         p.addUserDebugLine(handle_pose.p, np.add(handle_pose.p, [axis[0], 0.0, axis[1]]), [0,1,0], lifeTime=0)
-        pitch = -np.arctan2(axis[1], axis[0])
+        pitch = np.arccos(axis[0])#np.arctan2(axis[1], axis[0])
         yaw = 0.0
         true_policy = Prismatic._gen(bb, mech, 0.0)
+        # to get delta values, shift so true pitch and test pitches so centered at pi/2
+        delta_pitch = pitch - true_policy.pitch
         delta_yaw = 0.0#yaw-true_policy.yaw
-        delta_pitch = pitch-true_policy.pitch
-        if delta_pitch > np.pi/2 and delta_pitch < (3*np.pi)/2:
+        if delta_pitch > np.pi/2:
             delta_pitch = np.pi - delta_pitch
-        elif delta_pitch > (3*np.pi)/2 and delta_pitch < 2*np.pi:
-            delta_pitch = delta_pitch - 2*np.pi
         rigid_position = handle_pose.p
         rigid_orientation = np.array([0., 0., 0., 1.])
-        policy = Prismatic(rigid_position, rigid_orientation, pitch, yaw)#, delta_pitch,
-                #delta_yaw)
+        policy = Prismatic(rigid_position, rigid_orientation, pitch, yaw, delta_pitch,
+                delta_yaw)
         goal_config = policy._inverse_kinematics(goal_pos, [0., 0., 0., 1.])
         return policy, goal_config
 
