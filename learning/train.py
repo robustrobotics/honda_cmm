@@ -2,11 +2,12 @@ import argparse
 import numpy as np
 import torch
 from learning.nn_disp_pol_vis import DistanceRegressor as NNPolVis
+from learning.nn_disp_pol_mech import DistanceRegressor as NNPolMech
 from learning.dataloaders import setup_data_loaders
 import learning.viz as viz
-from torch.utils.tensorboard import SummaryWriter
 from collections import namedtuple
 from util import util
+torch.backends.cudnn.enabled = True
 
 RunData = namedtuple('RunData', 'hdim batch_size run_num max_epoch best_epoch best_val_error')
 name_lookup = {'Prismatic': 0, 'Revolute': 1}
@@ -24,6 +25,11 @@ def train_eval(args, hdim, batch_size, pviz):
                    im_h=53,  # 154,
                    im_w=115,  # 205,
                    kernel_size=3)
+    # net = NNPolMech(policy_names=['Prismatic'],
+    #                 policy_dims=[2],
+    #                 hdim=hdim,
+    #                 mech_dims=2)
+    print(sum(p.numel() for p in net.parameters() if p.requires_grad))
     if args.use_cuda:
         net = net.cuda()
 
@@ -31,7 +37,6 @@ def train_eval(args, hdim, batch_size, pviz):
     optim = torch.optim.Adam(net.parameters())
 
     # Add the graph to TensorBoard viz,
-    writer = SummaryWriter()
     k, x, q, im, y = train_set.dataset[0]
     pol = torch.Tensor([name_lookup[k]])
     if args.use_cuda:
@@ -39,7 +44,6 @@ def train_eval(args, hdim, batch_size, pviz):
         q = q.cuda().unsqueeze(0)
         im = im.cuda().unsqueeze(0)
         pol = pol.cuda()
-        writer.add_graph(net, (pol, x, q, im), operator_export_type="RAW")
 
     best_val = 1000
     # Training loop.
@@ -48,13 +52,13 @@ def train_eval(args, hdim, batch_size, pviz):
         train_losses = []
         net.train()
         for bx, (k, x, q, im, y) in enumerate(train_set):
-            pol = torch.Tensor([name_lookup[k[0]]])
+            pol = name_lookup[k[0]]
             if args.use_cuda:
                 x = x.cuda()
                 q = q.cuda()
                 im = im.cuda()
                 y = y.cuda()
-                pol = pol.cuda()
+                # pol = pol.cuda()
             optim.zero_grad()
             yhat = net.forward(pol, x, q, im)
 
@@ -82,6 +86,7 @@ def train_eval(args, hdim, batch_size, pviz):
                     pol = pol.cuda()
 
                 yhat = net.forward(pol, x, q, im)
+
                 loss = loss_fn(yhat, y)
                 val_losses.append(loss.item())
 

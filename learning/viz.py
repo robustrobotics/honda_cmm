@@ -43,7 +43,7 @@ def plot_q_yhat(data_loader, net, n_samples=50):
         ys = []
         for q in qs:
             q = torch.tensor([[q]]).cuda()
-            yhat = net.forward(k, x, q, im)
+            yhat = net.forward(torch.tensor([0]), x, q, im)
             ys.append(yhat.item())
 
         r = data_loader.dataset.items[bx]['mech'][0]/2
@@ -73,17 +73,17 @@ def plot_q_yhat(data_loader, net, n_samples=50):
 
 
 if __name__ == '__main__':
-    train_set, val_set, test_set = setup_data_loaders(fname='data/newdata.pickle',
+    train_set, val_set, test_set = setup_data_loaders(fname='prism_rand00_5k.pickle',
                                                       batch_size=1,
                                                       small_train=0)
 
     net = NNPolVis(policy_names=['Prismatic', 'Revolute'],
-                   policy_dims=[9, 12],
+                   policy_dims=[2, 12],
                    hdim=32,
                    im_h=53,
                    im_w=115,
                    kernel_size=3).cuda()
     device = torch.device('cuda')
-    net.load_state_dict(torch.load('data/models/random_prism._0.pt', map_location=device))
+    net.load_state_dict(torch.load('data/models/prism_rand2_hdim_32_bs_32_epoch_210.pt', map_location=device))
     net.eval()
     plot_q_yhat(test_set, net)

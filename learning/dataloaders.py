@@ -71,19 +71,19 @@ def imshow(img):
 class PolicyDataset(Dataset):
     def __init__(self, items):
         super(PolicyDataset, self).__init__()
-        self.items = items
+        self.items = items[0:5000]
 
         self.tensors = [torch.tensor(item['params']) for item in items]
         self.configs = [torch.tensor([item['config']]) for item in items]
         self.ys = [torch.tensor([item['y']]) for item in items]
         tt = transforms.Compose([transforms.ToTensor(),
-                                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+                                transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
         self.images = []
         for item in items:
             w, h, im = item['image']
             np_im = np.array(im, dtype=np.uint8).reshape(h, w, 3)[:, :, 0:3]
             self.images.append(tt(np_im))
-        # imshow(torchvision.utils.make_grid(self.images[0:10]))
+        #imshow(torchvision.utils.make_grid(self.images[0:10]))
 
         # this is just for plotting, not learning
         self.delta_vals = [item['delta_vals'] for item in items]
@@ -126,8 +126,6 @@ def parse_pickle_file(fname=None, data=None):
             mech_params = []
         motion = entry.net_motion
 
-
-
         parsed_data.append({
             'type': policy_type,
             'params': policy_params,
@@ -142,6 +140,7 @@ def parse_pickle_file(fname=None, data=None):
 
 
 def create_data_splits(data, val_pct=0.15, test_pct=0.15):
+    np.random.shuffle(data)
     n = len(data)
     val_start = int(n*(1-val_pct-test_pct))
     test_start = int(n*(1-test_pct))
