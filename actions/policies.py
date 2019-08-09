@@ -30,7 +30,7 @@ class Policy(object):
         """
         self.type = type
 
-    def generate_trajectory(self, pose_handle_base_world, config_goal, debug, p_delta= 0.01):
+    def generate_trajectory(self, pose_handle_base_world, config_goal, debug=False, p_delta= 0.01):
         """ This method generates a trajectory of waypoints that the gripper tip should
         move through
         :param pose_handle_base_world: util.Pose, initial pose of the base of the handle
@@ -96,6 +96,8 @@ class Prismatic(Policy):
         self.rigid_orientation = orn
         self.pitch = pitch
         self.yaw = yaw
+
+        # should calc delta pitch from mech params and pitch, yaw
         self.delta_pitch = delta_pitch
         self.delta_yaw = delta_yaw
 
@@ -146,11 +148,11 @@ class Prismatic(Policy):
         """ This function generates a Prismatic policy. The ranges are
         based on the data.generator range prismatic joints
         """
-        p_handle_world = p.getLinkState(bb.bb_id, mech.handle_id)[0]
-        rigid_position = bb.project_onto_backboard(p_handle_world)
+        rigid_position = mech.get_pose_handle_base_world().p
         rigid_orientation = np.array([0., 0., 0., 1.])
         if mech.mechanism_type == 'Slider':
-            pitch = -np.arccos(mech.axis[0])
+            # TODO: see if this should be -np.arctan2(axis[1], axis[0])
+            pitch = np.arccos(mech.axis[0])
             yaw = 0.0
         else:
             raise NotImplementedError('Still need to implement random Prismatic for Door')
@@ -158,6 +160,32 @@ class Prismatic(Policy):
         delta_yaw = randomness*np.random.uniform(-np.pi/2, np.pi/2)
         return Prismatic(rigid_position, rigid_orientation, pitch+delta_pitch,
                 yaw+delta_yaw, delta_pitch, delta_yaw)
+
+    @staticmethod
+    # TODO: this isn't calculating the correct delta pitch values
+    def get_policy_from_goal(bb, mech, handle_pose, goal_pos):
+        direction3d = np.subtract(goal_pos, handle_pose.p)
+        direction = [direction3d[0], direction3d[2]]
+        dist = np.linalg.norm(direction)
+        axis = np.divide(direction, dist)
+        # mechs all have positive z axis
+        if axis[1] < 1:
+            axis = -1*axis
+        p.addUserDebugLine(handle_pose.p, np.add(handle_pose.p, [axis[0], 0.0, axis[1]]), [0,1,0], lifeTime=0)
+        pitch = np.arccos(axis[0])#np.arctan2(axis[1], axis[0])
+        yaw = 0.0
+        true_policy = Prismatic._gen(bb, mech, 0.0)
+        # to get delta values, shift so true pitch and test pitches so centered at pi/2
+        delta_pitch = pitch - true_policy.pitch
+        delta_yaw = 0.0#yaw-true_policy.yaw
+        if delta_pitch > np.pi/2:
+            delta_pitch = np.pi - delta_pitch
+        rigid_position = handle_pose.p
+        rigid_orientation = np.array([0., 0., 0., 1.])
+        policy = Prismatic(rigid_position, rigid_orientation, pitch, yaw, delta_pitch,
+                delta_yaw)
+        goal_config = policy._inverse_kinematics(goal_pos, [0., 0., 0., 1.])
+        return policy, goal_config
 
 class Revolute(Policy):
     def __init__(self, center, axis_roll, axis_pitch, radius, orn, delta_roll=None,
@@ -274,19 +302,33 @@ class Path(Policy):
 # TODO: add other policy_types as they're made
 def generate_policy(bb, mech, match_policies, randomness, policy_types=[Revolute, Prismatic]):
     if match_policies:
-        if mech.mechanism_type == 'Door':
+        policy_type = get_matched_policy_type(mech)
+        if policy_type == 'Revolute':
             return Revolute._gen(bb, mech, randomness)
-        elif mech.mechanism_type == 'Slider':
+        elif policy_type == 'Prismatic':
             return Prismatic._gen(bb, mech, randomness)
     else:
         policy_type = np.random.choice(policy_types)
         return policy_type._gen(bb, mech, randomness)
 
-def get_policy_from_params(type, params):
+def get_matched_policy_type(mech):
+    if mech.mechanism_type == 'Door':
+        return 'Revolute'
+    elif mech.mechanism_type == 'Slider':
+        return 'Prismatic'
+
+def get_policy_from_params(type, params, mech=None):
     if type == 'Revolute':
         return Revolute(params[:3], params[3], params[4], params[5:9], params[9:12])
     if type == 'Prismatic':
-        return Prismatic(params[:3], params[3:7], params[7], params[8])
+        pitch = params[7]
+        yaw = params[8]
+        if mech:
+            delta_pitch = pitch + np.arccos(mech.axis[0])
+            delta_yaw = yaw
+        else:
+            delta_pitch, delta_yaw = None, None
+        return Prismatic(params[:3], params[3:7], pitch, yaw, delta_pitch, delta_yaw)
 
 def get_policy_from_tuple(policy_params):
     type = policy_params.type

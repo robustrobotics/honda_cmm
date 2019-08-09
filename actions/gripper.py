@@ -38,7 +38,6 @@ _des - desired
 _thresh - threshold
 _M - matrix form of a pose/transformation
 """
-
 class Gripper:
     def __init__(self, bb_id, k=[2000.0,20.0], d=[0.45,0.45]):
         """
@@ -185,7 +184,7 @@ class Gripper:
                 p.addUserDebugLine(np.add(pose_handle_base_world_des.p, [0.,0.025,0.]), np.add(pose_handle_base_world_des.p, [0,.025,1]), lifeTime=.5)
             handle_base_ps.append(mech.get_pose_handle_base_world().p)
             self._control_fingers('close', debug=debug)
-            if (not last_traj_p) and self._at_des_handle_base_pose(pose_handle_base_world_des, q_offset, mech, 0.01):
+            if (not last_traj_p) and self._at_des_handle_base_pose(pose_handle_base_world_des, q_offset, mech, 0.005):
                 return handle_base_ps, False
             elif last_traj_p and self._at_des_handle_base_pose(pose_handle_base_world_des, q_offset, mech, 0.005) and self._stable(handle_base_ps):
                 return handle_base_ps, True
