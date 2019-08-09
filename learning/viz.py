@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from learning.dataloaders import setup_data_loaders
-from learning.nn_disp_pol_vis import DistanceRegressor as NNPolVis
+from learning.models.nn_disp_pol_vis import DistanceRegressor as NNPolVis
 
 def plot_y_yhat(y, yhat, types, epoch_num, fname, title=''):
     plt.figure()

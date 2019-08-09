@@ -1,5 +1,5 @@
 import torch.nn as nn
-from learning.policy_encoder import PolicyEncoder
+from learning.modules.policy_encoder import PolicyEncoder
 
 
 class DistanceRegressor(nn.Module):

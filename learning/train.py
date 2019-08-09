@@ -1,8 +1,8 @@
 import argparse
 import numpy as np
 import torch
-from learning.nn_disp_pol_vis import DistanceRegressor as NNPolVis
-from learning.nn_disp_pol_mech import DistanceRegressor as NNPolMech
+from learning.models.nn_disp_pol_vis import DistanceRegressor as NNPolVis
+from learning.models.nn_disp_pol_mech import DistanceRegressor as NNPolMech
 from learning.dataloaders import setup_data_loaders
 import learning.viz as viz
 from collections import namedtuple
@@ -24,7 +24,8 @@ def train_eval(args, hdim, batch_size, pviz, fname):
                    hdim=hdim,
                    im_h=53,  # 154,
                    im_w=115,  # 205,
-                   kernel_size=3)
+                   kernel_size=3,
+                   image_encoder=args.image_encoder)
     # net = NNPolMech(policy_names=['Prismatic'],
     #                 policy_dims=[2],
     #                 hdim=hdim,
@@ -51,14 +52,13 @@ def train_eval(args, hdim, batch_size, pviz, fname):
     for ex in range(1, args.n_epochs+1):
         train_losses = []
         net.train()
-        for bx, (k, x, q, im, y) in enumerate(train_set):
+        for bx, (k, x, q, im, y, _) in enumerate(train_set):
             pol = name_lookup[k[0]]
             if args.use_cuda:
                 x = x.cuda()
                 q = q.cuda()
                 im = im.cuda()
                 y = y.cuda()
-                # pol = pol.cuda()
             optim.zero_grad()
             yhat = net.forward(pol, x, q, im)
 
@@ -76,14 +76,13 @@ def train_eval(args, hdim, batch_size, pviz, fname):
             net.eval()
 
             ys, yhats, types = [], [], []
-            for bx, (k, x, q, im, y) in enumerate(val_set):
+            for bx, (k, x, q, im, y, _) in enumerate(val_set):
                 pol = torch.Tensor([name_lookup[k[0]]])
                 if args.use_cuda:
                     x = x.cuda()
                     q = q.cuda()
                     im = im.cuda()
                     y = y.cuda()
-                    # pol = pol.cuda()
 
                 yhat = net.forward(pol, x, q, im)
 
@@ -140,6 +139,7 @@ if __name__ == '__main__':
     parser.add_argument('--model-prefix', type=str, default='model')
     # if 0 then use all samples in dataset, else use ntrain number of samples
     parser.add_argument('--n-train', type=int, default=0)
+    parser.add_argument('--image-encoder', type=str, default='spatial', choices=['spatial', 'cnn'])
     parser.add_argument('--n-runs', type=int, default=1)
     args = parser.parse_args()
 

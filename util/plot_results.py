@@ -510,7 +510,7 @@ class TestMechPolicies(PlotFunc):
         return 'show performance on policies for a single busybox'
 
     def _plot(self, data, model):
-        randomness = 0.1
+        randomness = 0.0
         n_policies= 5
         n_samples = 25
         delta_yaws = np.zeros((n_policies, n_policies))
@@ -524,12 +524,12 @@ class TestMechPolicies(PlotFunc):
         mech = bb._mechanisms[0]
         configs = np.linspace(-mech.range, mech.range, n_samples)
         mech_tuple = mech.get_mechanism_tuple()
+        print(mech_tuple)
 
         d_pitches = np.linspace(-np.pi/2*0.25, np.pi/2*0.25, n_policies)
         d_yaw = np.linspace(-np.pi/2*0.25, np.pi / 2 * 0.25, n_policies)
-
-        for i in range(n_policies):
-            for j in range(n_policies):
+        for i in range(len(d_pitches)):
+            for j in range(len(d_yaw)):
                 util.setup_pybullet.setup_env(bb, False, False)
                 random_policy = policies.generate_policy(bb, mech, True, randomness)
                 random_policy.pitch = random_policy.pitch - random_policy.delta_pitch + d_pitches[i]
@@ -555,7 +555,7 @@ class TestMechPolicies(PlotFunc):
                                          None,
                                          randomness)
                     pred_motion = get_pred_motions([sample], model)
-                    motions[i, j, k] = pred_motion[0].detach().numpy()
+                    motions[i, j, k] = pred_motion[0]
 
                     # calculate trajectory
                     pose_handle_base_world = mech.get_pose_handle_base_world()
@@ -699,7 +699,7 @@ def plot_results(file_name, model):
         data = util.read_from_file(file_name)
         print_stats(data)
     if model is not None:
-        model = util.load_model(model, hdim=8, model_type='polvis')
+        model = util.load_model(model, hdim=16, model_type='polvis')
 
     plot_funcs = PlotFunc.__subclasses__()
     for (i, func) in enumerate(plot_funcs):

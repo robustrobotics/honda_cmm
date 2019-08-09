@@ -6,16 +6,10 @@ from actions.gripper import Gripper
 from gen.generator_busybox import BusyBox, Slider, Door
 from util.setup_pybullet import setup_env
 from scipy.optimize import minimize
-from learning.nn_disp_pol import DistanceRegressor as NNPol
-from learning.nn_disp_pol_vis import DistanceRegressor as NNPolVis
 from learning.dataloaders import parse_pickle_file, PolicyDataset
 import torch
-import torchvision.transforms as transforms
 from util import util
 import numpy as np
-import pybullet as p
-import pybullet_data
-from collections import namedtuple
 import sys
 from learning.train import name_lookup
 import matplotlib.pyplot as plt

@@ -7,9 +7,9 @@ import math
 from collections import namedtuple
 import os
 import torch
-from learning.nn_disp_pol import DistanceRegressor as NNPol
-from learning.nn_disp_pol_vis import DistanceRegressor as NNPolVis
-from learning.nn_disp_pol_mech import DistanceRegressor as NNPolMech
+from learning.models.nn_disp_pol import DistanceRegressor as NNPol
+from learning.models.nn_disp_pol_vis import DistanceRegressor as NNPolVis
+from learning.models.nn_disp_pol_mech import DistanceRegressor as NNPolMech
 from actions import policies
 from actions.gripper import Gripper
 from gen.generator_busybox import BusyBox

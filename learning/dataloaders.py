@@ -64,7 +64,10 @@ class CustomSampler(Sampler):
 def imshow(img):
     img = img / 2 + 0.5     # unnormalize
     npimg = img.numpy()
-    plt.imshow(np.transpose(npimg, (1, 2, 0)))
+    if len(img.shape) == 3:
+        plt.imshow(np.transpose(npimg, (1, 2, 0)))
+    else:
+        plt.imshow(npimg)
     plt.show()
 
 
@@ -76,20 +79,29 @@ class PolicyDataset(Dataset):
         self.tensors = [torch.tensor(item['params']) for item in items]
         self.configs = [torch.tensor([item['config']]) for item in items]
         self.ys = [torch.tensor([item['y']]) for item in items]
+
+        downsample = transforms.Compose([transforms.ToPILImage(),
+                                         transforms.Resize(25),
+                                         transforms.Grayscale(),
+                                         transforms.ToTensor()])
         tt = transforms.Compose([transforms.ToTensor(),
-                                transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
+                                 transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
         self.images = []
+        self.downsampled_images = []
+
         for item in items:
             w, h, im = item['image']
             np_im = np.array(im, dtype=np.uint8).reshape(h, w, 3)[:, :, 0:3]
             self.images.append(tt(np_im))
-        #imshow(torchvision.utils.make_grid(self.images[0:10]))
+            self.downsampled_images.append(downsample(np_im))
+        # imshow(torchvision.utils.make_grid(self.images[0:10]))
+        # imshow(torchvision.utils.make_grid(self.downsampled_images[0:10]))
 
         # this is just for plotting, not learning
         self.delta_vals = [item['delta_vals'] for item in items]
 
     def __getitem__(self, index):
-        return self.items[index]['type'], self.tensors[index], self.configs[index], self.images[index], self.ys[index]
+        return self.items[index]['type'], self.tensors[index], self.configs[index], self.images[index], self.ys[index], self.downsampled_images[index]
 
     def __len__(self):
         return len(self.items)
@@ -182,7 +194,7 @@ def setup_data_loaders(fname, batch_size=128, use_cuda=True, small_train=0):
 
 
 if __name__ == '__main__':
-    train_loader, val_loader, test_loader = setup_data_loaders(fname='smalltest.pickle',
+    train_loader, val_loader, test_loader = setup_data_loaders(fname='prism_rand05_10k.pickle',
                                                                batch_size=16)
     print('Train: {}\tVal: {}\tTest: {}'.format(len(train_loader.dataset), len(val_loader.dataset), len(test_loader.dataset)))
     print(train_loader.dataset[0])
