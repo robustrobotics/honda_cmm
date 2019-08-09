@@ -46,7 +46,7 @@ class ImageEncoder(nn.Module):
         # I am currently just running the network to see what this size should be.
         self.lin_input = hdim*3*11  # H*W*hdim
         self.fc1 = nn.Linear(self.lin_input, hdim)
-        self.fc2 = nn.Linear(hdim, hdim)
+        self.fc2 = nn.Linear(hdim, hdim*2)
 
     def forward(self, img):
         x = F.relu(self.conv1(img))

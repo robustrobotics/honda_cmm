@@ -26,15 +26,10 @@ class ImageEncoder(nn.Module):
                                out_channels=8,
                                kernel_size=7,
                                padding=0)
-        # self.conv3 = nn.Conv2d(in_channels=hdim,
-        #                        out_channels=hdim,
-        #                        kernel_size=7,
-        #                        padding=3)
-        #print('CONV', sum(p.numel() for p in self.conv3.parameters() if p.requires_grad))
 
         # I am currently just running the network to see what this size should be.
         #self.fc1 = nn.Linear(self.lin_input, hdim)
-        self.fc2 = nn.Linear(8*2, hdim*2)
+        self.fc2 = nn.Linear(hdim*2, hdim*2)
         self.scale = nn.Linear(2, 2)
         self.sm = nn.Softmax(dim=1)
         self.temp = nn.Parameter(torch.tensor(0.1))

@@ -83,7 +83,7 @@ def train_eval(args, hdim, batch_size, pviz, fname):
                     q = q.cuda()
                     im = im.cuda()
                     y = y.cuda()
-                    pol = pol.cuda()
+                    # pol = pol.cuda()
 
                 yhat = net.forward(pol, x, q, im)
 
@@ -162,7 +162,7 @@ if __name__ == '__main__':
             for hdim in hdims:
                 for batch_size in batch_sizes:
                     fname = args.model_prefix+'_nrun_'+str(n)
-                    all_vals_epochs, best_epoch = train_eval(args, hdim, batch_size, True, fname)
+                    all_vals_epochs, best_epoch = train_eval(args, hdim, batch_size, False, fname)
                     es = [v[0] for v in all_vals_epochs]
                     vals = [v[1] for v in all_vals_epochs]
                     plot_val_error(es, vals, 'epoch', fname)

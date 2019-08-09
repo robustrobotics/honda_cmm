@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from learning.policy_encoder import PolicyEncoder
-from learning.image_encoder_spatialsoftmax import ImageEncoder
+from learning.image_encoder import ImageEncoder
 import torch.nn.functional as F
 
 
@@ -25,7 +25,7 @@ class DistanceRegressor(nn.Module):
         for name, dim in zip(policy_names, policy_dims):
             self.policy_modules[name] = PolicyEncoder(n_params=dim,
                                                       n_q=1,
-                                                      n_layer=3,
+                                                      n_layer=2,
                                                       n_hidden=hdim*2)
 
         self.image_module = ImageEncoder(hdim=hdim,
@@ -33,11 +33,11 @@ class DistanceRegressor(nn.Module):
                                          W=im_w,
                                          kernel_size=kernel_size)
 
-        self.fc1 = nn.Linear(hdim*2, hdim*4)
-        self.fc2 = nn.Linear(hdim*4, hdim*4)
-        self.fc3 = nn.Linear(hdim*4, hdim*4)
+        self.fc1 = nn.Linear(hdim*4, hdim*4)
+        self.fc2 = nn.Linear(hdim*4, hdim*2)
+        self.fc3 = nn.Linear(hdim*2, hdim*2)
         self.fc4 = nn.Linear(hdim, hdim)
-        self.fc5 = nn.Linear(hdim*4, 1)
+        self.fc5 = nn.Linear(hdim*2, 1)
         # SoftPLUS didn't work well... probably because our outputs are such small numbers.
         self.SOFTPLUS = nn.Softplus()
 
@@ -59,10 +59,10 @@ class DistanceRegressor(nn.Module):
         # x = pol*im
         # x_norm = torch.norm(x, p=2, dim=1, keepdim=True)
         # x = x/x_norm
-        #x = torch.cat([pol, im], dim=1)
-        x = pol + im
+        x = torch.cat([pol, im], dim=1)
+        # x = pol + im
 
-        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc1(x)) 
         x = F.relu(self.fc2(x))
         x = self.fc5(x)
         return x

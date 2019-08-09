@@ -71,7 +71,7 @@ def imshow(img):
 class PolicyDataset(Dataset):
     def __init__(self, items):
         super(PolicyDataset, self).__init__()
-        self.items = items[0:5000]
+        self.items = items
 
         self.tensors = [torch.tensor(item['params']) for item in items]
         self.configs = [torch.tensor([item['config']]) for item in items]
