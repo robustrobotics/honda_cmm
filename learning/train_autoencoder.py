@@ -23,7 +23,8 @@ def train_eval(args, pviz, fname):
     recon_size = train_set.dataset.downsampled_images[0].shape
     # Setup Model
     net = Autoencoder(hdim=args.hdim,
-                      recon_shape=recon_size)
+                      recon_shape=recon_size,
+                      n_features=args.n_features)
 
     if args.use_cuda:
         net = net.cuda()
@@ -125,6 +126,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--batch-size', type=int, help='Batch size to use for training.')
     parser.add_argument('--hdim', type=int, help='Hidden dimensions for the neural nets.')
+    parser.add_argument('--n-features', type=int, default=8)
     parser.add_argument('--n-epochs', type=int, default=10)
     parser.add_argument('--val-freq', type=int, default=5)
     parser.add_argument('--use-cuda', default=False, action='store_true')
