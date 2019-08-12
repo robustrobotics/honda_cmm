@@ -151,8 +151,7 @@ class Prismatic(Policy):
         rigid_position = mech.get_pose_handle_base_world().p
         rigid_orientation = np.array([0., 0., 0., 1.])
         if mech.mechanism_type == 'Slider':
-            # TODO: see if this should be -np.arctan2(axis[1], axis[0])
-            pitch = -np.arccos(mech.axis[0])
+            pitch = -np.arctan2(mech.axis[1], mech.axis[0])
             yaw = 0.0
         else:
             raise NotImplementedError('Still need to implement random Prismatic for Door')
