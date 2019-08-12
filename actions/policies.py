@@ -169,10 +169,10 @@ class Prismatic(Policy):
         dist = np.linalg.norm(direction)
         axis = np.divide(direction, dist)
         # mechs all have positive z axis
-        if axis[1] < 1:
+        if axis[1] < 0:
             axis = -1*axis
         p.addUserDebugLine(handle_pose.p, np.add(handle_pose.p, [axis[0], 0.0, axis[1]]), [0,1,0], lifeTime=0)
-        pitch = np.arccos(axis[0])#np.arctan2(axis[1], axis[0])
+        pitch = -np.arctan2(axis[1], axis[0])
         yaw = 0.0
         true_policy = Prismatic._gen(bb, mech, 0.0)
         # to get delta values, shift so true pitch and test pitches so centered at pi/2
