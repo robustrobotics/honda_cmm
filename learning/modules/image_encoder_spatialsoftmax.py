@@ -7,13 +7,14 @@ import numpy as np
 
 class ImageEncoder(nn.Module):
 
-    def __init__(self, hdim, kernel_size=7):
+    def __init__(self, hdim, n_features, kernel_size=7):
         """
 
         :param hdim: Number of hidden units to use in each layer.
         :param H: The initial height of an image.
         :param W: The initial width of an image.
         :param kernel_size: The kernel_size of the convolution.
+        :param n_features: Number of features the spatial autoencoder should have.
         """
         super(ImageEncoder, self).__init__()
         self.pad = torch.nn.ReplicationPad2d(3)
@@ -21,15 +22,16 @@ class ImageEncoder(nn.Module):
                                out_channels=hdim,
                                kernel_size=kernel_size,
                                padding=0)
-        # self.conv2 = nn.Conv2d(in_channels=hdim,
-        #                        out_channels=hdim,
-        #                        kernel_size=7,
-        #                        padding=0)
+        self.conv2 = nn.Conv2d(in_channels=hdim,
+                               out_channels=n_features,
+                               kernel_size=7,
+                               padding=0)
 
         # I am currently just running the network to see what this size should be.
         #self.fc1 = nn.Linear(self.lin_input, hdim)
-        self.fc2 = nn.Linear(hdim*2, hdim*2)
         self.scale = nn.Linear(2, 2)
+        self.fc2 = nn.Linear(n_features*2, hdim*2)
+
         self.sm = nn.Softmax(dim=1)
         self.temp = nn.Parameter(torch.tensor(0.1))
 
@@ -47,8 +49,8 @@ class ImageEncoder(nn.Module):
         pos_y = torch.reshape(pos_y, [h * w])
         img = self.pad(img)
         x = F.relu(self.conv1(img))
-        # x = self.pad(x)
-        # x = self.conv2(x)
+        x = self.pad(x)
+        x = self.conv2(x)
 
         # Do a spatial softmax.
         bs, c, h, w = x.shape
