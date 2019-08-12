@@ -68,6 +68,7 @@ class ImageEncoder(nn.Module):
         expected_xy = torch.cat([expected_x, expected_y], dim=1)
 
 
+
         # imshow(torchvision.utils.make_grid(img), expected_xy.detach().numpy(), pfeatures.detach().numpy())
         # input()
         # sys.exit(0)
@@ -76,7 +77,7 @@ class ImageEncoder(nn.Module):
         x = expected_xy2.view(-1, c*2)
 
         x = self.fc2(x)
-        return x, expected_xy.view(bs, c, 2)
+        return x, expected_xy.view(bs, c, 2), pfeatures.view(bs, c, h, w)
 
 def imshow(img, points, maps):
     c, h, w = img.shape

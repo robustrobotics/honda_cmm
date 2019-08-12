@@ -22,9 +22,9 @@ class Autoencoder(nn.Module):
         self.relu = nn.ReLU()
 
     def forward(self, img):
-        feat, points = self.encoder(img)
+        feat, points, heatmaps = self.encoder(img)
         recon = self.decoder2(self.relu(self.decoder1(feat)))
         return recon.view(-1,
                           self.recon_shape[0],
                           self.recon_shape[1],
-                          self.recon_shape[2]), points
+                          self.recon_shape[2]), points, heatmaps
