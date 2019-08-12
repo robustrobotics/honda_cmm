@@ -72,11 +72,11 @@ class ImageEncoder(nn.Module):
         # input()
         # sys.exit(0)
 
-        expected_xy = self.scale(expected_xy)
-        x = expected_xy.view(-1, c*2)
+        expected_xy2 = self.scale(expected_xy)
+        x = expected_xy2.view(-1, c*2)
 
         x = self.fc2(x)
-        return x
+        return x, expected_xy.view(bs, c, 2)
 
 def imshow(img, points, maps):
     c, h, w = img.shape
