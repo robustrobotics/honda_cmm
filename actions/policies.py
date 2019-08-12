@@ -151,14 +151,23 @@ class Prismatic(Policy):
         rigid_position = mech.get_pose_handle_base_world().p
         rigid_orientation = np.array([0., 0., 0., 1.])
         if mech.mechanism_type == 'Slider':
-            pitch = -np.arctan2(mech.axis[1], mech.axis[0])
-            yaw = 0.0
+            true_pitch = -np.arctan2(mech.axis[1], mech.axis[0])
+            true_yaw = 0.0
         else:
             raise NotImplementedError('Still need to implement random Prismatic for Door')
         delta_pitch = randomness*np.random.uniform(-np.pi/2, np.pi/2)
         delta_yaw = randomness*np.random.uniform(-np.pi/2, np.pi/2)
-        return Prismatic(rigid_position, rigid_orientation, pitch+delta_pitch,
-                yaw+delta_yaw, delta_pitch, delta_yaw)
+
+        pitch = true_pitch + delta_pitch
+        yaw = true_yaw + delta_yaw
+
+        if pitch < -np.pi:
+            pitch += np.pi
+        elif pitch > 0:
+            pitch -= np.pi
+
+        return Prismatic(rigid_position, rigid_orientation, pitch, yaw, \
+                delta_pitch, delta_yaw)
 
     @staticmethod
     # TODO: this isn't calculating the correct delta pitch values
