@@ -36,7 +36,6 @@ class ImageEncoder(nn.Module):
         self.temp = nn.Parameter(torch.tensor(0.1))
 
     def forward(self, img):
-        img = img[:, :, 1:, 1:]
         bs, c, h, w = img.shape
         pos_y, pos_x = torch.meshgrid(
             torch.linspace(-1., 1., h),
