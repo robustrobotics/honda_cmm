@@ -47,7 +47,7 @@ def train_eval(args, pviz, fname):
                 y_im = y_im.cuda()
 
             optim.zero_grad()
-            yhat = net.forward(im)
+            yhat, _ = net.forward(im)
 
             # TODO: Create a down-sampled image as y.
 
@@ -69,10 +69,13 @@ def train_eval(args, pviz, fname):
                     im = im.cuda()
                     y_im = y_im.cuda()
 
-                yhat = net.forward(im)
+                yhat, points = net.forward(im)
                 if bx == 0:
                     for kx in range(0, yhat.shape[0]):
                         writer.add_image('recon_%d' % kx, yhat[kx, 0, :, :], dataformats='HW', global_step=ex)
+                        fig = view_points(im[kx, :, :, :].cpu(),
+                                          points[kx, :, :].cpu().detach().numpy())
+                        writer.add_figure('features_%d' % kx, fig, global_step=ex)
 
                 loss = loss_fn(yhat, y_im)
                 val_losses.append(loss.item())
@@ -98,6 +101,21 @@ def train_eval(args, pviz, fname):
 
     return vals, best_epoch
 
+
+def view_points(img, points):
+    c, h, w = img.shape
+    img = img / 2 + 0.5  # unnormalize
+    npimg = img.numpy()
+
+    fig, axes = plt.subplots(1, 1)
+
+    axes.imshow(np.transpose(npimg, (1, 2, 0)))
+    cmap = plt.get_cmap('viridis')
+
+    for ix in range(points.shape[0]):
+        axes.scatter((points[ix, 0]+1)/2.0*w, (points[ix, 1]+1)/2.0*h, s=5, c=[cmap(ix/points.shape[0])])
+
+    return fig
 
 def imshow(img, recon):
     n, c, h, w = img.shape
