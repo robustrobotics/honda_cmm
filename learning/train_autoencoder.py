@@ -47,7 +47,7 @@ def train_eval(args, pviz, fname):
                 y_im = y_im.cuda()
 
             optim.zero_grad()
-            yhat, _ = net.forward(im)
+            yhat, _, _ = net.forward(im)
 
             # TODO: Create a down-sampled image as y.
 
@@ -69,13 +69,18 @@ def train_eval(args, pviz, fname):
                     im = im.cuda()
                     y_im = y_im.cuda()
 
-                yhat, points = net.forward(im)
+                yhat, points, heatmaps = net.forward(im)
+                # imshow(y_im.cpu().detach(), yhat.cpu().detach())
+                # sys.exit(0)
                 if bx == 0:
                     for kx in range(0, yhat.shape[0]):
                         writer.add_image('recon_%d' % kx, yhat[kx, 0, :, :], dataformats='HW', global_step=ex)
                         fig = view_points(im[kx, :, :, :].cpu(),
                                           points[kx, :, :].cpu().detach().numpy())
                         writer.add_figure('features_%d' % kx, fig, global_step=ex)
+                        fig = viz_heatmaps(im[kx, :, :, :].cpu(),
+                                           heatmaps[kx, :, :].cpu().detach().numpy())
+                        writer.add_figure('heatmaps_%d' % kx, fig, global_step=ex)
 
                 loss = loss_fn(yhat, y_im)
                 val_losses.append(loss.item())
@@ -114,6 +119,22 @@ def view_points(img, points):
 
     for ix in range(points.shape[0]):
         axes.scatter((points[ix, 0]+1)/2.0*w, (points[ix, 1]+1)/2.0*h, s=5, c=[cmap(ix/points.shape[0])])
+
+    return fig
+
+def viz_heatmaps(img, heatmaps):
+    c, h, w = img.shape
+    img = img / 2 + 0.5  # unnormalize
+    npimg = img.numpy()
+
+    fig, axes = plt.subplots(4, heatmaps.shape[0] // 4 + 1)
+    fig.subplots_adjust(hspace=0, wspace=0.1, top=0.9, bottom=0.1)
+
+    axes = axes.flatten()
+    axes[0].imshow(np.transpose(npimg, (1, 2, 0)))
+
+    for ix in range(0, heatmaps.shape[0]):
+        axes[ix + 1].imshow(heatmaps[ix, :, :])
 
     return fig
 
