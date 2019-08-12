@@ -165,7 +165,7 @@ class Prismatic(Policy):
             pitch += np.pi
         elif pitch > 0:
             pitch -= np.pi
-
+        # TODO: same for yaw if have mech with yaw != 0
         return Prismatic(rigid_position, rigid_orientation, pitch, yaw, \
                 delta_pitch, delta_yaw)
 
@@ -183,11 +183,13 @@ class Prismatic(Policy):
         pitch = -np.arctan2(axis[1], axis[0])
         yaw = 0.0
         true_policy = Prismatic._gen(bb, mech, 0.0)
-        # to get delta values, shift so true pitch and test pitches so centered at pi/2
         delta_pitch = pitch - true_policy.pitch
-        delta_yaw = 0.0#yaw-true_policy.yaw
+        delta_yaw = yaw - true_policy.yaw
         if delta_pitch > np.pi/2:
             delta_pitch = np.pi - delta_pitch
+        elif delta_pitch < -np.pi/2:
+            delta_pitch = -np.pi - delta_pitch
+        # TODO: same for yaw if have mech with yaw != 0
         rigid_position = handle_pose.p
         rigid_orientation = np.array([0., 0., 0., 1.])
         policy = Prismatic(rigid_position, rigid_orientation, pitch, yaw, delta_pitch,
