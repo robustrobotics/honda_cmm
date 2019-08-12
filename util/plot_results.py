@@ -10,6 +10,9 @@ from gen.generator_busybox import BusyBox, Slider, Door
 from gen.generate_policy_data import generate_samples
 from learning.dataloaders import parse_pickle_file, PolicyDataset, create_data_splits
 import actions.policies as policies
+import pybullet as p
+from actions.gripper import Gripper
+
 
 class PlotFunc(object):
 
@@ -500,8 +503,93 @@ class TestMechs(PlotFunc):
                 ax.set_xlabel('Delta Yaw')
                 ax.set_ylabel('Delta Pitch')
 
-class TestMechsPitch(PlotFunc):
+class TestMechPolicies(PlotFunc):
 
+    @staticmethod
+    def description():
+        return 'show performance on policies for a single busybox'
+
+    def _plot(self, data, model):
+        randomness = 0.0
+        n_policies= 5
+        n_samples = 25
+        delta_yaws = np.zeros((n_policies, n_policies))
+        delta_pitches = np.zeros((n_policies, n_policies))
+        motions = np.zeros((n_policies, n_policies, n_samples))
+        true_motions = np.zeros((n_policies, n_policies, n_samples))
+
+        # Generate the busybox.
+        bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider])
+
+        mech = bb._mechanisms[0]
+        configs = np.linspace(-mech.range, mech.range, n_samples)
+        mech_tuple = mech.get_mechanism_tuple()
+        print(mech_tuple)
+
+        d_pitches = np.linspace(-np.pi/2*0.25, np.pi/2*0.25, n_policies)
+        d_yaw = np.linspace(-np.pi/2*0.25, np.pi / 2 * 0.25, n_policies)
+        for i in range(len(d_pitches)):
+            for j in range(len(d_yaw)):
+                util.setup_pybullet.setup_env(bb, False, False)
+                random_policy = policies.generate_policy(bb, mech, True, randomness)
+                random_policy.pitch = random_policy.pitch - random_policy.delta_pitch + d_pitches[i]
+                random_policy.yaw = random_policy.yaw - random_policy.delta_yaw + d_yaw[j]
+                random_policy.delta_pitch = d_pitches[i]
+                random_policy.delta_yaw = d_yaw[j]
+                policy_tuple = random_policy.get_policy_tuple()
+                delta_yaws[i, j] = policy_tuple.delta_values.delta_yaw
+                delta_pitches[i, j] = policy_tuple.delta_values.delta_pitch
+                p.disconnect()
+
+                for k in range(n_samples):
+                    image_data = util.setup_pybullet.setup_env(bb, False, False)
+                    gripper = Gripper(bb.bb_id)
+                    sample = util.Result(policy_tuple,
+                                         mech_tuple,
+                                         0.0,
+                                         0.0,
+                                         None,
+                                         None,
+                                         configs[k],
+                                         image_data,
+                                         None,
+                                         randomness)
+                    pred_motion = get_pred_motions([sample], model)
+                    motions[i, j, k] = pred_motion[0]
+
+                    # calculate trajectory
+                    pose_handle_base_world = mech.get_pose_handle_base_world()
+                    traj = random_policy.generate_trajectory(pose_handle_base_world,
+                                                             configs[k],
+                                                             False)
+
+                    # execute trajectory
+                    _, net_motion, _ = gripper.execute_trajectory(traj,
+                                                                  mech,
+                                                                  random_policy.type,
+                                                                  False)
+                    true_motions[i, j, k] = net_motion
+                    p.disconnect()
+
+        # TODO: Plot the relevant motions.
+        fig, axes = plt.subplots(n_policies, n_policies, sharex=True, sharey=True)
+        plt.setp(axes.flat, adjustable='box-forced')
+        for i in range(n_policies):
+            for j in range(n_policies):
+                axes[i, j].plot(configs,
+                                true_motions[i, j, :],
+                                c='b',
+                                lw=1)
+                axes[i, j].plot(configs,
+                                motions[i, j, :],
+                                c='r',
+                                lw=1)
+                axes[i, j].set_title('(%.2f, %.2f)' % (delta_pitches[i, j], delta_yaws[i, j]))
+                axes[i, j].set_xlabel('q')
+                axes[i, j].set_ylabel('d')
+            print(mech.range)
+
+class TestMechsPitch(PlotFunc):
     @staticmethod
     def description():
         return 'show model performance on test mechanisms (varying pitch only!)'
@@ -611,7 +699,7 @@ def plot_results(file_name, model):
         data = util.read_from_file(file_name)
         print_stats(data)
     if model is not None:
-        model = util.load_model(model)
+        model = util.load_model(model, hdim=16, model_type='polvis')
 
     plot_funcs = PlotFunc.__subclasses__()
     for (i, func) in enumerate(plot_funcs):

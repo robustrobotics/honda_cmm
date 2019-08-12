@@ -1,9 +1,12 @@
 dependencies
+*.pt
+*.swp
 .idea
 *.pkl
 ns_exp/*
 .venv*
-
+*.pickle
+*.png
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

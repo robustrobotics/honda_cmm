@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchvision.models import alexnet
+from torchvision import transforms
 
 
 class ImageEncoder(nn.Module):
@@ -14,43 +16,38 @@ class ImageEncoder(nn.Module):
         :param kernel_size: The kernel_size of the convolution.
         """
         super(ImageEncoder, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels=3,
-                               out_channels=hdim,
-                               kernel_size=kernel_size)
-        self.conv21 = nn.Conv2d(in_channels=hdim,
+
+        anet = alexnet(pretrained=True)
+        f = list(anet.features)[:3]
+        print(f)
+        self.features = nn.Sequential(*f)
+        for p in self.features.parameters():
+            p.requires_grad = True
+
+        self.conv21 = nn.Conv2d(in_channels=64,
                                 out_channels=hdim,
-                                kernel_size=kernel_size)
+                                kernel_size=kernel_size,
+                                padding=1)
         self.conv22 = nn.Conv2d(in_channels=hdim,
                                 out_channels=hdim,
-                                kernel_size=kernel_size)
+                                kernel_size=kernel_size,
+                                padding=1)
         self.conv31 = nn.Conv2d(in_channels=hdim,
                                 out_channels=hdim,
-                                kernel_size=kernel_size)
+                                kernel_size=kernel_size,
+                                padding=1)
         self.conv32 = nn.Conv2d(in_channels=hdim,
                                 out_channels=hdim,
-                                kernel_size=kernel_size)
-        self.conv4 = nn.Conv2d(in_channels=hdim,
-                               out_channels=hdim,
-                               kernel_size=kernel_size)
-
-        # Reference: https://pytorch.org/docs/stable/nn.html#maxpool2d
-        for k in range(0, 4):
-            # Output size of kth conv layer
-            H = H - kernel_size + 1
-            W = W - kernel_size + 1
-
-            # Output size of kth pooling layer
-            H = int((H - (2 - 1) - 1)/2.0 + 1)
-            W = int((W - (2 - 1) - 1)/2.0 + 1)
+                                kernel_size=kernel_size,
+                                padding=1)
 
         # I am currently just running the network to see what this size should be.
-        self.lin_input = hdim*3*11  # H*W*hdim
+        self.lin_input = 24
         self.fc1 = nn.Linear(self.lin_input, hdim)
         self.fc2 = nn.Linear(hdim, hdim)
 
     def forward(self, img):
-        x = F.relu(self.conv1(img))
-        x = F.max_pool2d(x, kernel_size=2, stride=2)
+        x = self.features(img)
         x = F.relu(self.conv21(x))
         x = F.relu(self.conv22(x))
         x = F.max_pool2d(x, kernel_size=2, stride=2)

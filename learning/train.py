@@ -1,12 +1,13 @@
 import argparse
 import numpy as np
 import torch
-from learning.nn_disp_pol_vis import DistanceRegressor as NNPolVis
+from learning.models.nn_disp_pol_vis import DistanceRegressor as NNPolVis
+from learning.models.nn_disp_pol_mech import DistanceRegressor as NNPolMech
 from learning.dataloaders import setup_data_loaders
 import learning.viz as viz
-from torch.utils.tensorboard import SummaryWriter
 from collections import namedtuple
 from util import util
+torch.backends.cudnn.enabled = True
 
 RunData = namedtuple('RunData', 'hdim batch_size run_num max_epoch best_epoch best_val_error')
 name_lookup = {'Prismatic': 0, 'Revolute': 1}
@@ -23,7 +24,13 @@ def train_eval(args, hdim, batch_size, pviz, fname):
                    hdim=hdim,
                    im_h=53,  # 154,
                    im_w=115,  # 205,
-                   kernel_size=3)
+                   kernel_size=3,
+                   image_encoder=args.image_encoder)
+    # net = NNPolMech(policy_names=['Prismatic'],
+    #                 policy_dims=[2],
+    #                 hdim=hdim,
+    #                 mech_dims=2)
+    print(sum(p.numel() for p in net.parameters() if p.requires_grad))
     if args.use_cuda:
         net = net.cuda()
 
@@ -31,7 +38,6 @@ def train_eval(args, hdim, batch_size, pviz, fname):
     optim = torch.optim.Adam(net.parameters())
 
     # Add the graph to TensorBoard viz,
-    writer = SummaryWriter()
     k, x, q, im, y = train_set.dataset[0]
     pol = torch.Tensor([name_lookup[k]])
     if args.use_cuda:
@@ -39,7 +45,6 @@ def train_eval(args, hdim, batch_size, pviz, fname):
         q = q.cuda().unsqueeze(0)
         im = im.cuda().unsqueeze(0)
         pol = pol.cuda()
-        writer.add_graph(net, (pol, x, q, im), operator_export_type="RAW")
 
     best_val = 1000
     # Training loop.
@@ -47,14 +52,13 @@ def train_eval(args, hdim, batch_size, pviz, fname):
     for ex in range(1, args.n_epochs+1):
         train_losses = []
         net.train()
-        for bx, (k, x, q, im, y) in enumerate(train_set):
-            pol = torch.Tensor([name_lookup[k[0]]])
+        for bx, (k, x, q, im, y, _) in enumerate(train_set):
+            pol = name_lookup[k[0]]
             if args.use_cuda:
                 x = x.cuda()
                 q = q.cuda()
                 im = im.cuda()
                 y = y.cuda()
-                pol = pol.cuda()
             optim.zero_grad()
             yhat = net.forward(pol, x, q, im)
 
@@ -72,16 +76,16 @@ def train_eval(args, hdim, batch_size, pviz, fname):
             net.eval()
 
             ys, yhats, types = [], [], []
-            for bx, (k, x, q, im, y) in enumerate(val_set):
+            for bx, (k, x, q, im, y, _) in enumerate(val_set):
                 pol = torch.Tensor([name_lookup[k[0]]])
                 if args.use_cuda:
                     x = x.cuda()
                     q = q.cuda()
                     im = im.cuda()
                     y = y.cuda()
-                    pol = pol.cuda()
 
                 yhat = net.forward(pol, x, q, im)
+
                 loss = loss_fn(yhat, y)
                 val_losses.append(loss.item())
 
@@ -135,6 +139,7 @@ if __name__ == '__main__':
     parser.add_argument('--model-prefix', type=str, default='model')
     # if 0 then use all samples in dataset, else use ntrain number of samples
     parser.add_argument('--n-train', type=int, default=0)
+    parser.add_argument('--image-encoder', type=str, default='spatial', choices=['spatial', 'cnn'])
     parser.add_argument('--n-runs', type=int, default=1)
     args = parser.parse_args()
 
@@ -157,7 +162,7 @@ if __name__ == '__main__':
             for hdim in hdims:
                 for batch_size in batch_sizes:
                     fname = args.model_prefix+'_nrun_'+str(n)
-                    all_vals_epochs, best_epoch = train_eval(args, hdim, batch_size, True, fname)
+                    all_vals_epochs, best_epoch = train_eval(args, hdim, batch_size, False, fname)
                     es = [v[0] for v in all_vals_epochs]
                     vals = [v[1] for v in all_vals_epochs]
                     plot_val_error(es, vals, 'epoch', fname)

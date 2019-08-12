@@ -7,8 +7,9 @@ import math
 from collections import namedtuple
 import os
 import torch
-from learning.nn_disp_pol import DistanceRegressor as NNPol
-from learning.nn_disp_pol_vis import DistanceRegressor as NNPolVis
+from learning.models.nn_disp_pol import DistanceRegressor as NNPol
+from learning.models.nn_disp_pol_vis import DistanceRegressor as NNPolVis
+from learning.models.nn_disp_pol_mech import DistanceRegressor as NNPolMech
 from actions import policies
 from actions.gripper import Gripper
 from gen.generator_busybox import BusyBox
@@ -67,15 +68,20 @@ def discrete_sampler(range_vals, slope, n_bins=10):
 def load_model(model_fname, hdim=32, model_type='polvis', use_cuda=False):
     if model_type == 'pol':
         model = NNPol(policy_names=['Prismatic', 'Revolute'],
-                    policy_dims=[2, 12],
-                    hdim=hdim)
+                      policy_dims=[2, 12],
+                      hdim=hdim)
+    elif model_type == 'mech':
+        model = NNPolMech(policy_names=['Prismatic'],
+                          policy_dims=[2],
+                          mech_dims=2,
+                          hdim=hdim)
     else:
         model = NNPolVis(policy_names=['Prismatic', 'Revolute'],
-                       policy_dims=[2, 12],
-                       hdim=hdim,
-                       im_h=53,
-                       im_w=155,
-                       kernel_size=3)
+                         policy_dims=[2, 12],
+                         hdim=hdim,
+                         im_h=53,
+                         im_w=115,
+                         kernel_size=3)
     if use_cuda:
         device = torch.device('cuda')
     else:
@@ -269,20 +275,20 @@ def quaternion_from_euler(roll, pitch, yaw):
 
 if __name__ == '__main__':
     # testing the sampler
-    import matplotlib.pyplot as plt
-    n_bins = 10
-    range_s = [0.,.25]
-    hist_data = {}
-    vals = np.linspace(range_s[0], range_s[1], n_bins+1)
-    keys = vals[:-1]
-    slope = .1
-    samples = []
-    for _ in range(1000):
-        samples += [discrete_sampler(range_s, slope, n_bins)]
-    plt.ion()
-    plt.hist(samples, n_bins)
-    plt.show()
-    input()
-    #in_names = ['data/datasets/clean_0_5000', 'data/datasets/clean_1_5000']
-    #out_name = 'data/datasets/clean_10000'
-    #merge_files(in_names, out_name)
+    # import matplotlib.pyplot as plt
+    # n_bins = 10
+    # range_s = [0.,.25]
+    # hist_data = {}
+    # vals = np.linspace(range_s[0], range_s[1], n_bins+1)
+    # keys = vals[:-1]
+    # slope = .1
+    # samples = []
+    # for _ in range(1000):
+    #     samples += [discrete_sampler(range_s, slope, n_bins)]
+    # plt.ion()
+    # plt.hist(samples, n_bins)
+    # plt.show()
+    # input()
+    in_names = ['prism_rand05_20k.pickle', 'prism_rand05_20k_2.pickle']
+    out_name = 'prism_rand05_40k.pickle'
+    merge_files(in_names, out_name)
