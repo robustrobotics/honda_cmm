@@ -16,12 +16,14 @@ class Autoencoder(nn.Module):
         self.encoder = ImageEncoder(hdim=hdim,
                                     kernel_size=7,
                                     n_features=n_features)
-        self.decoder = nn.Linear(hdim*2, np.prod(recon_shape))
+        self.decoder1 = nn.Linear(hdim*2, hdim*4)
+        self.decoder2 = nn.Linear(hdim*4, np.prod(recon_shape))
         self.recon_shape = recon_shape
+        self.relu = nn.ReLU()
 
     def forward(self, img):
         feat = self.encoder(img)
-        recon = self.decoder(feat)
+        recon = self.decoder2(self.relu(self.decoder1(feat)))
         return recon.view(-1,
                           self.recon_shape[0],
                           self.recon_shape[1],
