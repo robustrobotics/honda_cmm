@@ -7,6 +7,8 @@ from learning.models.autoencoder import Autoencoder
 from collections import namedtuple
 import matplotlib.pyplot as plt
 import torchvision
+from torch.utils.tensorboard import SummaryWriter
+
 import sys
 
 RunData = namedtuple('RunData', 'hdim batch_size run_num max_epoch best_epoch best_val_error')
@@ -25,6 +27,8 @@ def train_eval(args, pviz, fname):
 
     if args.use_cuda:
         net = net.cuda()
+
+    writer = SummaryWriter()
 
     loss_fn = torch.nn.MSELoss()
     optim = torch.optim.Adam(net.parameters())
@@ -65,6 +69,9 @@ def train_eval(args, pviz, fname):
                     y_im = y_im.cuda()
 
                 yhat = net.forward(im)
+                if bx == 0:
+                    for kx in range(0, yhat.shape[0]):
+                        writer.add_image('recon_%d' % kx, yhat[kx, 0, :, :], dataformats='HW', global_step=ex)
 
                 loss = loss_fn(yhat, y_im)
                 val_losses.append(loss.item())
