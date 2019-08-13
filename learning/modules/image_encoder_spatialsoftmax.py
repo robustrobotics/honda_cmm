@@ -33,7 +33,7 @@ class ImageEncoder(nn.Module):
         self.fc2 = nn.Linear(n_features*2, hdim*2)
 
         self.sm = nn.Softmax(dim=1)
-        self.temp = nn.Parameter(torch.tensor(0.1))
+        self.temp = nn.Parameter(torch.tensor(1.0))
 
     def forward(self, img):
         bs, c, h, w = img.shape
