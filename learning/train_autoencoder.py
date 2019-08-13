@@ -24,7 +24,8 @@ def train_eval(args, pviz, fname):
     # Setup Model
     net = Autoencoder(hdim=args.hdim,
                       recon_shape=recon_size,
-                      n_features=args.n_features)
+                      n_features=args.n_features,
+                      decoder_type=args.decoder_type)
 
     if args.use_cuda:
         net = net.cuda()
@@ -73,7 +74,7 @@ def train_eval(args, pviz, fname):
                 # imshow(y_im.cpu().detach(), yhat.cpu().detach())
                 # sys.exit(0)
                 if bx == 0:
-                    for kx in range(0, yhat.shape[0]):
+                    for kx in range(0, yhat.shape[0]//2):
                         writer.add_image('recon_%d' % kx, yhat[kx, 0, :, :], dataformats='HW', global_step=ex)
                         fig = view_points(im[kx, :, :, :].cpu(),
                                           points[kx, :, :].cpu().detach().numpy())
@@ -83,6 +84,7 @@ def train_eval(args, pviz, fname):
                         writer.add_figure('heatmaps_%d' % kx, fig, global_step=ex)
 
                 loss = loss_fn(yhat, y_im)
+                writer.add_scalar('val_loss', loss, global_step=ex)
                 val_losses.append(loss.item())
 
             curr_val = np.mean(val_losses)
@@ -172,6 +174,7 @@ if __name__ == '__main__':
     parser.add_argument('--data-fname', type=str, required=True)
     parser.add_argument('--model-prefix', type=str, default='model')
     parser.add_argument('--image-encoder', type=str, default='spatial', choices=['spatial', 'cnn'])
+    parser.add_argument('--decoder-type', default='basis', choices=['linear', 'basis'])
     args = parser.parse_args()
 
     fname = args.model_prefix + '_autoencoder'
