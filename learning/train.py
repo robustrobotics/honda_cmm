@@ -25,7 +25,9 @@ def train_eval(args, hdim, batch_size, pviz, fname):
                    im_h=53,  # 154,
                    im_w=115,  # 205,
                    kernel_size=3,
-                   image_encoder=args.image_encoder)
+                   image_encoder=args.image_encoder,
+                   pretrain_encoder=args.pretrain_encoder,
+                   n_features=args.n_features)
     # net = NNPolMech(policy_names=['Prismatic'],
     #                 policy_dims=[2],
     #                 hdim=hdim,
@@ -36,15 +38,6 @@ def train_eval(args, hdim, batch_size, pviz, fname):
 
     loss_fn = torch.nn.MSELoss()
     optim = torch.optim.Adam(net.parameters())
-
-    # Add the graph to TensorBoard viz,
-    k, x, q, im, y = train_set.dataset[0]
-    pol = torch.Tensor([name_lookup[k]])
-    if args.use_cuda:
-        x = x.cuda().unsqueeze(0)
-        q = q.cuda().unsqueeze(0)
-        im = im.cuda().unsqueeze(0)
-        pol = pol.cuda()
 
     best_val = 1000
     # Training loop.
@@ -141,6 +134,8 @@ if __name__ == '__main__':
     parser.add_argument('--n-train', type=int, default=0)
     parser.add_argument('--image-encoder', type=str, default='spatial', choices=['spatial', 'cnn'])
     parser.add_argument('--n-runs', type=int, default=1)
+    parser.add_argument('--pretrain-encoder', default='', type=str)
+    parser.add_argument('--n-features', type=int, default=16)
     args = parser.parse_args()
 
     if args.debug:

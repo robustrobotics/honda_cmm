@@ -8,7 +8,7 @@ import torch.nn.functional as F
 
 class DistanceRegressor(nn.Module):
 
-    def __init__(self, policy_names, policy_dims, hdim, im_h, im_w, kernel_size=3, image_encoder='spatial'):
+    def __init__(self, policy_names, policy_dims, hdim, im_h, im_w, kernel_size=3, image_encoder='spatial', pretrain_encoder='', n_features=16):
         """
         This module will estimate the distance the end-effector will move
         when executing various policies. It will have a separate module for
@@ -37,7 +37,11 @@ class DistanceRegressor(nn.Module):
                                            kernel_size=kernel_size)
         else:
             self.image_module = SpatialEncoder(hdim=hdim,
-                                               kernel_size=7)
+                                               kernel_size=7,
+                                               n_features=n_features)
+
+        if pretrain_encoder != '':
+            self.image_module.load_state_dict(torch.load(pretrain_encoder))
 
         self.fc1 = nn.Linear(hdim*4, hdim*4)
         self.fc2 = nn.Linear(hdim*4, hdim*2)
@@ -60,7 +64,7 @@ class DistanceRegressor(nn.Module):
         else:
             policy_type = 'Revolute'
         pol = self.policy_modules[policy_type].forward(theta, q)
-        im = self.image_module(im)
+        im, _, _ = self.image_module(im)
 
         # x = pol*im
         # x_norm = torch.norm(x, p=2, dim=1, keepdim=True)

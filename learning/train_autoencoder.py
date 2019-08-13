@@ -99,6 +99,11 @@ def train_eval(args, pviz, fname):
                 full_path = 'data/models/'+model_fname+'.pt'
                 torch.save(net.state_dict(), full_path)
 
+                # Save the encoder.
+                encoder_name = fname + '_encoder.pt'
+                full_path = 'data/models/encoders/' + encoder_name
+                torch.save(net.encoder.state_dict(), full_path)
+
                 # save plot of prediction error
                 if pviz:
                     if args.use_cuda:
