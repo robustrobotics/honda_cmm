@@ -74,7 +74,7 @@
       </axis>
     </joint>
     <link name='left_finger'>
-      <pose frame=''>0 0.024 1.35 0 -0.05 0</pose>
+      <pose frame=''>0 0.0 1.35 0 -0.05 0</pose>
       <inertial>
         <pose frame=''>0 0 0.04 0 0 0</pose>
         <mass>0.2</mass>
@@ -120,7 +120,7 @@
         <lateral_friction>0.8</lateral_friction>
         <spinning_friction>.1</spinning_friction>
       </contact>
-      <pose frame=''>-0.005 0.024 1.43 0 -0.3 0</pose>
+      <pose frame=''>-0.005 0.0 1.43 0 -0.3 0</pose>
       <inertial>
         <pose frame=''>-0.003 0 0.04 0 0 0 </pose>
         <mass>0.2</mass>
@@ -182,7 +182,7 @@
         <lateral_friction>10.</lateral_friction>
         <spinning_friction>.1</spinning_friction>
       </contact>
-      <pose frame=''>-0.02 0.024 1.49 0 0.2 0</pose>
+      <pose frame=''>-0.02 0.0 1.49 0 0.2 0</pose>
       <inertial>
         <pose frame=''>-0.005 0 0.026 0 0 0 </pose>
         <mass>0.2</mass>
@@ -244,7 +244,7 @@
         <lateral_friction>0.8</lateral_friction>
         <spinning_friction>.1</spinning_friction>
       </contact>
-      <pose frame=''>0 0.024 1.35 0 0.05 0</pose>
+      <pose frame=''>0 0.0 1.35 0 0.05 0</pose>
       <inertial>
         <pose frame=''>0 0 0.04 0 0 0</pose>
         <mass>0.2</mass>
@@ -295,7 +295,7 @@
         <lateral_friction>0.8</lateral_friction>
         <spinning_friction>.1</spinning_friction>
       </contact>
-      <pose frame=''>0.005 0.024 1.43 0 0.3 0</pose>
+      <pose frame=''>0.005 0.0 1.43 0 0.3 0</pose>
       <inertial>
         <pose frame=''>0.003 0 0.04 0 0 0 </pose>
         <mass>0.2</mass>
@@ -357,7 +357,7 @@
         <lateral_friction>10.</lateral_friction>
         <spinning_friction>.1</spinning_friction>
       </contact>
-      <pose frame=''>0.02 0.024 1.49 0 -0.2 0</pose>
+      <pose frame=''>0.02 0.0 1.49 0 -0.2 0</pose>
       <inertial>
         <pose frame=''>0.005 0 0.026 0 0 0 </pose>
         <mass>0.2</mass>
