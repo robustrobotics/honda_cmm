@@ -28,15 +28,15 @@ Result = namedtuple('Result', 'policy_params mechanism_params net_motion cumu_mo
 Result contains the performance information after the gripper tries to move a mechanism
 :param policy_params: actions.policies.PolicyParams
 :param mechanism_params: gen.generator_busybox.MechanismParams
-:param motion: scalar, the cummulative distance the mechanism handle moved
+:param net_motion: scalar, the net distance the mechanism handle moved, 0.0 if the gripper lost contact with the mechanism
+:param net_motion: scalar, the cummulative distance the mechanism handle moved
 :param pose_joint_world_init: util.Pose object, the initial pose of the mechanism handle
 :param pose_joint_world_final: util.Pose object or None, the final pose of the mechanism handle if the
                     gripper tip is in contact with the mechanism at completion, else None
 :param config_goal: the goal configuration which the joint was attempting to reach
 :param image_data: util.util.ImageData
 :param git_hash: None or str representing the git hash when the data was collected
-:param randomness: float in [0,1] representing how far the policy is from the
-                    correct model-based policy
+:param randomness: float in [0,1] representing how far from the true policy the random samples came from
 """
 
 ImageData = namedtuple('ImageData', 'width height rgbPixels')

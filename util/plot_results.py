@@ -7,7 +7,6 @@ import sys
 from learning.test_model import get_pred_motions
 from actions.policies import PrismaticParams, RevoluteParams, get_policy_from_params
 from gen.generator_busybox import BusyBox, Slider, Door
-from gen.generate_policy_data import generate_samples
 from learning.dataloaders import parse_pickle_file, PolicyDataset, create_data_splits
 import actions.policies as policies
 import pybullet as p
@@ -24,12 +23,12 @@ class DoorRadiusMotion(PlotFunc):
 
     @staticmethod
     def description():
-        return 'Plot the door radius versus the joint motion'
+        return 'Plot of the door radius versus the joint motion'
 
-    def _plot(self, data, model=None):
-        for data_point in plot_data:
+    def _plot(self, data, model):
+        for data_point in data:
             if data_point.mechanism_params.type == 'Door':
-                plt.plot(data_point.mechanism_params.params.door_size[0], data_point.motion, 'b.')
+                plt.plot(data_point.mechanism_params.params.door_size[0], data_point.net_motion, 'b.')
         plt.xlabel('Door Radius')
         plt.ylabel('Motion of Handle')
         plt.title('Motion of Doors')
@@ -38,12 +37,12 @@ class SliderRangeMotion(PlotFunc):
 
     @staticmethod
     def description():
-        return 'Plot the slider range versus the joint motion'
+        return 'Plot of the slider range versus the joint motion'
 
-    def _plot(self, data, model=None):
-        for data_point in plot_data:
+    def _plot(self, data, model):
+        for data_point in data:
             if data_point.mechanism_params.type == 'Slider':
-                plt.plot(data_point.mechanism_params.params.range, data_point.motion, 'b.')
+                plt.plot(data_point.mechanism_params.params.range, data_point.net_motion, 'b.')
         plt.xlabel('Slider Range')
         plt.ylabel('Motion of Handle')
         plt.title('Motion of Sliders')
@@ -52,70 +51,40 @@ class SliderConfigMotion(PlotFunc):
 
     @staticmethod
     def description():
-        return 'Plot the goal config percentage versus the joint motion for a slider'
+        return 'Plot of the goal config percentage versus the joint motion for a slider'
 
-    def _plot(self, data, model=None):
+    def _plot(self, data, model):
         plt.figure()
-        for data_point in plot_data:
+        for data_point in data:
             percentage = data_point.config_goal/(data_point.mechanism_params.params.range/2)
             plt.plot(percentage, data_point.net_motion, 'b.')
-        print(plot_data[0].mechanism_params.params.range/2)
+        print(data[0].mechanism_params.params.range/2)
         plt.xlabel('Goal Config (%)')
         plt.ylabel('Motion of Handle')
         plt.title('NET Motion of Sliders')
 
         plt.figure()
-        for data_point in plot_data:
+        for data_point in data:
             percentage = data_point.config_goal/(data_point.mechanism_params.params.range/2)
             plt.plot(percentage, data_point.cumu_motion, 'b.')
         plt.xlabel('Goal Config (%)')
         plt.ylabel('Motion of Handle')
         plt.title('CUMMULATIVE Motion of Sliders')
 
-class MotionKD(PlotFunc):
-
-    @staticmethod
-    def description():
-        return 'Plot a heatmap of the motion reached for varying k and d values (fixed q)'
-
-    def _plot(self, data, model=None):
-        fig, ax = plt.subplots()
-        cm = plt.cm.get_cmap('viridis')
-
-        goal_config = plot_data[0].result.config_goal
-        ks = [p.k for p in plot_data]
-        ds = [p.d for p in plot_data]
-        motions = [p.result.net_motion for p in plot_data]
-        a = ax.scatter(ks, ds, c=motions, cmap=cm, s=4)
-        #for data_point in plot_data:
-            #if data_point.result.net_motion > .07 and data_point.result.net_motion < .08:
-        #    a = ax.scatter([data_point.k], [data_point.d], c=[data_point.result.net_motion],
-        #            cmap=cm, s=4)#, vmin=0.07, vmax=0.08)
-                #print(data_point.result.net_motion)
-        ax.set_xlabel('Linear K')
-        ax.set_ylabel('Linear D')
-        ax.set_title('Motion Generated, q_{goal}='+str(goal_config))
-        #ax.legend()
-        #ax.set_yscale('log')
-        #ax.set_xscale('log')
-        #ax.set_xlim(*np.power(10.,[2,6]))
-        #ax.set_ylim(*np.power(10.,[-5,5]))
-        fig.colorbar(a)
-
 class MechanismMotion(PlotFunc):
 
     @staticmethod
     def description():
-        return 'Plot a histogram of the motion generated for each (mechanism type, policy tried) in a dataset'
+        return 'Histogram of the motion generated for each (mechanism type, policy tried) in a dataset'
 
-    def _plot(self, data, model=None):
+    def _plot(self, data, model):
         plt_cont = input('Only plot motion if gripper touching handle at end of execution? [y/n] then [ENTER]')
         data_hist = {}
-        for data_point in plot_data:
+        for data_point in data:
             key = data_point.mechanism_params.type + ', ' +  data_point.policy_params.type
             if plt_cont == 'n' or (plt_cont == 'y' and data_point.pose_joint_world_final):
                 if key in data_hist:
-                    data_hist[key].append(data_point.motion)
+                    data_hist[key].append(data_point.net_motion)
                 else:
                     data_hist[key] = []
 
@@ -132,14 +101,14 @@ class MotionRandomness(PlotFunc):
 
     @staticmethod
     def description():
-        return 'Plot the randomness in a policy versus the motion generated'
+        return 'Plot of the randomness in a policy versus the motion generated'
 
-    def _plot(self, data, model=None):
-        for data_point in plot_data:
+    def _plot(self, data, model):
+        for data_point in data:
             if data_point.pose_joint_world_final is None:
-                plt.plot(data_point.randomness, data_point.motion, 'b.')
+                plt.plot(data_point.randomness, data_point.net_motion, 'b.')
             else:
-                plt.plot(data_point.randomness, data_point.motion, 'c.')
+                plt.plot(data_point.randomness, data_point.net_motion, 'c.')
         plt.xlabel('Randomness')
         plt.ylabel('Motion')
         plt.title('Randomness versus Motion for a '+data_point.mechanism_params.type)
@@ -150,7 +119,7 @@ class MotionConfig(PlotFunc):
     def description():
         return 'Plot motion versus goal configuration (assumes constant policy params)'
 
-    def _plot(self, data, model=None):
+    def _plot(self, data, model):
         motions = [point.net_motion for point in data]
         configs = [point.config_goal for point in data]
         plt.plot(configs, motions, '.')
@@ -158,21 +127,21 @@ class MotionConfig(PlotFunc):
         plt.ylabel('Motion')
         dyaw = data[0].policy_params.delta_values.delta_yaw
         dpitch = data[0].policy_params.delta_values.delta_pitch
-        plt.title('Goal Config versus Motion for yaw='+str(dyaw)+' pitch='+str(dpitch))
+        plt.title('Goal Config versus Motion for delta yaw='+str(dyaw)+', delta pitch='+str(dpitch))
 
 class SliderPolicyDelta(PlotFunc):
 
     @staticmethod
     def description():
-        return 'Plot the motion generated versus to distance from the true slider policy for all goal configurations (no z axis)'
+        return 'Scatterplot of the motion generated for varying distances from the true slider policy for all goal configurations'
 
-    def _plot(self, data, model=None):
+    def _plot(self, data, model):
         fig, ax = plt.subplots()
-        delta_yaws = [data_point.policy_params.delta_values.delta_yaw for data_point in plot_data \
+        delta_yaws = [data_point.policy_params.delta_values.delta_yaw for data_point in data \
                         if data_point.pose_joint_world_final is not None]
-        delta_pitches = [data_point.policy_params.delta_values.delta_pitch for data_point in plot_data \
+        delta_pitches = [data_point.policy_params.delta_values.delta_pitch for data_point in data \
                         if data_point.pose_joint_world_final is not None]
-        motion = [data_point.net_motion for data_point in plot_data \
+        motion = [data_point.net_motion for data_point in data \
                         if data_point.pose_joint_world_final is not None]
         im = ax.scatter(delta_yaws, delta_pitches, c=motion, vmin=min(motion), vmax=max(motion))
         fig.colorbar(im)
@@ -184,20 +153,20 @@ class SliderPolicyDeltaConfig(PlotFunc):
 
     @staticmethod
     def description():
-        return 'Plot the motion generated versus to distance from the true slider policy and the goal configuration (along the z axis)'
+        return 'Scatterplot of the motion generated for varying distances from the true slider policy and the goal configuration (along the z axis)'
 
-    def _plot(self, data, model=None):
+    def _plot(self, data, model):
         from mpl_toolkits.mplot3d import axes3d, Axes3D
 
         fig = plt.figure()
         ax = Axes3D(fig)
-        delta_yaws = [data_point.policy_params.delta_values.delta_yaw for data_point in plot_data \
+        delta_yaws = [data_point.policy_params.delta_values.delta_yaw for data_point in data \
                         if data_point.pose_joint_world_final is not None]
-        delta_pitches = [data_point.policy_params.delta_values.delta_pitch for data_point in plot_data \
+        delta_pitches = [data_point.policy_params.delta_values.delta_pitch for data_point in data \
                         if data_point.pose_joint_world_final is not None]
-        goal_configs =  [data_point.config_goal for data_point in plot_data \
+        goal_configs =  [data_point.config_goal for data_point in data \
                         if data_point.pose_joint_world_final is not None]
-        motion = [data_point.net_motion for data_point in plot_data \
+        motion = [data_point.net_motion for data_point in data \
                         if data_point.pose_joint_world_final is not None]
         im = ax.scatter(delta_yaws, delta_pitches, goal_configs, c=motion, vmin=min(motion), vmax=max(motion))
         fig.colorbar(im)
@@ -209,110 +178,66 @@ class DoorPolicyDelta(PlotFunc):
 
     @staticmethod
     def description():
-        return 'Plot the motion generated versus to distance from the true door policy'
+        return 'Plot of the motion generated versus the distance from the true door policy'
 
-    def _plot(self, data, model=None):
+    def _plot(self, data, model):
         plt.figure()
-        for data_point in plot_data:
+        for data_point in data:
             if data_point.pose_joint_world_final is None:
                 c = 'b.'
             else:
                 c = 'c.'
-            plt.plot(data_point.delta_values.delta_roll, data_point.motion, c)
+            plt.plot(data_point.delta_values.delta_roll, data_point.net_motion, c)
         plt.xlabel('Delta Axis Roll')
         plt.ylabel('Motion')
         plt.title('Distance from true axis roll value versus Motion for a '+data_point.mechanism_params.type)
 
         plt.figure()
-        for data_point in plot_data:
+        for data_point in data:
             if data_point.pose_joint_world_final is None:
                 c = 'b.'
             else:
                 c = 'c.'
-            plt.plot(data_point.delta_values.delta_pitch, data_point.motion, c)
+            plt.plot(data_point.delta_values.delta_pitch, data_point.net_motion, c)
         plt.xlabel('Delta Axis Pitch')
         plt.ylabel('Motion')
         plt.title('Distance from true axis pitch value versus Motion for a '+data_point.mechanism_params.type)
 
         plt.figure()
-        for data_point in plot_data:
+        for data_point in data:
             if data_point.pose_joint_world_final is None:
                 c = 'b.'
             else:
                 c = 'c.'
-            plt.plot(data_point.delta_values.delta_radius_x, data_point.motion, c)
+            plt.plot(data_point.delta_values.delta_radius_x, data_point.net_motion, c)
         plt.xlabel('Delta Radius x')
         plt.ylabel('Motion')
         plt.title('Distance from true radius x value versus Motion for a '+data_point.mechanism_params.type)
 
         plt.figure()
-        for data_point in plot_data:
+        for data_point in data:
             if data_point.pose_joint_world_final is None:
                 c = 'b.'
             else:
                 c = 'c.'
-            plt.plot(data_point.delta_values.delta_radius_z, data_point.motion, c)
+            plt.plot(data_point.delta_values.delta_radius_z, data_point.net_motion, c)
         plt.xlabel('Delta Radius z')
         plt.ylabel('Motion')
         plt.title('Distance from true radius z value versus Motion for a '+data_point.mechanism_params.type)
-
-class YawPitchMotionResults(PlotFunc):
-
-    @staticmethod
-    def description():
-        return 'Plot a heatmap of the predicted motion for yaw versus pitch for several q values 5 mechanism of 1000 results each'
-
-    def _plot(self, data, model=None):
-        for m in range(1,6):
-            mech_data = data[(m-1)*1000:m*1000]
-            config_data = {}
-            for point in mech_data:
-                if point.config_goal not in config_data:
-                    config_data[point.config_goal] = [[] for _ in range(3)]
-            limit = mech_data[0].mechanism_params.params.range/2
-            for point in mech_data:
-                config = point.config_goal
-                if point.pose_joint_world_final is not None:
-                    config_data[config][0] += [point.policy_params.delta_values.delta_yaw]
-                    config_data[config][1] += [point.policy_params.delta_values.delta_pitch]
-                    config_data[config][2] += [point.cumu_motion]
-
-            min_motion = min([min(config_data[config][2]) for config in config_data.keys()])
-            max_motion = max([max(config_data[config][2]) for config in config_data.keys()])
-
-            configs = list(config_data.keys())
-            configs.sort()
-            n_configs = len(configs)
-            config_num = 0
-            lw = int(round(np.sqrt(n_configs)))
-            fig, axes = plt.subplots(lw, lw, sharex=True, sharey=True)
-            plt.setp(axes.flat, aspect=1.0, adjustable='box-forced')
-            for ax in axes.flatten():
-                if config_num < n_configs:
-                    im = ax.scatter(config_data[configs[config_num]][0],
-                                    config_data[configs[config_num]][1],
-                                    c=config_data[configs[config_num]][2],
-                                    vmin=min_motion, vmax=max_motion)
-                    ax.set_title(str(round(configs[config_num], 2))+', limit='+str(round(limit, 2)))
-                    config_num += 1
-            im.set_clim(min_motion, max_motion)
-            plt.xlabel('Delta Yaw')
-            plt.ylabel('Delta Pitch')
-            fig.colorbar(im, ax=axes.ravel().tolist())
 
 class VisTrainingPerformance(PlotFunc):
 
     @staticmethod
     def description():
-        return 'generate plots to visualize training performance'
+        return 'Network performance scatterplots of net motion for binned limits and goal configurations: training data plot shows net motion, validation and test plots show prediction error'
 
-    def _plot(self, data, model=None):
+    def _plot(self, data, model):
         train_data, val_data, test_data = create_data_splits(data)
-        self._plot_data(train_data, 'Training Data')
+        self._plot_data(train_data, 'Training Data', model)
         self._plot_data(val_data, 'Validation Prediction Error', model)
         self._plot_data(test_data, 'Test Prediction Error', model)
 
-    def _plot_data(self, data, title, model=None):
+    def _plot_data(self, data, title, model):
         n_q_perc_bins = 6
         n_limit_bins = 4
         q_percs = np.linspace(0, 1.2, n_q_perc_bins+1)
@@ -381,17 +306,17 @@ class VisTrainingPerformancePitchOnly(PlotFunc):
 
     @staticmethod
     def description():
-        return 'generate plots to visualize training performance (when varying pitch only!)'
+        return 'Training data plots for binned limits and goal configurations: plot of delta pitch versus net motion and histogram of delta pitches (when varying pitch only!)'
 
-    def _plot(self, data, model=None):
+    def _plot(self, data, model):
         train_data, val_data, test_data = create_data_splits(data)
         n_q_perc_bins = 6
         n_limit_bins = 4
         q_percs = np.linspace(0, 1.2, n_q_perc_bins+1)
         limits = np.linspace(0.05, 0.25, n_limit_bins+1)
         plot_data = {}
-        print(len(data))
-        for point in data:
+
+        for point in train_data:
             plot_motion = point.net_motion
             limit = point.mechanism_params.params.range/2
             closest_lim = min(limits, key=lambda x: abs(x-limit))
@@ -411,7 +336,7 @@ class VisTrainingPerformancePitchOnly(PlotFunc):
             else:
                 plot_data[(closest_lim_i, closest_q_perc_i)][0] += [point.policy_params.delta_values.delta_pitch]
                 plot_data[(closest_lim_i, closest_q_perc_i)][1] += [plot_motion]
-        #self._plot_training_motion(n_limit_bins, n_q_perc_bins, limits, q_percs, plot_data)
+        self._plot_training_motion(n_limit_bins, n_q_perc_bins, limits, q_percs, plot_data)
         self._plot_motion_hist(n_limit_bins, n_q_perc_bins, limits, q_percs, plot_data)
 
     def _plot_training_motion(self, n_limit_bins, n_q_perc_bins, limits, q_percs, plot_data):
@@ -420,7 +345,7 @@ class VisTrainingPerformancePitchOnly(PlotFunc):
         for i in range(n_limit_bins):
             for j in range(n_q_perc_bins):
                 if (i,j) in plot_data:
-                    im = axes[i,j].scatter(plot_data[i,j][0], plot_data[i,j][1])
+                    im = axes[i,j].plot(plot_data[i,j][0], plot_data[i,j][1])
                     if j==0:
                         limit_min = str(round(limits[i],2))
                         limit_max = str(round(limits[i+1],2))
@@ -450,18 +375,18 @@ class DataHist(PlotFunc):
 
     @staticmethod
     def description():
-        return 'histograom of delta pitches'
+        return 'Histogram of delta pitches in a dataset'
 
     def _plot(self, data, model):
         fig, ax = plt.subplots()
-        delta_pitches = [point.policy_params.params.pitch for point in data]
+        delta_pitches = [point.policy_params.delta_values.delta_pitch for point in data]
         ax.hist(delta_pitches, 20, histtype='bar')
 
 class TestMechs(PlotFunc):
 
     @staticmethod
     def description():
-        return 'show model performance on test mechanisms'
+        return 'Scatterplots of predicted motion for several test mechanisms and varying policies'
 
     def _plot(self, data, model):
         n_mechs = 9
@@ -485,7 +410,7 @@ class TestMechs(PlotFunc):
                 sample = util.Result(policy_tuple, mech_tuple, 0.0, 0.0,
                                         None, None, limits[i], image_data, None, 1.0, None)
                 pred_motion = get_pred_motions([sample], model)
-                motions[i,j] = pred_motion[0]#.detach().numpy()
+                motions[i,j] = pred_motion[0]
 
         lw = int(round(np.sqrt(n_mechs)))
         fig, axes = plt.subplots(lw, lw, sharex=True, sharey=True)
@@ -592,7 +517,7 @@ class TestMechPolicies(PlotFunc):
 class TestMechsPitch(PlotFunc):
     @staticmethod
     def description():
-        return 'show model performance on test mechanisms (varying pitch only!)'
+        return 'Plots of true, random predicted, and active predicted motion for several test mechanisms and varying pitches (varying pitch only!)'
 
     def _plot(self, model0, model1):
         import pybullet as p
@@ -636,8 +561,7 @@ class TestMechsPitch(PlotFunc):
                 motions[2,i,j] = pred_motion1[0]
 
         lw = int(round(np.sqrt(n_mechs)))
-        fig, axes = plt.subplots(lw, lw)#, sharex=True, sharey=True)
-        #plt.setp(axes.flat, aspect=1.0, adjustable='box-forced')
+        fig, axes = plt.subplots(lw, lw)
         for (n, ax) in enumerate(axes.flatten()):
             if n < n_mechs:
                 for s in range(n_samples):
@@ -650,7 +574,7 @@ class TestMechsPitch(PlotFunc):
                         ax.plot(delta_pitches[n,s], motions[1,n,s], 'm.')
                         ax.plot(delta_pitches[n,s], motions[2,n,s], 'c.')
             ax.set_title('limit = '+str(round(limits[n], 2)))
-            ax.set_xlabel('Delta Yaw')
+            ax.set_xlabel('Delta Pitch')
             ax.set_ylabel('Predicted Motion')
             ax.legend()
 
@@ -719,20 +643,19 @@ if __name__ == '__main__':
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--fname', type=str)
     parser.add_argument('--model', type=str)
+    parser.add_argument('--model2', type=str)
     args = parser.parse_args()
 
     if args.debug:
         import pdb; pdb.set_trace()
 
-    plot_results(args.fname, args.model)
-    '''
-    model0 = 'random_vary_pitch_nrun_0_epoch_20.pt'
-    model1 = 'biased_vary_pitch_nrun_1_epoch_50.pt'
-    model0 = util.load_model(model0)
-    model1 = util.load_model(model1)
-    plt.ion()
-    plot = TestMechsPitch()
-    plot._plot(model0, model1)
-    plt.show()
-    input('hit [ENTER] to close plots')
-    '''
+    if args.model2 is None:
+        plot_results(args.fname, args.model)
+    else:
+        model0 = util.load_model(args.model)
+        model1 = util.load_model(args.model2)
+        plt.ion()
+        plot = TestMechsPitch()
+        plot._plot(model0, model1)
+        plt.show()
+        input('hit [ENTER] to close plots')
