@@ -5,7 +5,7 @@ from util import util
 import numpy as np
 from gen.generator_busybox import Slider, Door, BusyBox
 import matplotlib.pyplot as plt
-
+import sys
 
 def setup_env(bb, viz, debug):
 
@@ -17,7 +17,7 @@ def setup_env(bb, viz, debug):
         client = p.connect(p.DIRECT)
     else:
         client = p.connect(p.GUI)
-        p.configureDebugVisualizer(p.COV_ENABLE_GUI,0)
+        p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
         p.configureDebugVisualizer(p.COV_ENABLE_MOUSE_PICKING, 0)
 
     p.setAdditionalSearchPath(pybullet_data.getDataPath())
@@ -33,7 +33,7 @@ def setup_env(bb, viz, debug):
     model = p.loadURDF(bb.file_name, [0., -.3, 0.])
     bb.set_mechanism_ids(model)
 
-    #p.setGravity(0, 0, -10)
+    # p.setGravity(0, 0, -10)
     maxForce = 10
     mode = p.VELOCITY_CONTROL
     for jx in range(0, p.getNumJoints(bb.bb_id)):
@@ -55,7 +55,13 @@ def setup_env(bb, viz, debug):
     farPlane = 100
     fov = 60
     projection_matrix = p.computeProjectionMatrixFOV(fov, aspect, nearPlane, farPlane)
-    image_data_pybullet = p.getCameraImage(205, 154, shadow=0, renderer=p.ER_TINY_RENDERER, viewMatrix=view_matrix, projectionMatrix=projection_matrix)
+    image_data_pybullet = p.getCameraImage(205, 154,
+                                           shadow=0,
+                                           lightDiffuseCoeff=0,
+                                           lightSpecularCoeff=0,
+                                           renderer=p.ER_TINY_RENDERER,
+                                           viewMatrix=view_matrix,
+                                           projectionMatrix=projection_matrix)
     image_data = util.ImageData(*image_data_pybullet[:3])
 
     w, h, im = image_data_pybullet[:3]
@@ -68,6 +74,7 @@ def setup_env(bb, viz, debug):
     # np_im = np.array(im, dtype=np.uint8).reshape(h, w, 3)
     # plt.imshow(np_im)
     # plt.show()
+    # sys.exit(0)
 
     p.stepSimulation()
     return image_data

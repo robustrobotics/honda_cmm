@@ -126,12 +126,12 @@ class Slider(Mechanism):
                            urdf.Dynamics(friction=1.0, damping=1.0),
                            type='prismatic')
 
-        angle = np.arctan2(axis[1], axis[0])
+        angle = -np.arctan2(axis[1], axis[0])
         track_joint = urdf.Joint('slider_{0}_track_joint'.format(name),
                                  urdf.Parent('back_link'),
                                  urdf.Child('slider_{0}_track'.format(name)),
                                  urdf.Origin(xyz=(x_offset, bb_thickness/2, z_offset),
-                                             rpy=(0, -angle, 0)),
+                                             rpy=(0, angle, 0)),
                                  type='fixed')
 
         self._links.append(handle)

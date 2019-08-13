@@ -151,15 +151,23 @@ class Prismatic(Policy):
         rigid_position = mech.get_pose_handle_base_world().p
         rigid_orientation = np.array([0., 0., 0., 1.])
         if mech.mechanism_type == 'Slider':
-            # TODO: see if this should be -np.arctan2(axis[1], axis[0])
-            pitch = -np.arccos(mech.axis[0])
-            yaw = 0.0
+            true_pitch = -np.arctan2(mech.axis[1], mech.axis[0])
+            true_yaw = 0.0
         else:
             raise NotImplementedError('Still need to implement random Prismatic for Door')
         delta_pitch = randomness*np.random.uniform(-np.pi/2, np.pi/2)
         delta_yaw = randomness*np.random.uniform(-np.pi/2, np.pi/2)
-        return Prismatic(rigid_position, rigid_orientation, pitch+delta_pitch,
-                yaw+delta_yaw, delta_pitch, delta_yaw)
+
+        pitch = true_pitch + delta_pitch
+        yaw = true_yaw + delta_yaw
+
+        if pitch < -np.pi:
+            pitch += np.pi
+        elif pitch > 0:
+            pitch -= np.pi
+        # TODO: same for yaw if have mech with yaw != 0
+        return Prismatic(rigid_position, rigid_orientation, pitch, yaw, \
+                delta_pitch, delta_yaw)
 
     @staticmethod
     # TODO: this isn't calculating the correct delta pitch values
@@ -175,11 +183,13 @@ class Prismatic(Policy):
         pitch = -np.arctan2(axis[1], axis[0])
         yaw = 0.0
         true_policy = Prismatic._gen(bb, mech, 0.0)
-        # to get delta values, shift so true pitch and test pitches so centered at pi/2
         delta_pitch = pitch - true_policy.pitch
-        delta_yaw = 0.0#yaw-true_policy.yaw
+        delta_yaw = yaw - true_policy.yaw
         if delta_pitch > np.pi/2:
             delta_pitch = np.pi - delta_pitch
+        elif delta_pitch < -np.pi/2:
+            delta_pitch = -np.pi - delta_pitch
+        # TODO: same for yaw if have mech with yaw != 0
         rigid_position = handle_pose.p
         rigid_orientation = np.array([0., 0., 0., 1.])
         policy = Prismatic(rigid_position, rigid_orientation, pitch, yaw, delta_pitch,

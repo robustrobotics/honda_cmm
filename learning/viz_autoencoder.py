@@ -21,7 +21,7 @@ def view_recons(data, net):
 
 
 if __name__ == '__main__':
-    train_set, val_set, test_set = setup_data_loaders(fname='prism_rand05_10k.pickle',
+    train_set, val_set, test_set = setup_data_loaders(fname='prism_rand05_noshadow_10k.pickle',
                                                       batch_size=10,
                                                       small_train=0)
 
