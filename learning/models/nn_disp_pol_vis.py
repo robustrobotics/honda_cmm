@@ -42,6 +42,10 @@ class DistanceRegressor(nn.Module):
 
         if pretrain_encoder != '':
             self.image_module.load_state_dict(torch.load(pretrain_encoder))
+            for p in self.image_module.conv1.parameters():
+                p.requires_grad = False
+            for p in self.image_module.conv2.parameters():
+                p.requires_grad = False
 
         self.fc1 = nn.Linear(hdim*4, hdim*4)
         self.fc2 = nn.Linear(hdim*4, hdim*2)
