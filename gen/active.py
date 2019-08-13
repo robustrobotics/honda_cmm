@@ -46,8 +46,9 @@ class ActivePolicyLearner(object):
             self.reset_plot()
             self.made_colorbar = False
 
-    def explore(self, n_samples):
+    def explore(self, n_samples, i, n_bbs):
         for n in range(n_samples):
+            sys.stdout.write("\rProcessing sample %i/%i for busybox %i/%i" % (n+1, n_samples, i+1, n_bbs))
             if self.debug:
                 for region in self.regions:
                     region.draw(self.bb)
@@ -299,13 +300,12 @@ class Region(object):
 results = []
 def generate_dataset(n_bbs, n_samples, viz, debug, urdf_num, max_mech, viz_plot):
     for i in range(n_bbs):
-        sys.stdout.write("\rProcessing % samples for busybox %i/%i" % (n_samples, i+1, n_bbs))
         bb = BusyBox.generate_random_busybox(max_mech=max_mech, mech_types=[Slider], urdf_tag=urdf_num, debug=debug)
         active_learner = ActivePolicyLearner(bb, viz, debug, viz_plot)
-        active_learner.explore(n_samples)
+        active_learner.explore(n_samples, i, n_bbs)
         results.extend(active_learner.interactions)
-    return results
     print()
+    return results
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -314,11 +314,11 @@ if __name__ == '__main__':
     parser.add_argument('--n-bbs', type=int, default=5) # number bbs to generate
     parser.add_argument('--n-samples', type=int, default=5) # number samples per bb to generate
     parser.add_argument('--max-mech', type=int, default=1) # mechanisms per bb
-    parser.add_argument('--fname', type=str) # give filename
+    parser.add_argument('--fname', type=str) # give filename if want to save to file
     # if running multiple gens, give then a urdf_num so the correct urdf is read from/written to
     parser.add_argument('--urdf-num', type=int, default=0)
-    parser.add_argument('--match-policies', action='store_true')
-    parser.add_argument('--viz-plot', action='store_true')
+    parser.add_argument('--match-policies', action='store_true') # if want to only use correct policy class on mechanisms
+    parser.add_argument('--viz-plot', action='store_true') # if want to run a matplotlib visualization of sampling and competence
     args = parser.parse_args()
 
     if args.debug:
