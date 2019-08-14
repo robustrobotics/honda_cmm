@@ -14,10 +14,9 @@ torch.backends.cudnn.enabled = True
 RunData = namedtuple('RunData', 'hdim batch_size run_num max_epoch best_epoch best_val_error')
 name_lookup = {'Prismatic': 0, 'Revolute': 1}
 
-def train_eval(args, data_fname, hdim, batch_size, pviz, plot_fname, writer):
+def train_eval(args, data_path, hdim, batch_size, pviz, plot_fname, writer):
     # Load data
-    prefix = 'data/datasets/'
-    train_set, val_set, test_set = setup_data_loaders(fname=prefix+data_fname,
+    train_set, val_set, test_set = setup_data_loaders(fname=data_path,
                                                       batch_size=batch_size,
                                                       small_train=args.n_train)
 
@@ -111,7 +110,7 @@ def train_eval(args, data_fname, hdim, batch_size, pviz, plot_fname, writer):
 
                 # save model
                 model_fname = plot_fname+'_epoch_'+str(best_epoch)
-                full_path = 'data/models/'+model_fname+'.pt'
+                full_path = model_fname+'.pt'
                 torch.save(net.state_dict(), full_path)
 
                 # save plot of prediction error
@@ -134,6 +133,14 @@ def plot_val_error(val_errors, type, plot_fname, writer, viz=False):
         if viz:
             plt.show()
 
+def get_fname(path):
+    fname = ''
+    for c in reversed(path):
+        if c is not '/':
+            fname = fname + c
+        else:
+            break
+    return fname[::-1]
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -144,8 +151,8 @@ if __name__ == '__main__':
     parser.add_argument('--mode', choices=['ntrain', 'normal'], default='normal')
     parser.add_argument('--use-cuda', default=False, action='store_true')
     parser.add_argument('--debug', action='store_true')
-    parser.add_argument('--data-fname', type=str, required=True)
-    parser.add_argument('--data-fname2', type=str)
+    parser.add_argument('--data-path', type=str, required=True)
+    parser.add_argument('--data-path2', type=str)
     parser.add_argument('--model-prefix', type=str, default='model')
     # in normal mode: if 0 use all samples in dataset, else use ntrain number of samples
     # in ntrain mode: must be the max number of samples you want to train with
@@ -174,21 +181,22 @@ if __name__ == '__main__':
             for hdim in hdims:
                 for batch_size in batch_sizes:
                     plot_fname = args.model_prefix+'_nrun_'+str(n)
-                    val_errors, best_epoch = train_eval(args, args.data_fname, hdim, batch_size, False, plot_fname, writer)
+                    val_errors, best_epoch = train_eval(args, args.data_path, hdim, batch_size, False, plot_fname, writer)
                     run_data += [RunData(hdim, batch_size, n, args.n_epochs, best_epoch, min(val_errors.keys()))]
         util.write_to_file(plot_fname+'_results', run_data)
     elif args.mode == 'ntrain':
         step = 20
         ns = range(step, args.n_train+1, step)
-        data_files = [args.data_fname]
-        if args.data_fname2 is not None:
-            data_files += [args.data_fname2]
+        data_files = [args.data_path]
+        if args.data_path2 is not None:
+            data_files += [args.data_path2]
         val_errors = {}
         for n in ns:
-            for data_fname in data_files:
-                if not data_fname in val_errors:
-                    val_errors[data_fname] = {}
-                plot_fname = 'data_'+data_fname+'_ntrain_'+str(n)
-                all_vals_epochs, best_epoch = train_eval(args, data_fname, args.hdim, args.batch_size, False, plot_fname, writer)
-                val_errors[data_fname][n] = all_vals_epochs[best_epoch]
+            for data_path in data_files:
+                if not data_path in val_errors:
+                    val_errors[data_path] = {}
+                fname = get_fname(data_path)
+                plot_fname = 'data_'+fname+'_ntrain_'+str(n)
+                all_vals_epochs, best_epoch = train_eval(args, data_path, args.hdim, args.batch_size, False, plot_fname, writer)
+                val_errors[data_path][n] = all_vals_epochs[best_epoch]
                 plot_val_error(val_errors, 'n train', 'ntrain error', writer)
