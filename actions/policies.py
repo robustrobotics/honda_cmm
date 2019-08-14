@@ -156,7 +156,7 @@ class Prismatic(Policy):
         else:
             raise NotImplementedError('Still need to implement random Prismatic for Door')
         delta_pitch = randomness*np.random.uniform(-np.pi/2, np.pi/2)
-        delta_yaw = randomness*np.random.uniform(-np.pi/2, np.pi/2)
+        delta_yaw = 0.0#randomness*np.random.uniform(-np.pi/2, np.pi/2)
 
         pitch = true_pitch + delta_pitch
         yaw = true_yaw + delta_yaw
