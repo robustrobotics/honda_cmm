@@ -1,0 +1,36 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: honda-cmm
+spec:
+  template:
+    spec:
+      containers:
+      - name: honda-cmm
+        image: carismoses/honda_cmm:latest
+        command: ["bash", "run.sh"]
+        resources:
+          limits:
+            cpu: 1
+            memory: 2Gi
+            nvidia.com/gpu: 1
+          requests:
+            cpu: 1
+            memory: 2Gi
+            nvidia.com/gpu: 1
+        ports:
+        - containerPort: 6006
+        envFrom:
+        - configMapRef:
+            name: object-store
+        - configMapRef:
+            name: github-key
+        - secretRef:
+            name: github-key
+        - secretRef:
+            name: object-store
+        env:
+        - name: BRANCH
+          value: active
+      restartPolicy: Never
+  backoffLimit: 4
