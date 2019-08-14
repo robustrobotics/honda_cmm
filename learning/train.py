@@ -7,14 +7,17 @@ from learning.dataloaders import setup_data_loaders
 import learning.viz as viz
 from collections import namedtuple
 from util import util
+from torch.utils.tensorboard import SummaryWriter
+from collections import OrderedDict
 torch.backends.cudnn.enabled = True
 
 RunData = namedtuple('RunData', 'hdim batch_size run_num max_epoch best_epoch best_val_error')
 name_lookup = {'Prismatic': 0, 'Revolute': 1}
 
-def train_eval(args, hdim, batch_size, pviz, fname):
+def train_eval(args, data_fname, hdim, batch_size, pviz, plot_fname, writer):
     # Load data
-    train_set, val_set, test_set = setup_data_loaders(fname=args.data_fname,
+    prefix = 'data/datasets/'
+    train_set, val_set, test_set = setup_data_loaders(fname=prefix+data_fname,
                                                       batch_size=batch_size,
                                                       small_train=args.n_train)
 
@@ -31,6 +34,7 @@ def train_eval(args, hdim, batch_size, pviz, fname):
     #                 hdim=hdim,
     #                 mech_dims=2)
     print(sum(p.numel() for p in net.parameters() if p.requires_grad))
+
     if args.use_cuda:
         net = net.cuda()
 
@@ -38,7 +42,7 @@ def train_eval(args, hdim, batch_size, pviz, fname):
     optim = torch.optim.Adam(net.parameters())
 
     # Add the graph to TensorBoard viz,
-    k, x, q, im, y = train_set.dataset[0]
+    k, x, q, im, y, _ = train_set.dataset[0]
     pol = torch.Tensor([name_lookup[k]])
     if args.use_cuda:
         x = x.cuda().unsqueeze(0)
@@ -48,7 +52,7 @@ def train_eval(args, hdim, batch_size, pviz, fname):
 
     best_val = 1000
     # Training loop.
-    vals = []
+    val_errors = OrderedDict()
     for ex in range(1, args.n_epochs+1):
         train_losses = []
         net.train()
@@ -97,31 +101,36 @@ def train_eval(args, hdim, batch_size, pviz, fname):
                 yhats += yhat.detach().numpy().tolist()
 
             curr_val = np.mean(val_losses)
-            vals += [[ex, curr_val]]
+            val_errors[ex] = curr_val
+            plot_val_error(val_errors, 'epoch', 'val error '+plot_fname, writer, False)
+
             print('[Epoch {}] - Validation Loss: {}'.format(ex, curr_val))
             if curr_val < best_val:
                 best_val = curr_val
                 best_epoch = ex
 
                 # save model
-                model_fname = fname+'_epoch_'+str(best_epoch)
+                model_fname = plot_fname+'_epoch_'+str(best_epoch)
                 full_path = 'data/models/'+model_fname+'.pt'
                 torch.save(net.state_dict(), full_path)
 
                 # save plot of prediction error
                 if pviz:
-                    viz.plot_y_yhat(ys, yhats, types, ex, fname, title='PolVis')
-    return vals, best_epoch
+                    viz.plot_y_yhat(ys, yhats, types, ex, plot_fname, title='PolVis')
+    return val_errors, best_epoch
 
-
-def plot_val_error(ns, vals, type, fname=None, viz=False):
+def plot_val_error(val_errors, type, plot_fname, writer, viz=False):
         import matplotlib.pyplot as plt
-        plt.figure()
+        fig = plt.figure()
         plt.xlabel(type)
         plt.ylabel('Val MSE')
-
-        plt.plot(ns, vals)
-        plt.savefig('val_error_'+fname+'.png', bbox_inches='tight')
+        if isinstance(list(val_errors.keys())[0], int):
+            plt.plot(list(val_errors.keys()), list(val_errors.values()))
+        else:
+            for file in val_errors.keys():
+                plt.plot(list(val_errors[file].keys()), list(val_errors[file].values()), label=file)
+        plt.legend()
+        writer.add_figure(plot_fname, fig)
         if viz:
             plt.show()
 
@@ -136,8 +145,10 @@ if __name__ == '__main__':
     parser.add_argument('--use-cuda', default=False, action='store_true')
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--data-fname', type=str, required=True)
+    parser.add_argument('--data-fname2', type=str)
     parser.add_argument('--model-prefix', type=str, default='model')
-    # if 0 then use all samples in dataset, else use ntrain number of samples
+    # in normal mode: if 0 use all samples in dataset, else use ntrain number of samples
+    # in ntrain mode: must be the max number of samples you want to train with
     parser.add_argument('--n-train', type=int, default=0)
     parser.add_argument('--image-encoder', type=str, default='spatial', choices=['spatial', 'cnn'])
     parser.add_argument('--n-runs', type=int, default=1)
@@ -156,25 +167,28 @@ if __name__ == '__main__':
     else:
         batch_sizes = [16, 32]
 
+    writer = SummaryWriter()
     if args.mode == 'normal':
         run_data = []
         for n in range(args.n_runs):
             for hdim in hdims:
                 for batch_size in batch_sizes:
-                    fname = args.model_prefix+'_nrun_'+str(n)
-                    all_vals_epochs, best_epoch = train_eval(args, hdim, batch_size, False, fname)
-                    es = [v[0] for v in all_vals_epochs]
-                    vals = [v[1] for v in all_vals_epochs]
-                    plot_val_error(es, vals, 'epoch', fname)
-                    run_data += [RunData(hdim, batch_size, n, args.n_epochs, best_epoch, min(vals))]
-        util.write_to_file(fname+'_results', run_data)
+                    plot_fname = args.model_prefix+'_nrun_'+str(n)
+                    val_errors, best_epoch = train_eval(args, args.data_fname, hdim, batch_size, False, plot_fname, writer)
+                    run_data += [RunData(hdim, batch_size, n, args.n_epochs, best_epoch, min(val_errors.keys()))]
+        util.write_to_file(plot_fname+'_results', run_data)
     elif args.mode == 'ntrain':
-        vals = []
-        step = 5000
+        step = 20
         ns = range(step, args.n_train+1, step)
+        data_files = [args.data_fname]
+        if args.data_fname2 is not None:
+            data_files += [args.data_fname2]
+        val_errors = {}
         for n in ns:
-            fname = args.model_prefix+'_ntrain_'+str(n)
-            all_vals_epochs, best_epoch = train_eval(args, args.hdim, args.batch_size, True, fname)
-            best_val = min([ve[1] for ve in all_vals_epochs])
-            vals.append(best_val)
-        plot_val_error(ns, vals, 'n train', args.model_prefix+'ntrain')
+            for data_fname in data_files:
+                if not data_fname in val_errors:
+                    val_errors[data_fname] = {}
+                plot_fname = 'data_'+data_fname+'_ntrain_'+str(n)
+                all_vals_epochs, best_epoch = train_eval(args, data_fname, args.hdim, args.batch_size, False, plot_fname, writer)
+                val_errors[data_fname][n] = all_vals_epochs[best_epoch]
+                plot_val_error(val_errors, 'n train', 'ntrain error', writer)
