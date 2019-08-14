@@ -316,7 +316,7 @@ class VisTrainingPerformancePitchOnly(PlotFunc):
         limits = np.linspace(0.05, 0.25, n_limit_bins+1)
         plot_data = {}
 
-        for point in train_data:
+        for (i, point) in enumerate(train_data):
             plot_motion = point.net_motion
             limit = point.mechanism_params.params.range/2
             closest_lim = min(limits, key=lambda x: abs(x-limit))
@@ -345,7 +345,7 @@ class VisTrainingPerformancePitchOnly(PlotFunc):
         for i in range(n_limit_bins):
             for j in range(n_q_perc_bins):
                 if (i,j) in plot_data:
-                    im = axes[i,j].plot(plot_data[i,j][0], plot_data[i,j][1])
+                    im = axes[i,j].plot(plot_data[i,j][0], plot_data[i,j][1], 'b.')
                     if j==0:
                         limit_min = str(round(limits[i],2))
                         limit_max = str(round(limits[i+1],2))
@@ -361,7 +361,7 @@ class VisTrainingPerformancePitchOnly(PlotFunc):
         for i in range(n_limit_bins):
             for j in range(n_q_perc_bins):
                 if (i,j) in plot_data:
-                    im = axes[i,j].hist(plot_data[i,j][1], 20, histtype='bar')
+                    im = axes[i,j].hist(plot_data[i,j][0], 20, histtype='bar')
                     if j==0:
                         limit_min = str(round(limits[i],2))
                         limit_max = str(round(limits[i+1],2))
