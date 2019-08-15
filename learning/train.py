@@ -185,7 +185,7 @@ if __name__ == '__main__':
                     run_data += [RunData(hdim, batch_size, n, args.n_epochs, best_epoch, min(val_errors.keys()))]
         util.write_to_file(plot_fname+'_results', run_data)
     elif args.mode == 'ntrain':
-        step = 20
+        step = 10000
         ns = range(step, args.n_train+1, step)
         data_files = [args.data_path]
         if args.data_path2 is not None:
