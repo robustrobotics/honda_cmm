@@ -190,11 +190,11 @@ if __name__ == '__main__':
         data_files = [args.data_path]
         if args.data_path2 is not None:
             data_files += [args.data_path2]
-        val_errors = {}
+        val_errors = OrderedDict()
         for n in ns:
             for data_path in data_files:
                 if not data_path in val_errors:
-                    val_errors[data_path] = {}
+                    val_errors[data_path] = OrderedDict()
                 fname = get_fname(data_path)
                 plot_fname = 'data_'+fname+'_ntrain_'+str(n)
                 all_vals_epochs, best_epoch = train_eval(args, data_path, args.hdim, args.batch_size, False, plot_fname, writer)
