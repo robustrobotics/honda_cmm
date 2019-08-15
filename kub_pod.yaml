@@ -11,12 +11,12 @@ spec:
         command: ["bash", "run.sh"]
         resources:
           limits:
-            cpu: 4
-            memory: 2Gi
+            cpu: 8
+            memory: 16Gi
             nvidia.com/gpu: 1
           requests:
-            cpu: 4
-            memory: 2Gi
+            cpu: 8
+            memory: 16Gi
             nvidia.com/gpu: 1
         ports:
         - containerPort: 6006
