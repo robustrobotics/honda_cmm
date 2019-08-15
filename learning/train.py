@@ -190,7 +190,7 @@ if __name__ == '__main__':
         data_files = [args.data_path]
         if args.data_path2 is not None:
             data_files += [args.data_path2]
-        val_errors = {}
+        val_errors = OrderedDict()
         for n in ns:
             for data_path in data_files:
                 if not data_path in val_errors:
