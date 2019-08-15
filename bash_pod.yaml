@@ -18,11 +18,11 @@ spec:
         command: ["bash"]
         resources:
           limits:
-            cpu: 1
+            cpu: 4
             memory: 2Gi
             nvidia.com/gpu: 1
           requests:
-            cpu: 1
+            cpu: 4
             memory: 2Gi
             nvidia.com/gpu: 1
         tty: true
