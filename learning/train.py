@@ -15,8 +15,13 @@ RunData = namedtuple('RunData', 'hdim batch_size run_num max_epoch best_epoch be
 name_lookup = {'Prismatic': 0, 'Revolute': 1}
 
 def train_eval(args, n_train, data_path, hdim, batch_size, pviz, plot_fname, writer):
+    # always use the validation and test set from the random dataset
+    _, val_set, test_set = setup_data_loaders(fname=args.random_data_path,
+                                                      batch_size=batch_size,
+                                                      small_train=n_train)
+
     # Load data
-    train_set, val_set, test_set = setup_data_loaders(fname=data_path,
+    train_set, _, _ = setup_data_loaders(fname=data_path,
                                                       batch_size=batch_size,
                                                       small_train=n_train)
 
@@ -133,14 +138,6 @@ def plot_val_error(val_errors, type, plot_fname, writer, viz=False):
         if viz:
             plt.show()
 
-def get_fname(path):
-    fname = ''
-    for c in reversed(path):
-        if c is not '/':
-            fname = fname + c
-        else:
-            break
-    return fname[::-1]
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -151,8 +148,8 @@ if __name__ == '__main__':
     parser.add_argument('--mode', choices=['ntrain', 'normal'], default='normal')
     parser.add_argument('--use-cuda', default=False, action='store_true')
     parser.add_argument('--debug', action='store_true')
-    parser.add_argument('--data-path', type=str, required=True)
-    parser.add_argument('--data-path2', type=str)
+    parser.add_argument('--random-data-path', type=str, required=True) # always needed for validation
+    parser.add_argument('--active-data-path', type=str)
     parser.add_argument('--model-prefix', type=str, default='model')
     # in normal mode: if 0 use all samples in dataset, else use ntrain number of samples
     # in ntrain mode: must be the max number of samples you want to train with
@@ -174,29 +171,31 @@ if __name__ == '__main__':
     else:
         batch_sizes = [16, 32]
 
+    # get list of data_paths to try
+    data_tups = [('random', args.random_data_path)]
+    if args.active_data_path is not None:
+        data_tups += [('active', args.active_data_path)]
+
     writer = SummaryWriter()
     if args.mode == 'normal':
-        run_data = []
-        for n in range(args.n_runs):
-            for hdim in hdims:
-                for batch_size in batch_sizes:
-                    plot_fname = args.model_prefix+'_nrun_'+str(n)
-                    val_errors, best_epoch = train_eval(args, 0, args.data_path, hdim, batch_size, False, plot_fname, writer)
-                    run_data += [RunData(hdim, batch_size, n, args.n_epochs, best_epoch, min(val_errors.keys()))]
-        util.write_to_file(plot_fname+'_results', run_data)
+        for data_tup in data_tups:
+            run_data = []
+            for n in range(args.n_runs):
+                for hdim in hdims:
+                    for batch_size in batch_sizes:
+                        plot_fname = args.model_prefix+'_nrun_'+str(n)+'_'+str(data_tup[0])
+                        val_errors, best_epoch = train_eval(args, 0, data_tup[1], hdim, batch_size, False, plot_fname, writer)
+                        run_data += [RunData(hdim, batch_size, n, args.n_epochs, best_epoch, min(val_errors.keys()))]
+            util.write_to_file(plot_fname+'_results', run_data)
     elif args.mode == 'ntrain':
-        step = 1000
+        step = 10
         ns = range(step, args.n_train+1, step)
-        data_files = [args.data_path]
-        if args.data_path2 is not None:
-            data_files += [args.data_path2]
         val_errors = OrderedDict()
         for n_train in ns:
-            for data_path in data_files:
-                if not data_path in val_errors:
-                    val_errors[data_path] = OrderedDict()
-                fname = get_fname(data_path)
-                plot_fname = 'data_'+fname+'_ntrain_'+str(n_train)
-                all_vals_epochs, best_epoch = train_eval(args, n_train, data_path, args.hdim, args.batch_size, False, plot_fname, writer)
-                val_errors[data_path][n_train] = all_vals_epochs[best_epoch]
+            for data_tup in data_tups:
+                if not data_tup[0] in val_errors:
+                    val_errors[data_tup[0]] = OrderedDict()
+                plot_fname = 'data_'+data_tup[0]+'_ntrain_'+str(n_train)
+                all_vals_epochs, best_epoch = train_eval(args, n_train, data_tup[1], args.hdim, args.batch_size, False, plot_fname, writer)
+                val_errors[data_tup[0]][n_train] = all_vals_epochs[best_epoch]
                 plot_val_error(val_errors, 'n train', 'ntrain error', writer)
