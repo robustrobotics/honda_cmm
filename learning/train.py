@@ -14,11 +14,11 @@ torch.backends.cudnn.enabled = True
 RunData = namedtuple('RunData', 'hdim batch_size run_num max_epoch best_epoch best_val_error')
 name_lookup = {'Prismatic': 0, 'Revolute': 1}
 
-def train_eval(args, data_path, hdim, batch_size, pviz, plot_fname, writer):
+def train_eval(args, n_train, data_path, hdim, batch_size, pviz, plot_fname, writer):
     # Load data
     train_set, val_set, test_set = setup_data_loaders(fname=data_path,
                                                       batch_size=batch_size,
-                                                      small_train=args.n_train)
+                                                      small_train=n_train)
 
     # Setup Model (TODO: Update the correct policy dims)
     net = NNPolVis(policy_names=['Prismatic', 'Revolute'],
@@ -181,22 +181,22 @@ if __name__ == '__main__':
             for hdim in hdims:
                 for batch_size in batch_sizes:
                     plot_fname = args.model_prefix+'_nrun_'+str(n)
-                    val_errors, best_epoch = train_eval(args, args.data_path, hdim, batch_size, False, plot_fname, writer)
+                    val_errors, best_epoch = train_eval(args, 0, args.data_path, hdim, batch_size, False, plot_fname, writer)
                     run_data += [RunData(hdim, batch_size, n, args.n_epochs, best_epoch, min(val_errors.keys()))]
         util.write_to_file(plot_fname+'_results', run_data)
     elif args.mode == 'ntrain':
-        step = 10000
+        step = 1000
         ns = range(step, args.n_train+1, step)
         data_files = [args.data_path]
         if args.data_path2 is not None:
             data_files += [args.data_path2]
         val_errors = OrderedDict()
-        for n in ns:
+        for n_train in ns:
             for data_path in data_files:
                 if not data_path in val_errors:
                     val_errors[data_path] = OrderedDict()
                 fname = get_fname(data_path)
-                plot_fname = 'data_'+fname+'_ntrain_'+str(n)
-                all_vals_epochs, best_epoch = train_eval(args, data_path, args.hdim, args.batch_size, False, plot_fname, writer)
-                val_errors[data_path][n] = all_vals_epochs[best_epoch]
+                plot_fname = 'data_'+fname+'_ntrain_'+str(n_train)
+                all_vals_epochs, best_epoch = train_eval(args, n_train, data_path, args.hdim, args.batch_size, False, plot_fname, writer)
+                val_errors[data_path][n_train] = all_vals_epochs[best_epoch]
                 plot_val_error(val_errors, 'n train', 'ntrain error', writer)
