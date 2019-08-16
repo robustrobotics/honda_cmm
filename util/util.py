@@ -13,6 +13,8 @@ from learning.models.nn_disp_pol_mech import DistanceRegressor as NNPolMech
 from actions import policies
 from actions.gripper import Gripper
 from gen.generator_busybox import BusyBox
+import matplotlib.pyplot as plt
+
 ### namedtuple Definitions ###
 Pose = namedtuple('Pose', 'p q')
 """
@@ -47,6 +49,13 @@ ImageData contains a subset of the image data returned by pybullet
 :param rgbPixels: list of [char RED,char GREEN,char BLUE, char ALPHA] [0..width*height],
                     list of pixel colors in R,G,B,A format, in range [0..255] for each color
 """
+def imshow(image_data):
+    img = np.reshape(image_data.rgbPixels, [image_data.height, image_data.width, 3])
+    plt.ion()
+    plt.imshow(img)
+    plt.show()
+    input('ENTER to close plot')
+
 ### Sampling Helper Function
 # TODO: want the prob of bin 0 to go to 0 as the slope increases (currently doesn't do that)
 def discrete_sampler(range_vals, slope, n_bins=10):
@@ -91,7 +100,7 @@ def load_model(model_fname, hdim=32, model_type='polvis', use_cuda=False):
     return model
 
 ### Writing and Reading to File Helper Functions ###
-def write_to_file(file_name, data):
+def write_to_file(file_name, data, verbose=True):
     # make directory if doesn't exist
     dir = '/'.join(file_name.split('/')[:-1])
     if not os.path.isdir(dir) and dir !='':
@@ -100,7 +109,8 @@ def write_to_file(file_name, data):
     # save to pickle
     with open(file_name, 'wb') as handle:
         pickle.dump(data, handle)
-    print('wrote dataset to '+file_name)
+    if verbose:
+        print('wrote dataset to '+file_name)
 
 def read_from_file(file_name):
     with open(file_name, 'rb') as handle:
