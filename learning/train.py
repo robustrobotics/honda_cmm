@@ -115,7 +115,7 @@ def train_eval(args, n_train, data_path, hdim, batch_size, pviz, plot_fname, wri
 
                 # save model
                 model_fname = plot_fname+'_epoch_'+str(best_epoch)
-                full_path = model_fname+'.pt'
+                full_path = 'torch_models/'+model_fname+'.pt'
                 torch.save(net.state_dict(), full_path)
 
                 # save plot of prediction error
@@ -124,19 +124,19 @@ def train_eval(args, n_train, data_path, hdim, batch_size, pviz, plot_fname, wri
     return val_errors, best_epoch
 
 def plot_val_error(val_errors, type, plot_fname, writer, viz=False):
-        import matplotlib.pyplot as plt
-        fig = plt.figure()
-        plt.xlabel(type)
-        plt.ylabel('Val MSE')
-        if isinstance(list(val_errors.keys())[0], int):
-            plt.plot(list(val_errors.keys()), list(val_errors.values()))
-        else:
-            for file in val_errors.keys():
-                plt.plot(list(val_errors[file].keys()), list(val_errors[file].values()), label=file)
-        plt.legend()
-        writer.add_figure(plot_fname, fig)
-        if viz:
-            plt.show()
+    import matplotlib.pyplot as plt
+    fig = plt.figure()
+    plt.xlabel(type)
+    plt.ylabel('Val MSE')
+    if isinstance(list(val_errors.keys())[0], int):
+        plt.plot(list(val_errors.keys()), list(val_errors.values()))
+    else:
+        for file in val_errors.keys():
+            plt.plot(list(val_errors[file].keys()), list(val_errors[file].values()), label=file)
+    plt.legend()
+    writer.add_figure(plot_fname, fig)
+    if viz:
+        plt.show()
 
 
 if __name__ == '__main__':
