@@ -617,13 +617,13 @@ def print_stats(data):
     for (key, val) in stats.items():
         sys.stdout.write('  %s mech, %s policy: %i\n' % (*key, val))
 
-def plot_results(file_name, model):
+def plot_results(file_name, model, hdim):
     data = None
     if file_name:
         data = util.read_from_file(file_name)
         print_stats(data)
     if model is not None:
-        model = util.load_model(model, hdim=16, model_type='polvis')
+        model = util.load_model(model, hdim, model_type='polvis')
 
     plot_funcs = PlotFunc.__subclasses__()
     for (i, func) in enumerate(plot_funcs):
@@ -644,16 +644,17 @@ if __name__ == '__main__':
     parser.add_argument('--fname', type=str)
     parser.add_argument('--model', type=str)
     parser.add_argument('--model2', type=str)
+    parser.add_argument('--hdim', type=int, default=16)
     args = parser.parse_args()
 
     if args.debug:
         import pdb; pdb.set_trace()
 
     if args.model2 is None:
-        plot_results(args.fname, args.model)
+        plot_results(args.fname, args.model, args.hdim)
     else:
-        model0 = util.load_model(args.model)
-        model1 = util.load_model(args.model2)
+        model0 = util.load_model(args.model, hdim=args.hdim)
+        model1 = util.load_model(args.model2, hdim=args.hdim)
         plt.ion()
         plot = TestMechsPitch()
         plot._plot(model0, model1)
