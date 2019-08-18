@@ -154,6 +154,7 @@ if __name__ == '__main__':
     # in normal mode: if 0 use all samples in dataset, else use ntrain number of samples
     # in ntrain mode: must be the max number of samples you want to train with
     parser.add_argument('--n-train', type=int, default=0)
+    parser.add_argument('--step', type=int, default=1000)
     parser.add_argument('--image-encoder', type=str, default='spatial', choices=['spatial', 'cnn'])
     parser.add_argument('--n-runs', type=int, default=1)
     args = parser.parse_args()
@@ -188,8 +189,7 @@ if __name__ == '__main__':
                         run_data += [RunData(hdim, batch_size, n, args.n_epochs, best_epoch, min(val_errors.keys()))]
             util.write_to_file(plot_fname+'_results', run_data)
     elif args.mode == 'ntrain':
-        step = 1000
-        ns = range(step, args.n_train+1, step)
+        ns = range(args.step, args.n_train+1, args.step)
         val_errors = OrderedDict()
         for n_train in ns:
             for data_tup in data_tups:
