@@ -112,10 +112,12 @@ def write_to_file(file_name, data, verbose=True):
     if verbose:
         print('wrote dataset to '+file_name)
 
-def read_from_file(file_name):
+def read_from_file(file_name, verbose=True):
+    print('reading in '+file_name)
     with open(file_name, 'rb') as handle:
         data = pickle.load(handle)
-        print('successfully read in '+file_name)
+        if verbose:
+            print('successfully read in '+file_name)
     return data
 
 def merge_files(in_file_names, out_file_name):
