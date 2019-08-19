@@ -175,7 +175,7 @@ if __name__ == '__main__':
     # get list of data_paths to try
     data_tups = [('random', args.random_data_path)]
     if args.active_data_path is not None:
-        data_tups += [('active', args.active_data_path)]
+        data_tups = [('active', args.active_data_path)] + data_tups
 
     writer = SummaryWriter()
     if args.mode == 'normal':
