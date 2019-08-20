@@ -20,7 +20,6 @@ def generate_dataset(args, git_hash, given_bb=None):
         if given_bb is None:
             # TODO: add back doors when working
             bb = BusyBox.generate_random_busybox(max_mech=args.max_mech, mech_types=[Slider], urdf_tag=str(args.urdf_num), debug=args.debug)
-        print(bb._mechanisms[0].range/2)
         image_data = setup_env(bb, args.viz, args.debug)
         for j in range(args.n_samples):
             sys.stdout.write("\rProcessing sample %i/%i for busybox %i/%i" % (j+1, args.n_samples, i+1, args.n_bbs))
