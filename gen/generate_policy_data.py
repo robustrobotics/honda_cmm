@@ -10,18 +10,22 @@ from actions.gripper import Gripper
 from gen.generator_busybox import Slider, Door, BusyBox
 
 results = []
+
+def reset(bb, viz, debug):
+    setup_env(bb, viz, debug)
+    return Gripper(bb.bb_id)
+
 def generate_dataset(args, git_hash, bb=None):
     for i in range(args.n_bbs):
         if bb is None:
             # TODO: add back doors when working
             bb = BusyBox.generate_random_busybox(max_mech=args.max_mech, mech_types=[Slider], urdf_tag=str(args.urdf_num), debug=args.debug)
 
+        image_data = setup_env(bb, args.viz, args.debug)
         for j in range(args.n_samples):
             sys.stdout.write("\rProcessing sample %i/%i for busybox %i/%i" % (j+1, args.n_samples, i+1, args.n_bbs))
             # setup env and get image before load gripper
-            image_data = setup_env(bb, args.viz, args.debug)
-            gripper = Gripper(bb.bb_id)
-
+            gripper = reset(bb, args.viz, args.debug)
             for mech in bb._mechanisms:
                 # generate either a random or model-based policy and goal configuration
                 policy = policies.generate_policy(bb, mech, args.match_policies, args.randomness)
@@ -43,7 +47,6 @@ def generate_dataset(args, git_hash, bb=None):
                             cumu_motion, pose_handle_world_init, pose_handle_world_final, \
                             config_goal, image_data, git_hash, args.randomness))
 
-            p.disconnect()
     print()
 
 if __name__ == '__main__':
