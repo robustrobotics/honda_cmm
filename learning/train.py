@@ -174,30 +174,30 @@ if __name__ == '__main__':
 
     # get list of data_paths to try
     random_data = parse_pickle_file(args.random_data_path)
-    data_tups = [('random', random_data)]
+    data_dict = {'random': random_data}
     if args.active_data_path is not None:
         active_data = parse_pickle_file(args.active_data_path)
-        data_tups += [('active', active_data)]
+        data_dict['active'] = active_data
 
     writer = SummaryWriter()
     if args.mode == 'normal':
-        for data_tup in data_tups:
+        for data_type in data_dict:
             run_data = []
             for n in range(args.n_runs):
                 for hdim in hdims:
                     for batch_size in batch_sizes:
-                        plot_fname = args.model_prefix+'_nrun_'+str(n)+'_'+str(data_tup[0])
-                        val_errors, best_epoch = train_eval(args, 0, data_tups[0][1], data_tup[1], hdim, batch_size, False, plot_fname, writer)
+                        plot_fname = args.model_prefix+'_nrun_'+str(n)+'_'+data_type
+                        val_errors, best_epoch = train_eval(args, 0, data_dict['random'], data_dict[data_type], hdim, batch_size, False, plot_fname, writer)
                         run_data += [RunData(hdim, batch_size, n, args.n_epochs, best_epoch, min(val_errors.keys()))]
             util.write_to_file(plot_fname+'_results', run_data)
     elif args.mode == 'ntrain':
         ns = range(args.step, args.n_train+1, args.step)
         val_errors = OrderedDict()
         for n_train in ns:
-            for data_tup in data_tups:
-                if not data_tup[0] in val_errors:
-                    val_errors[data_tup[0]] = OrderedDict()
-                plot_fname = 'data_'+data_tup[0]+'_ntrain_'+str(n_train)
-                all_vals_epochs, best_epoch = train_eval(args, n_train, data_tups[0][1], data_tup[1], args.hdim, args.batch_size, False, plot_fname, writer)
-                val_errors[data_tup[0]][n_train] = all_vals_epochs[best_epoch]
+            for data_type in data_dict:
+                if not data_type in val_errors:
+                    val_errors[data_type] = OrderedDict()
+                plot_fname = 'data_'+data_type+'_ntrain_'+str(n_train)
+                all_vals_epochs, best_epoch = train_eval(args, n_train, data_dict['random'], data_dict[data_type], args.hdim, args.batch_size, False, plot_fname, writer)
+                val_errors[data_type][n_train] = all_vals_epochs[best_epoch]
                 plot_val_error(val_errors, 'n train', 'ntrain error', writer)
