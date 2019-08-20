@@ -1,6 +1,7 @@
 # Given a file setup the dataloaders.
 import copy
 import numpy as np
+import random
 import pickle
 import torch
 from torch.utils.data.dataset import Dataset
@@ -152,7 +153,7 @@ def parse_pickle_file(fname=None, data=None):
 
 
 def create_data_splits(data, val_pct=0.15, test_pct=0.15):
-    np.random.shuffle(data)
+    random.Random(0).shuffle(data)
     n = len(data)
     val_start = int(n*(1-val_pct-test_pct))
     test_start = int(n*(1-test_pct))
