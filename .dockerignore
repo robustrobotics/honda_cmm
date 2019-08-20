@@ -3,3 +3,7 @@ models/*.urdf
 
 # generated pickle files
 /data
+
+# tensorflow run log data
+/runs*
+/torch_models*
