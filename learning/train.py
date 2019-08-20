@@ -14,14 +14,14 @@ torch.backends.cudnn.enabled = True
 RunData = namedtuple('RunData', 'hdim batch_size run_num max_epoch best_epoch best_val_error')
 name_lookup = {'Prismatic': 0, 'Revolute': 1}
 
-def train_eval(args, n_train, random_data, train_data, hdim, batch_size, pviz, plot_fname, writer):
+def train_eval(args, n_train, data_type, data_dict, hdim, batch_size, pviz, plot_fname, writers):
     # always use the validation and test set from the random dataset
-    _, val_set, test_set = setup_data_loaders(random_data,
+    _, val_set, test_set = setup_data_loaders(data_dict['random'],
                                                 batch_size=batch_size,
                                                 small_train=n_train)
 
     # Load data
-    train_set, _, _ = setup_data_loaders(train_data,
+    train_set, _, _ = setup_data_loaders(data_dict[data_type],
                                             batch_size=batch_size,
                                             small_train=n_train)
 
@@ -33,11 +33,6 @@ def train_eval(args, n_train, random_data, train_data, hdim, batch_size, pviz, p
                    im_w=115,  # 205,
                    kernel_size=3,
                    image_encoder=args.image_encoder)
-    # net = NNPolMech(policy_names=['Prismatic'],
-    #                 policy_dims=[2],
-    #                 hdim=hdim,
-    #                 mech_dims=2)
-    #print(sum(p.numel() for p in net.parameters() if p.requires_grad))
 
     if args.use_cuda:
         net = net.cuda()
@@ -71,6 +66,8 @@ def train_eval(args, n_train, random_data, train_data, hdim, batch_size, pviz, p
             yhat = net.forward(pol, x, q, im)
 
             loss = loss_fn(yhat, y)
+            # to do average over all batches and add that value to writer
+            #writers[data_type].add_scalar('Loss/train/'+str(n_train), loss, ex)
             loss.backward()
 
             optim.step()
@@ -106,7 +103,7 @@ def train_eval(args, n_train, random_data, train_data, hdim, batch_size, pviz, p
 
             curr_val = np.mean(val_losses)
             val_errors[ex] = curr_val
-            plot_val_error(val_errors, 'epoch', 'val error '+plot_fname, writer, False)
+            writers[data_type].add_scalar('Loss/val/'+str(n_train), curr_val, ex)
 
             print('[Epoch {}] - Validation Loss: {}'.format(ex, curr_val))
             if curr_val < best_val:
@@ -121,23 +118,8 @@ def train_eval(args, n_train, random_data, train_data, hdim, batch_size, pviz, p
                 # save plot of prediction error
                 if pviz:
                     viz.plot_y_yhat(ys, yhats, types, ex, plot_fname, title='PolVis')
+    writers[data_type].add_scalar('ntrain_val_loss', val_errors[best_epoch], n_train)
     return val_errors, best_epoch
-
-def plot_val_error(val_errors, type, plot_fname, writer, viz=False):
-    import matplotlib.pyplot as plt
-    fig = plt.figure()
-    plt.xlabel(type)
-    plt.ylabel('Val MSE')
-    if isinstance(list(val_errors.keys())[0], int):
-        plt.plot(list(val_errors.keys()), list(val_errors.values()))
-    else:
-        for file in val_errors.keys():
-            plt.plot(list(val_errors[file].keys()), list(val_errors[file].values()), label=file)
-        plt.legend()
-    writer.add_figure(plot_fname, fig)
-    if viz:
-        plt.show()
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -175,11 +157,12 @@ if __name__ == '__main__':
     # get list of data_paths to try
     random_data = parse_pickle_file(args.random_data_path)
     data_dict = {'random': random_data}
+    writers = {'random': SummaryWriter('./runs/random')}
     if args.active_data_path is not None:
         active_data = parse_pickle_file(args.active_data_path)
         data_dict['active'] = active_data
+        writers['active'] = SummaryWriter('./runs/active')
 
-    writer = SummaryWriter()
     if args.mode == 'normal':
         for data_type in data_dict:
             run_data = []
@@ -187,7 +170,7 @@ if __name__ == '__main__':
                 for hdim in hdims:
                     for batch_size in batch_sizes:
                         plot_fname = args.model_prefix+'_nrun_'+str(n)+'_'+data_type
-                        val_errors, best_epoch = train_eval(args, 0, data_dict['random'], data_dict[data_type], hdim, batch_size, False, plot_fname, writer)
+                        train_eval(args, 0, data_type, data_dict, hdim, batch_size, False, plot_fname, writers)
                         run_data += [RunData(hdim, batch_size, n, args.n_epochs, best_epoch, min(val_errors.keys()))]
             util.write_to_file(plot_fname+'_results', run_data)
     elif args.mode == 'ntrain':
@@ -198,6 +181,4 @@ if __name__ == '__main__':
                 if not data_type in val_errors:
                     val_errors[data_type] = OrderedDict()
                 plot_fname = 'data_'+data_type+'_ntrain_'+str(n_train)
-                all_vals_epochs, best_epoch = train_eval(args, n_train, data_dict['random'], data_dict[data_type], args.hdim, args.batch_size, False, plot_fname, writer)
-                val_errors[data_type][n_train] = all_vals_epochs[best_epoch]
-                plot_val_error(val_errors, 'n train', 'ntrain error', writer)
+                train_eval(args, n_train, data_type, data_dict, args.hdim, args.batch_size, False, plot_fname, writers)
