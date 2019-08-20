@@ -164,8 +164,8 @@ def create_data_splits(data, val_pct=0.15, test_pct=0.15):
     return train_data, val_data, test_data
 
 
-def setup_data_loaders(fname, batch_size=128, use_cuda=True, small_train=0):
-    data = parse_pickle_file(fname)
+def setup_data_loaders(data, batch_size=128, use_cuda=True, small_train=0):
+    #data = parse_pickle_file(fname)
 
     # Create datasplits.
     train_data, val_data, test_data = create_data_splits(data)

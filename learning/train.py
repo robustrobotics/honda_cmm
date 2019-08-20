@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from learning.models.nn_disp_pol_vis import DistanceRegressor as NNPolVis
 from learning.models.nn_disp_pol_mech import DistanceRegressor as NNPolMech
-from learning.dataloaders import setup_data_loaders
+from learning.dataloaders import setup_data_loaders, parse_pickle_file
 import learning.viz as viz
 from collections import namedtuple
 from util import util
@@ -14,16 +14,16 @@ torch.backends.cudnn.enabled = True
 RunData = namedtuple('RunData', 'hdim batch_size run_num max_epoch best_epoch best_val_error')
 name_lookup = {'Prismatic': 0, 'Revolute': 1}
 
-def train_eval(args, n_train, data_path, hdim, batch_size, pviz, plot_fname, writer):
+def train_eval(args, n_train, random_data, train_data, hdim, batch_size, pviz, plot_fname, writer):
     # always use the validation and test set from the random dataset
-    _, val_set, test_set = setup_data_loaders(fname=args.random_data_path,
-                                                      batch_size=batch_size,
-                                                      small_train=n_train)
+    _, val_set, test_set = setup_data_loaders(random_data,
+                                                batch_size=batch_size,
+                                                small_train=n_train)
 
     # Load data
-    train_set, _, _ = setup_data_loaders(fname=data_path,
-                                                      batch_size=batch_size,
-                                                      small_train=n_train)
+    train_set, _, _ = setup_data_loaders(train_data,
+                                            batch_size=batch_size,
+                                            small_train=n_train)
 
     # Setup Model (TODO: Update the correct policy dims)
     net = NNPolVis(policy_names=['Prismatic', 'Revolute'],
@@ -37,7 +37,7 @@ def train_eval(args, n_train, data_path, hdim, batch_size, pviz, plot_fname, wri
     #                 policy_dims=[2],
     #                 hdim=hdim,
     #                 mech_dims=2)
-    print(sum(p.numel() for p in net.parameters() if p.requires_grad))
+    #print(sum(p.numel() for p in net.parameters() if p.requires_grad))
 
     if args.use_cuda:
         net = net.cuda()
@@ -133,7 +133,7 @@ def plot_val_error(val_errors, type, plot_fname, writer, viz=False):
     else:
         for file in val_errors.keys():
             plt.plot(list(val_errors[file].keys()), list(val_errors[file].values()), label=file)
-    plt.legend()
+        plt.legend()
     writer.add_figure(plot_fname, fig)
     if viz:
         plt.show()
@@ -173,9 +173,11 @@ if __name__ == '__main__':
         batch_sizes = [16, 32]
 
     # get list of data_paths to try
-    data_tups = [('random', args.random_data_path)]
+    random_data = parse_pickle_file(args.random_data_path)
+    data_tups = [('random', random_data)]
     if args.active_data_path is not None:
-        data_tups = [('active', args.active_data_path)] + data_tups
+        active_data = parse_pickle_file(args.active_data_path)
+        data_tups += [('active', active_data)]
 
     writer = SummaryWriter()
     if args.mode == 'normal':
@@ -185,7 +187,7 @@ if __name__ == '__main__':
                 for hdim in hdims:
                     for batch_size in batch_sizes:
                         plot_fname = args.model_prefix+'_nrun_'+str(n)+'_'+str(data_tup[0])
-                        val_errors, best_epoch = train_eval(args, 0, data_tup[1], hdim, batch_size, False, plot_fname, writer)
+                        val_errors, best_epoch = train_eval(args, 0, data_tups[0][1], data_tup[1], hdim, batch_size, False, plot_fname, writer)
                         run_data += [RunData(hdim, batch_size, n, args.n_epochs, best_epoch, min(val_errors.keys()))]
             util.write_to_file(plot_fname+'_results', run_data)
     elif args.mode == 'ntrain':
@@ -196,6 +198,6 @@ if __name__ == '__main__':
                 if not data_tup[0] in val_errors:
                     val_errors[data_tup[0]] = OrderedDict()
                 plot_fname = 'data_'+data_tup[0]+'_ntrain_'+str(n_train)
-                all_vals_epochs, best_epoch = train_eval(args, n_train, data_tup[1], args.hdim, args.batch_size, False, plot_fname, writer)
+                all_vals_epochs, best_epoch = train_eval(args, n_train, data_tups[0][1], data_tup[1], args.hdim, args.batch_size, False, plot_fname, writer)
                 val_errors[data_tup[0]][n_train] = all_vals_epochs[best_epoch]
                 plot_val_error(val_errors, 'n train', 'ntrain error', writer)
