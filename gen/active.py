@@ -26,7 +26,7 @@ n_max = 5   # maximum number of samples in a region to calc interest
 m = 100      # number of samples used to find optimal split
 class ActivePolicyLearner(object):
 
-    def __init__(self, bb, viz_sim, debug, viz_plot):
+    def __init__(self, bb, viz_sim, debug, viz_plot, all_random):
         self.bb = bb
         self.mech = self.bb._mechanisms[0]
         self.debug = debug
@@ -38,6 +38,7 @@ class ActivePolicyLearner(object):
         self.max_region = self.get_max_region()
         self.regions = [copy(self.max_region)]
         self.interactions = []
+        self.all_random = all_random
 
         if self.viz_plot:
             self.fig, self.ax = plt.subplots()
@@ -94,8 +95,13 @@ class ActivePolicyLearner(object):
             probs = self.region_probs()
             return np.random.choice(self.regions, p=probs)
 
+        if self.all_random:
+            probs = [0., 1., 0.]
+        else:
+            probs = [.7, .2, .1]
+
         if len(self.regions) > 1:
-            mode = np.random.choice([1,2,3],p=[.7,.2,.1])
+            mode = np.random.choice([1,2,3],p=probs)
         else:
             mode = 2
 
@@ -298,10 +304,10 @@ class Region(object):
         return inside
 
 results = []
-def generate_dataset(n_bbs, n_samples, viz, debug, urdf_num, max_mech, viz_plot):
+def generate_dataset(n_bbs, n_samples, viz, debug, urdf_num, max_mech, viz_plot, all_random):
     for i in range(n_bbs):
         bb = BusyBox.generate_random_busybox(max_mech=max_mech, mech_types=[Slider], urdf_tag=urdf_num, debug=debug)
-        active_learner = ActivePolicyLearner(bb, viz, debug, viz_plot)
+        active_learner = ActivePolicyLearner(bb, viz, debug, viz_plot, all_random)
         active_learner.explore(n_samples, i, n_bbs)
         results.extend(active_learner.interactions)
     print()
@@ -319,13 +325,14 @@ if __name__ == '__main__':
     parser.add_argument('--urdf-num', type=int, default=0)
     parser.add_argument('--match-policies', action='store_true') # if want to only use correct policy class on mechanisms
     parser.add_argument('--viz-plot', action='store_true') # if want to run a matplotlib visualization of sampling and competence
+    parser.add_argument('--all-random', action='store_true') # if want to only sample randomly
     args = parser.parse_args()
 
     if args.debug:
         import pdb; pdb.set_trace()
 
     try:
-        generate_dataset(args.n_bbs, args.n_samples, args.viz, args.debug, args.urdf_num, args.max_mech, args.viz_plot)
+        generate_dataset(args.n_bbs, args.n_samples, args.viz, args.debug, args.urdf_num, args.max_mech, args.viz_plot, args.all_random)
         if args.fname:
             util.write_to_file(args.fname, results)
     except KeyboardInterrupt:
