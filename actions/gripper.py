@@ -58,6 +58,8 @@ class Gripper:
         self._finger_force = 20
         self.pose_tip_world_reset = util.Pose([0.0, 0.0, 0.2], \
                             [0.50019904,  0.50019904, -0.49980088, 0.49980088])
+        self.errors = []
+        self.forces = []
 
         # get mass of gripper
         mass = 0
@@ -181,10 +183,11 @@ class Gripper:
         handle_base_ps = []
         for i in itertools.count():
             if debug:
-                p.addUserDebugLine(np.add(pose_handle_base_world_des.p, [0.,0.025,0.]), np.add(pose_handle_base_world_des.p, [0,.025,1]), lifeTime=.5)
+                p.addUserDebugLine(np.add(pose_handle_base_world_des.p, [0.,0.,0.]), np.add(pose_handle_base_world_des.p, [0.,0.,1]), lifeTime=.5)
             handle_base_ps.append(mech.get_pose_handle_base_world().p)
             self._control_fingers('close', debug=debug)
             if (not last_traj_p) and self._at_des_handle_base_pose(pose_handle_base_world_des, q_offset, mech, 0.01):
+                #print('reached')
                 return handle_base_ps, False
             elif last_traj_p and self._at_des_handle_base_pose(pose_handle_base_world_des, q_offset, mech, 0.005) and self._stable(handle_base_ps):
                 return handle_base_ps, True
@@ -202,6 +205,8 @@ class Gripper:
             # apply both position and velocity controls at the gripper COM
             f = np.multiply(self.k[0], p_handle_base_world_err) + np.multiply(self.d[0], lin_v_com_world_err)
             tau = np.multiply(self.k[1], e_handle_base_world_err) + np.multiply(self.d[1], omega_com_world_err)
+            self.errors += [(p_handle_base_world_err, lin_v_com_world_err)]
+            self.forces += [(f, tau)]
             p_com_world, q_com_world = self._get_pose_com_('world')
             if debug:
                 p.addUserDebugLine(p_com_world, np.add(p_com_world, p_handle_base_world_err), [1,0,0], lifeTime=.05)
@@ -214,6 +219,7 @@ class Gripper:
     def set_control_params(self, policy_type):
         if policy_type == 'Revolute':
             self.k = [2000.0,20.0]
+            self.d = [250.0,0.45]
         if policy_type == 'Prismatic':
             self.k = [3000.0,20.0]
             self.d = [250.0,0.45]
@@ -232,6 +238,7 @@ class Gripper:
         cumu_motion = 0.0
         for i in range(len(traj)):
             last_traj_p = (i == len(traj)-1)
+            #print(i)
             handle_base_ps, finished = self._move_PD(traj[i], q_offset, mech, last_traj_p, debug)
             cumu_motion = np.add(cumu_motion, np.linalg.norm(np.subtract(handle_base_ps[-1],handle_base_ps[0])))
             if finished:
@@ -242,4 +249,20 @@ class Gripper:
         net_motion = 0.0
         if pose_handle_world_final is not None:
             net_motion = np.linalg.norm(np.subtract(pose_handle_world_final.p, pose_handle_world_init.p))
+        #self.plot_err_forces()
         return cumu_motion, net_motion, pose_handle_world_final
+
+    def plot_err_forces(self):
+        import matplotlib.pyplot as plt
+        plt.ion()
+        fig, axes = plt.subplots(3,1)
+        axes[0].plot([err[0] for err in self.errors])
+        axes[1].plot([err[1] for err in self.errors])
+        axes[2].plot([f[1] for f in self.forces])
+
+        axes[0].set_title('position error')
+        axes[1].set_title('velocity error')
+        axes[2].set_title('force')
+
+        plt.show()
+        input()
