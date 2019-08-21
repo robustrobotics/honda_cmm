@@ -126,9 +126,7 @@ class Prismatic(Policy):
     @staticmethod
     def generate_config(mech, goal_config):
         if goal_config is None:
-            # TODO: make more general
-            # currently only samples up to 1.2 x joint limit
-            max_config = 1.2*mech.range/2
+            max_config = 0.25 # from generator_busybox
             return np.random.uniform(-max_config,max_config)
         else:
             return goal_config*mech.range/2.0
@@ -255,7 +253,10 @@ class Revolute(Policy):
         if goal_config is None:
             return np.random.uniform(-np.pi/2,np.pi/2)
         else:
-            return goal_config*np.pi/2.0
+            if mech.flipped:
+                return -goal_config*np.pi/2.0
+            else:
+                return goal_config*np.pi/2.0
 
     def get_policy_tuple(self):
         rev_params = RevoluteParams(self.rot_center, self.rot_axis_roll, \
@@ -327,17 +328,14 @@ def get_matched_policy_type(mech):
     elif mech.mechanism_type == 'Slider':
         return 'Prismatic'
 
-def get_policy_from_params(type, params, mech=None):
+def get_policy_from_params(type, params, mech):
     if type == 'Revolute':
         return Revolute(params[:3], params[3], params[4], params[5:9], params[9:12])
     if type == 'Prismatic':
         pitch = params[7]
         yaw = params[8]
-        if mech:
-            delta_pitch = pitch + np.arccos(mech.axis[0])
-            delta_yaw = yaw
-        else:
-            delta_pitch, delta_yaw = None, None
+        delta_pitch = pitch + np.arccos(mech.axis[0])
+        delta_yaw = yaw
         return Prismatic(params[:3], params[3:7], pitch, yaw, delta_pitch, delta_yaw)
 
 def get_policy_from_tuple(policy_params):
