@@ -7,12 +7,15 @@ from learning.dataloaders import setup_data_loaders, parse_pickle_file
 import learning.viz as viz
 from collections import namedtuple
 from util import util
+from util.setup_pybullet import setup_env
 from torch.utils.tensorboard import SummaryWriter
 from collections import OrderedDict
+from gen.generator_busybox import BusyBox, Slider
+from actions import policies
+from learning.test_model import test_env
 torch.backends.cudnn.enabled = True
 
 RunData = namedtuple('RunData', 'hdim batch_size run_num max_epoch best_epoch best_val_error')
-name_lookup = {'Prismatic': 0, 'Revolute': 1}
 
 def train_eval(args, n_train, data_type, data_dict, hdim, batch_size, pviz, plot_fname, writers):
     # always use the validation and test set from the random dataset
@@ -42,7 +45,7 @@ def train_eval(args, n_train, data_type, data_dict, hdim, batch_size, pviz, plot
 
     # Add the graph to TensorBoard viz,
     k, x, q, im, y, _ = train_set.dataset[0]
-    pol = torch.Tensor([name_lookup[k]])
+    pol = torch.Tensor([util.name_lookup[k]])
     if args.use_cuda:
         x = x.cuda().unsqueeze(0)
         q = q.cuda().unsqueeze(0)
@@ -56,7 +59,7 @@ def train_eval(args, n_train, data_type, data_dict, hdim, batch_size, pviz, plot
         train_losses = []
         net.train()
         for bx, (k, x, q, im, y, _) in enumerate(train_set):
-            pol = name_lookup[k[0]]
+            pol = util.name_lookup[k[0]]
             if args.use_cuda:
                 x = x.cuda()
                 q = q.cuda()
@@ -82,7 +85,7 @@ def train_eval(args, n_train, data_type, data_dict, hdim, batch_size, pviz, plot
 
             ys, yhats, types = [], [], []
             for bx, (k, x, q, im, y, _) in enumerate(val_set):
-                pol = torch.Tensor([name_lookup[k[0]]])
+                pol = torch.Tensor([util.name_lookup[k[0]]])
                 if args.use_cuda:
                     x = x.cuda()
                     q = q.cuda()
@@ -109,16 +112,33 @@ def train_eval(args, n_train, data_type, data_dict, hdim, batch_size, pviz, plot
             if curr_val < best_val:
                 best_val = curr_val
                 best_epoch = ex
+                best_net = net
 
                 # save model
-                model_fname = plot_fname+'_epoch_'+str(best_epoch)
-                full_path = 'torch_models/'+model_fname+'.pt'
+                full_path = 'torch_models/'+plot_fname+'.pt'
                 torch.save(net.state_dict(), full_path)
 
                 # save plot of prediction error
                 if pviz:
                     viz.plot_y_yhat(ys, yhats, types, ex, plot_fname, title='PolVis')
     writers[data_type].add_scalar('ntrain_val_loss', val_errors[best_epoch], n_train)
+
+    # TODO: run on test set instead of random bbs (need to add bbs to results to do that)
+    N = 40
+    error = 0
+    for _ in range(N):
+        bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider])
+        setup_env(bb, False, False) # todo: get from params so don't have to start pybullet
+        mech = bb._mechanisms[0]
+        true_policy = policies.generate_policy(bb, mech, True, 0)
+        true_config = mech.range/2
+        test_policy, test_config = test_env(best_net, plot=False, viz=False, debug=False)
+        true = np.array([true_policy.pitch, true_config])
+        test = np.array([test_policy.pitch, test_config])
+        error += np.linalg.norm([true-test])**2
+    test_mse = error/N
+    writers[data_type].add_scalar('test_error', test_mse, n_train)
+    print(data_type, test_mse, n_train)
     return val_errors, best_epoch
 
 if __name__ == '__main__':
