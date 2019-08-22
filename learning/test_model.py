@@ -49,10 +49,10 @@ def objective_func(x, policy_type, image_tensor, model, use_cuda):
     policy_tensor = torch.tensor([x[:-1]]).float()
     config_tensor = torch.tensor([[x[-1]]]).float()
     if use_cuda:
-        policy_type_tensor.cuda()
-        policy_tensor.cuda()
-        config_tensor.cuda()
-        image_tensor.cuda()
+        policy_type_tensor = policy_type_tensor.cuda()
+        policy_tensor = policy_tensor.cuda()
+        config_tensor = config_tensor.cuda()
+        image_tensor = image_tensor.cuda()
     val = -model.forward(policy_type_tensor, policy_tensor, config_tensor, image_tensor)
     val = val.detach().numpy()
     if use_cuda:
