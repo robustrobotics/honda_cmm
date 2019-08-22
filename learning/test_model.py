@@ -54,9 +54,9 @@ def objective_func(x, policy_type, image_tensor, model, use_cuda):
         config_tensor = config_tensor.cuda()
         image_tensor = image_tensor.cuda()
     val = -model.forward(policy_type_tensor, policy_tensor, config_tensor, image_tensor)
-    val = val.detach().numpy()
     if use_cuda:
         val = val.cpu()
+    val = val.detach().numpy()
     return val
 
 def test_env(model, bb=None, plot=False, viz=False, debug=False, use_cuda=False):
