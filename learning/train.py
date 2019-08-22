@@ -122,26 +122,6 @@ def train_eval(args, n_train, data_type, data_dict, hdim, batch_size, pviz, plot
                 if pviz:
                     viz.plot_y_yhat(ys, yhats, types, ex, plot_fname, title='PolVis')
     writers[data_type].add_scalar('ntrain_val_loss', val_errors[best_epoch], n_train)
-
-    # TODO: run on test set instead of random bbs (need to add bbs to results to do that)
-    N = 40
-    error = 0
-    for i in range(N):
-        np.random.seed(i)
-        bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider])
-        np.random.seed()
-        setup_env(bb, False, False) # todo: get from params so don't have to start pybullet
-        mech = bb._mechanisms[0]
-        true_policy = policies.generate_policy(bb, mech, True, 0)
-        true_config = mech.range/2
-        test_policy, test_config = test_env(best_net, plot=False, viz=False, debug=False, use_cuda=args.use_cuda)
-        test_config = abs(test_config)
-        true = np.array([true_policy.pitch, true_config])
-        test = np.array([test_policy.pitch, test_config])
-        error += np.linalg.norm([true-test])**2
-    test_mse = error/N
-    writers[data_type].add_scalar('test_error', test_mse, n_train)
-    print(data_type, test_mse, n_train)
     return val_errors, best_epoch
 
 if __name__ == '__main__':
