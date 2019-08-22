@@ -11,7 +11,6 @@ import torch
 from util import util
 import numpy as np
 import sys
-from learning.train import name_lookup
 import matplotlib.pyplot as plt
 import pybullet as p
 
@@ -21,7 +20,7 @@ def get_pred_motions(data, model, ret_dataset=False):
     pred_motions = []
     for i in range(len(dataset.items)):
         policy_type = dataset.items[i]['type']
-        pred_motion = model.forward(torch.Tensor([name_lookup[policy_type]]),
+        pred_motion = model.forward(torch.Tensor([util.name_lookup[policy_type]]),
                                     dataset.tensors[i].unsqueeze(0),
                                     dataset.configs[i].unsqueeze(0),
                                     dataset.images[i].unsqueeze(0))
@@ -33,7 +32,8 @@ def get_pred_motions(data, model, ret_dataset=False):
         return pred_motions
 
 def objective_func(x, policy_type, image_tensor, model):
-    policy_type_tensor = torch.Tensor([name_lookup[policy_type]])
+    policy_type_tensor = torch.Tensor([util.name_lookup[policy_type]])
+    x = x.squeeze()
     val = -model.forward(policy_type_tensor, torch.tensor([x[:-1]]).float(), torch.tensor([[x[-1]]]).float(), image_tensor)
     return val.detach().numpy()
 
