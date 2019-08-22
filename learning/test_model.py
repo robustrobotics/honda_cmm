@@ -14,16 +14,25 @@ import sys
 import matplotlib.pyplot as plt
 import pybullet as p
 
-def get_pred_motions(data, model, ret_dataset=False):
+def get_pred_motions(data, model, ret_dataset=False, use_cuda=False):
     data = parse_pickle_file(data=data)
     dataset = PolicyDataset(data)
     pred_motions = []
     for i in range(len(dataset.items)):
         policy_type = dataset.items[i]['type']
-        pred_motion = model.forward(torch.Tensor([util.name_lookup[policy_type]]),
-                                    dataset.tensors[i].unsqueeze(0),
-                                    dataset.configs[i].unsqueeze(0),
-                                    dataset.images[i].unsqueeze(0))
+        policy_type_tensor = torch.Tensor([util.name_lookup[policy_type]])
+        policy_tensor = dataset.tensors[i].unsqueeze(0)
+        config_tensor = dataset.configs[i].unsqueeze(0)
+        image_tensor = dataset.images[i].unsqueeze(0)
+        if use_cuda:
+            policy_type_tensor = policy_type_tensor.cuda()
+            policy_tensor = policy_tensor.cuda()
+            config_tensor = config_tensor.cuda()
+            image_tensor = image_tensor.cuda()
+        pred_motion = model.forward(policy_type_tensor,
+                                    policy_tensor,
+                                    config_tensor,
+                                    image_tensor)
         pred_motion_float = pred_motion.detach().numpy()[0][0]
         pred_motions += [pred_motion_float]
     if ret_dataset:
@@ -37,7 +46,7 @@ def objective_func(x, policy_type, image_tensor, model):
     val = -model.forward(policy_type_tensor, torch.tensor([x[:-1]]).float(), torch.tensor([[x[-1]]]).float(), image_tensor)
     return val.detach().numpy()
 
-def test_env(model, bb=None, plot=False, viz=False, debug=False):
+def test_env(model, bb=None, plot=False, viz=False, debug=False, use_cuda=False):
     if bb is None:
         bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider])
     image_data = setup_env(bb, viz=False, debug=debug)
@@ -53,7 +62,7 @@ def test_env(model, bb=None, plot=False, viz=False, debug=False):
         policy_tuple = random_policy.get_policy_tuple()
         results = [util.Result(policy_tuple, mech_tuple, 0.0, 0.0,
                                 None, None, q, image_data, None, 1.0)]
-        sample_disps, dataset = get_pred_motions(results, model, ret_dataset=True)
+        sample_disps, dataset = get_pred_motions(results, model, ret_dataset=True, use_cuda=use_cuda)
         samples.append(((policy_type,
                         dataset.tensors[0].detach().numpy(),
                         dataset.configs[0].detach().numpy(),
@@ -189,6 +198,7 @@ if __name__ == '__main__':
     parser.add_argument('--model-fname', type=str)
     parser.add_argument('--search-fname', type=str)
     parser.add_argument('--hdim', type=int, default=16)
+    parser.add_argument('--use-cuda', action='store_true')
     args = parser.parse_args()
 
     if args.debug:
@@ -198,7 +208,7 @@ if __name__ == '__main__':
     search_results = []
     for i in range(args.n_test):
         sys.stdout.write("\rProcessing mechanism %i/%i" % (i+1, args.n_test))
-        search_results.append(test_env(model, plot=args.plot, viz=args.viz, debug=args.debug))
+        search_results.append(test_env(model, plot=args.plot, viz=args.viz, debug=args.debug, use_cuda=use_cuda))
     print()
 
     if args.search_fname:
