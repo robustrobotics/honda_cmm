@@ -33,7 +33,10 @@ def get_pred_motions(data, model, ret_dataset=False, use_cuda=False):
                                     policy_tensor,
                                     config_tensor,
                                     image_tensor)
-        pred_motion_float = pred_motion.detach().numpy()[0][0]
+        if use_cuda:
+            pred_motion_float = pred_motion.cpu().detach().numpy()[0][0]
+        else:
+            pred_motion_float = pred_motion.detach().numpy()[0][0]
         pred_motions += [pred_motion_float]
     if ret_dataset:
         return pred_motions, dataset
