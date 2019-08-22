@@ -126,8 +126,10 @@ def train_eval(args, n_train, data_type, data_dict, hdim, batch_size, pviz, plot
     # TODO: run on test set instead of random bbs (need to add bbs to results to do that)
     N = 40
     error = 0
-    for _ in range(N):
+    for i in range(N):
+        np.random.seed(i)
         bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider])
+        np.random.seed()
         setup_env(bb, False, False) # todo: get from params so don't have to start pybullet
         mech = bb._mechanisms[0]
         true_policy = policies.generate_policy(bb, mech, True, 0)
