@@ -43,11 +43,21 @@ def get_pred_motions(data, model, ret_dataset=False, use_cuda=False):
     else:
         return pred_motions
 
-def objective_func(x, policy_type, image_tensor, model):
+def objective_func(x, policy_type, image_tensor, model, use_cuda):
     policy_type_tensor = torch.Tensor([util.name_lookup[policy_type]])
     x = x.squeeze()
-    val = -model.forward(policy_type_tensor, torch.tensor([x[:-1]]).float(), torch.tensor([[x[-1]]]).float(), image_tensor)
-    return val.detach().numpy()
+    policy_tensor = torch.tensor([x[:-1]]).float()
+    config_tensor = torch.tensor([[x[-1]]]).float()
+    if use_cuda:
+        policy_type_tensor.cuda()
+        policy_tensor.cuda()
+        config_tensor.cuda()
+        image_tensor.cuda()
+    val = -model.forward(policy_type_tensor, policy_tensor, config_tensor, image_tensor)
+    val = val.detach().numpy()
+    if use_cuda:
+        val = val.cpu()
+    return val
 
 def test_env(model, bb=None, plot=False, viz=False, debug=False, use_cuda=False):
     if bb is None:
@@ -79,7 +89,7 @@ def test_env(model, bb=None, plot=False, viz=False, debug=False, use_cuda=False)
     # start optimization from here
     # assume you guessed the correct policy type, and optimize for params and configuration
     x0 = np.concatenate([params_max, q_max])
-    res = minimize(fun=objective_func, x0=x0, args=(policy_type_max, dataset.images[0].unsqueeze(0), model),
+    res = minimize(fun=objective_func, x0=x0, args=(policy_type_max, dataset.images[0].unsqueeze(0), model, use_cuda),
                 method='BFGS')#, options={'eps': 10**-3}) # TODO: for some reason get pytorch error when change options
     x_final = res['x']
     policy_list = list(pose_handle_base_world.p)+list(pose_handle_base_world.q)+list(x_final[:-1])
