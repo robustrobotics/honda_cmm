@@ -15,6 +15,7 @@ from actions.gripper import Gripper
 from gen.generator_busybox import BusyBox
 import matplotlib.pyplot as plt
 
+name_lookup = {'Prismatic': 0, 'Revolute': 1}
 ### namedtuple Definitions ###
 Pose = namedtuple('Pose', 'p q')
 """
@@ -74,7 +75,7 @@ def discrete_sampler(range_vals, slope, n_bins=10):
     return val
 
 ### Model Testing Helper Functions ###
-def load_model(model_fname, hdim=32, model_type='polvis', use_cuda=False):
+def load_model(model_fname, hdim=32, model_type='polvis', use_cuda=False, image_encoder='spatial'):
     if model_type == 'pol':
         model = NNPol(policy_names=['Prismatic', 'Revolute'],
                       policy_dims=[2, 12],
@@ -90,7 +91,8 @@ def load_model(model_fname, hdim=32, model_type='polvis', use_cuda=False):
                          hdim=hdim,
                          im_h=53,
                          im_w=115,
-                         kernel_size=3)
+                         kernel_size=3,
+                         image_encoder=image_encoder)
     if use_cuda:
         device = torch.device('cuda')
     else:
