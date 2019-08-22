@@ -135,6 +135,7 @@ def train_eval(args, n_train, data_type, data_dict, hdim, batch_size, pviz, plot
         true_policy = policies.generate_policy(bb, mech, True, 0)
         true_config = mech.range/2
         test_policy, test_config = test_env(best_net, plot=False, viz=False, debug=False, use_cuda=args.use_cuda)
+        test_config = abs(test_config)
         true = np.array([true_policy.pitch, true_config])
         test = np.array([test_policy.pitch, test_config])
         error += np.linalg.norm([true-test])**2
