@@ -13,20 +13,24 @@ from collections import OrderedDict
 from gen.generator_busybox import BusyBox, Slider
 from actions import policies
 from learning.test_model import test_env
+import os
 torch.backends.cudnn.enabled = True
 
 RunData = namedtuple('RunData', 'hdim batch_size run_num max_epoch best_epoch best_val_error')
 
-def train_eval(args, n_train, data_type, data_dict, hdim, batch_size, pviz, plot_fname, writers):
-    # always use the validation and test set from the random dataset
-    _, val_set, test_set = setup_data_loaders(data_dict['random'],
+def train_eval(args, n_train, data_type, data_dict, hdim, batch_size, pviz, writers):
+
+    rand_train_set, rand_val_set, rand_test_set = setup_data_loaders(data_dict['random'],
                                                 batch_size=batch_size,
                                                 small_train=n_train)
 
-    # Load data
-    train_set, _, _ = setup_data_loaders(data_dict[data_type],
-                                            batch_size=batch_size,
-                                            small_train=n_train)
+    act_train_set, act_val_set, act_test_set = setup_data_loaders(data_dict['active'],
+                                                batch_size=batch_size,
+                                                small_train=n_train)
+    if data_type == 'active':
+        train_set = act_train_set
+    else:
+        train_set = rand_train_set
 
     # Setup Model (TODO: Update the correct policy dims)
     net = NNPolVis(policy_names=['Prismatic', 'Revolute'],
@@ -52,9 +56,10 @@ def train_eval(args, n_train, data_type, data_dict, hdim, batch_size, pviz, plot
         im = im.cuda().unsqueeze(0)
         pol = pol.cuda()
 
-    best_val = 1000
-    # Training loop.
     val_errors = OrderedDict()
+    val_errors['random'] = 1000
+    val_errors['active'] = 1000
+    # Training loop.
     for ex in range(1, args.n_epochs+1):
         train_losses = []
         net.train()
@@ -80,49 +85,60 @@ def train_eval(args, n_train, data_type, data_dict, hdim, batch_size, pviz, plot
         print('[Epoch {}] - Training Loss: {}'.format(ex, np.mean(train_losses)))
 
         if ex % args.val_freq == 0:
-            val_losses = []
-            net.eval()
+            for val_data_type in data_dict:
+                if val_data_type == 'random':
+                    val_set = rand_val_set
+                else:
+                    val_set = act_val_set
 
-            ys, yhats, types = [], [], []
-            for bx, (k, x, q, im, y, _) in enumerate(val_set):
-                pol = torch.Tensor([util.name_lookup[k[0]]])
-                if args.use_cuda:
-                    x = x.cuda()
-                    q = q.cuda()
-                    im = im.cuda()
-                    y = y.cuda()
+                val_losses = []
+                net.eval()
 
-                yhat = net.forward(pol, x, q, im)
+                ys, yhats, types = [], [], []
+                for bx, (k, x, q, im, y, _) in enumerate(val_set):
+                    pol = torch.Tensor([util.name_lookup[k[0]]])
+                    if args.use_cuda:
+                        x = x.cuda()
+                        q = q.cuda()
+                        im = im.cuda()
+                        y = y.cuda()
 
-                loss = loss_fn(yhat, y)
-                val_losses.append(loss.item())
+                    yhat = net.forward(pol, x, q, im)
 
-                types += k
-                if args.use_cuda:
-                    y = y.cpu()
-                    yhat = yhat.cpu()
-                ys += y.numpy().tolist()
-                yhats += yhat.detach().numpy().tolist()
+                    loss = loss_fn(yhat, y)
+                    val_losses.append(loss.item())
 
-            curr_val = np.mean(val_losses)
-            val_errors[ex] = curr_val
-            writers[data_type].add_scalar('Loss/val/'+str(n_train), curr_val, ex)
+                    types += k
+                    if args.use_cuda:
+                        y = y.cpu()
+                        yhat = yhat.cpu()
+                    ys += y.numpy().tolist()
+                    yhats += yhat.detach().numpy().tolist()
 
-            print('[Epoch {}] - Validation Loss: {}'.format(ex, curr_val))
-            if curr_val < best_val:
-                best_val = curr_val
-                best_epoch = ex
-                best_net = net
+                curr_val = np.mean(val_losses)
 
-                # save model
-                full_path = 'torch_models/'+plot_fname+'.pt'
-                torch.save(net.state_dict(), full_path)
+                writer_key = data_type + ',' + val_data_type
+                writers[writer_key].add_scalar('Loss/val/'+str(n_train), curr_val, ex)
 
-                # save plot of prediction error
-                if pviz:
-                    viz.plot_y_yhat(ys, yhats, types, ex, plot_fname, title='PolVis')
-    writers[data_type].add_scalar('ntrain_val_loss', val_errors[best_epoch], n_train)
-    return val_errors, best_epoch
+                #print('[Epoch {}] - Validation Loss: {}'.format(ex, curr_val))
+                if curr_val < val_errors[val_data_type]:
+                    val_errors[val_data_type] = curr_val
+
+                    # save model
+                    dir = 'torch_models/'+data_type+'/'+val_data_type
+                    file = str(n_train)+'.pt'
+                    if not os.path.isdir(dir):
+                        os.makedirs(dir)
+                    path = dir + '/' + file
+                    torch.save(net.state_dict(), path)
+
+                    ## save plot of prediction error
+                    #if pviz:
+                    #    viz.plot_y_yhat(ys, yhats, types, ex, plot_fname, title='PolVis')
+    for val_data_type in data_dict:
+        writer_key = data_type + ',' + val_data_type
+        writers[writer_key].add_scalar('ntrain_val_loss', val_errors[val_data_type], n_train)
+    #return val_errors, best_epoch
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -159,12 +175,13 @@ if __name__ == '__main__':
 
     # get list of data_paths to try
     random_data = parse_pickle_file(args.random_data_path)
-    data_dict = {'random': random_data}
-    writers = {'random': SummaryWriter('./runs/random')}
-    if args.active_data_path is not None:
-        active_data = parse_pickle_file(args.active_data_path)
-        data_dict['active'] = active_data
-        writers['active'] = SummaryWriter('./runs/active')
+    active_data = parse_pickle_file(args.active_data_path)
+    data_dict = {'random': random_data,
+                    'active': active_data}
+    writers = {'random,random': SummaryWriter('./runs/random_random'),
+                'random,active': SummaryWriter('./runs/random_active'),
+                'active,active': SummaryWriter('./runs/active_active'),
+                'active,random': SummaryWriter('./runs/active_random'),}
 
     if args.mode == 'normal':
         for data_type in data_dict:
@@ -178,10 +195,6 @@ if __name__ == '__main__':
             util.write_to_file(plot_fname+'_results', run_data)
     elif args.mode == 'ntrain':
         ns = range(args.step, args.n_train+1, args.step)
-        val_errors = OrderedDict()
         for n_train in ns:
             for data_type in data_dict:
-                if not data_type in val_errors:
-                    val_errors[data_type] = OrderedDict()
-                plot_fname = 'data_'+data_type+'_ntrain_'+str(n_train)
-                train_eval(args, n_train, data_type, data_dict, args.hdim, args.batch_size, False, plot_fname, writers)
+                train_eval(args, n_train, data_type, data_dict, args.hdim, args.batch_size, False, writers)
