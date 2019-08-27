@@ -23,7 +23,8 @@ class Autoencoder(nn.Module):
             self.decoder2 = nn.Linear(hdim*4, np.prod(recon_shape))
         elif decoder_type == 'basis':
             self.decoder1 = nn.Linear(2*n_features, hdim)
-            self.decoder2 = nn.Linear(hdim, 1)
+            self.decoder2 = nn.Linear(hdim, hdim)
+            self.decoder3 = nn.Linear(hdim, 1)
         self.decoder_type = decoder_type
         self.recon_shape = recon_shape
         self.relu = nn.ReLU()
@@ -51,7 +52,7 @@ class Autoencoder(nn.Module):
             F = points.unsqueeze(1).expand(-1, dim_l, -1, -1)
             deltas = (L-F).reshape(bs, dim_l, dim_f*2)
 
-            recon = self.decoder2(self.relu(self.decoder1(deltas)))
+            recon = self.decoder3(self.relu(self.decoder2(self.relu(self.decoder1(deltas)))))
             return recon.view(-1,
                               self.recon_shape[0],
                               self.recon_shape[1],
