@@ -24,6 +24,8 @@ g_max = 10  # max samples per region
 R = 0.05    # region to sample for low competence
 n_max = 5   # maximum number of samples in a region to calc interest
 m = 100      # number of samples used to find optimal split
+min_region = 0.003
+
 class ActivePolicyLearner(object):
 
     def __init__(self, bb, viz_sim, debug, viz_plot, all_random):
@@ -69,12 +71,13 @@ class ActivePolicyLearner(object):
             region.update(goal, competence)
             if self.viz_plot:
                 self.update_plot((goal, competence))
-            if len(region.attempted_goals) > g_max:
-                new_regions = region.split(self.bb)
-                self.regions.remove(region)
-                self.regions += new_regions
-                if self.viz_plot:
-                    self.update_plot()
+            if np.multiply(*region.dims) > min_region:
+                if len(region.attempted_goals) > g_max:
+                    new_regions = region.split(self.bb)
+                    self.regions.remove(region)
+                    self.regions += new_regions
+                    if self.viz_plot:
+                        self.update_plot()
             if n != n_samples-1:
                 self.reset()
 
@@ -87,18 +90,22 @@ class ActivePolicyLearner(object):
         return start_region
 
     def region_probs(self):
-        total_interest = sum([region.interest for region in self.regions])
-        return [region.interest/total_interest for region in self.regions]
+        relevant_regions = []
+        for region in self.regions:
+            if not (len(region.attempted_goals) > g_max and np.multiply(*region.dims) < min_region):
+                relevant_regions += [region]
+        total_interest = sum([region.interest for region in relevant_regions])
+        return [region.interest/total_interest for region in relevant_regions], relevant_regions
 
     def select_goal(self):
         def interesting_region():
-            probs = self.region_probs()
-            return np.random.choice(self.regions, p=probs)
+            probs, rel_regions = self.region_probs()
+            return np.random.choice(rel_regions, p=probs)
 
         if self.all_random:
             probs = [0., 1., 0.]
         else:
-            probs = [.7, .2, .1]
+            probs = [.8, .1, .1]
 
         if len(self.regions) > 1:
             mode = np.random.choice([1,2,3],p=probs)
@@ -180,8 +187,12 @@ class ActivePolicyLearner(object):
             # clear figure
             plt.cla()
             self.reset_plot()
-            interest_probs = self.region_probs()
-            for (region, prob) in zip(self.regions, interest_probs):
+            interest_probs, rel_regions = self.region_probs()
+            for region in self.regions:
+                if region in rel_regions:
+                    prob = str(region.interest)
+                else:
+                    prob = 'w'
                 # draw regions
                 corner_coords = region.get_corner_coords()+[region.coord]
                 for i in range(4):
@@ -191,7 +202,7 @@ class ActivePolicyLearner(object):
                     self.ax.fill_between([-corner_coords[0].x, -corner_coords[1].x],
                                             [corner_coords[0].z, corner_coords[1].z],
                                             [corner_coords[2].z, corner_coords[3].z],
-                                            color=str(prob), alpha=.3)
+                                            color=prob, alpha=.3)
                 # redraw goals
                 for goal in region.attempted_goals:
                     draw_goal(goal)
@@ -240,7 +251,7 @@ class Region(object):
         range_max = min(n_max, n_goals)
         self.interest = 0.0
         if n_goals > 1:
-            for j in range(-2,-range_max-1,-1):
+            for j in enumerate(range(-2,-range_max-1,-1)):
                 self.interest += abs(self.attempted_goals[j+1][1]-self.attempted_goals[j][1])
             self.interest = self.interest/(range_max-1)
 
