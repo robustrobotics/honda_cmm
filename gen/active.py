@@ -26,7 +26,7 @@ n_max = 5   # maximum number of samples in a region to calc interest
 m = 100      # number of samples used to find optimal split
 class ActivePolicyLearner(object):
 
-    def __init__(self, bb, viz_sim, debug, viz_plot):
+    def __init__(self, bb, viz_sim, debug, viz_plot, all_random):
         self.bb = bb
         self.mech = self.bb._mechanisms[0]
         self.debug = debug
@@ -38,6 +38,7 @@ class ActivePolicyLearner(object):
         self.max_region = self.get_max_region()
         self.regions = [copy(self.max_region)]
         self.interactions = []
+        self.all_random = all_random
 
         if self.viz_plot:
             self.fig, self.ax = plt.subplots()
@@ -65,9 +66,9 @@ class ActivePolicyLearner(object):
             interact_result = self.execute_interaction(policy, config_goal)
             self.interactions += [interact_result]
             competence = self.calc_competence(goal_pos, interact_result)
+            region.update(goal, competence)
             if self.viz_plot:
                 self.update_plot((goal, competence))
-            region.update(goal, competence)
             if len(region.attempted_goals) > g_max:
                 new_regions = region.split(self.bb)
                 self.regions.remove(region)
@@ -94,8 +95,13 @@ class ActivePolicyLearner(object):
             probs = self.region_probs()
             return np.random.choice(self.regions, p=probs)
 
+        if self.all_random:
+            probs = [0., 1., 0.]
+        else:
+            probs = [.7, .2, .1]
+
         if len(self.regions) > 1:
-            mode = np.random.choice([1,2,3],p=[.7,.2,.1])
+            mode = np.random.choice([1,2,3],p=probs)
         else:
             mode = 2
 
@@ -146,8 +152,8 @@ class ActivePolicyLearner(object):
         return competence
 
     def reset(self):
-        setup_env(self.bb, self.viz_sim, self.debug)
-        self.gripper = Gripper(self.bb.bb_id)
+        p.resetJointState(self.bb.bb_id, self.mech.handle_id, 0.0)
+        self.gripper._set_pose_tip_world(self.gripper.pose_tip_world_reset)
 
     def get_goal_region(self, goal):
         for region in self.regions:
@@ -204,6 +210,9 @@ class Region(object):
         self.attempted_goals = [] # in frame of the region coord
         self.interest = float('inf')
 
+    def size(self):
+        return np.multiply(*self.dims)
+
     def random_coord(self):
         rand_x = np.random.uniform(self.coord.x, self.coord.x-self.dims.width)
         rand_z = np.random.uniform(self.coord.z, self.coord.z+self.dims.height)
@@ -213,10 +222,13 @@ class Region(object):
         if type == 'random':
             return Point(*self.random_coord())
         if type == 'biased':
-            low_comp_goal, _ = min(self.attempted_goals, key=operator.itemgetter(1))
+            high_comp_goal, _ = max(self.attempted_goals, key=operator.itemgetter(1))
             r = R*np.sqrt(np.random.uniform())
             theta = np.random.uniform()*2*np.pi
-            near_goal = np.add(low_comp_goal, [r*np.cos(theta), r*np.sin(theta)])
+            near_goal = np.add(high_comp_goal, [r*np.cos(theta), r*np.sin(theta)])
+
+            #plt.plot([-near_goal[0]], [near_goal[1]], 'r.')
+            #plt.plot([-high_comp_goal.x], [high_comp_goal.z], 'm.')
             return Point(*near_goal)
 
     def update(self, goal, competence):
@@ -234,11 +246,16 @@ class Region(object):
 
     def split(self, bb):
         splits = []
-        # randomly generate splits (half xs half zs)
-        for dim in range(2):
-            for _ in range(m):
-                coord = self.random_coord()
-                splits += [(dim, coord[dim])]
+        ordered_x_goals = sorted(self.attempted_goals, key=lambda goal: goal[0].x)
+        ordered_z_goals = sorted(self.attempted_goals, key=lambda goal: goal[0].z)
+        for i in range(len(ordered_x_goals)-1):
+            diff = abs(ordered_x_goals[i+1][0].x-ordered_x_goals[i][0].x)/2
+            x_split = ordered_x_goals[i][0].x + diff
+            splits += [(0, x_split)]
+        for j in range(len(ordered_z_goals)-1):
+            diff = abs(ordered_z_goals[j+1][0].z-ordered_z_goals[j][0].z)/2
+            z_split = ordered_z_goals[j][0].z + diff
+            splits += [(1, z_split)]
 
         quality_values = []
         for (dim, dim_coord) in splits:
@@ -298,10 +315,10 @@ class Region(object):
         return inside
 
 results = []
-def generate_dataset(n_bbs, n_samples, viz, debug, urdf_num, max_mech, viz_plot):
+def generate_dataset(n_bbs, n_samples, viz, debug, urdf_num, max_mech, viz_plot, all_random):
     for i in range(n_bbs):
         bb = BusyBox.generate_random_busybox(max_mech=max_mech, mech_types=[Slider], urdf_tag=urdf_num, debug=debug)
-        active_learner = ActivePolicyLearner(bb, viz, debug, viz_plot)
+        active_learner = ActivePolicyLearner(bb, viz, debug, viz_plot, all_random)
         active_learner.explore(n_samples, i, n_bbs)
         results.extend(active_learner.interactions)
     print()
@@ -319,13 +336,14 @@ if __name__ == '__main__':
     parser.add_argument('--urdf-num', type=int, default=0)
     parser.add_argument('--match-policies', action='store_true') # if want to only use correct policy class on mechanisms
     parser.add_argument('--viz-plot', action='store_true') # if want to run a matplotlib visualization of sampling and competence
+    parser.add_argument('--all-random', action='store_true') # if want to only sample randomly
     args = parser.parse_args()
 
     if args.debug:
         import pdb; pdb.set_trace()
 
     try:
-        generate_dataset(args.n_bbs, args.n_samples, args.viz, args.debug, args.urdf_num, args.max_mech, args.viz_plot)
+        generate_dataset(args.n_bbs, args.n_samples, args.viz, args.debug, args.urdf_num, args.max_mech, args.viz_plot, args.all_random)
         if args.fname:
             util.write_to_file(args.fname, results)
     except KeyboardInterrupt:
