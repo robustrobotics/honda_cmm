@@ -218,8 +218,8 @@ class Gripper:
 
     def set_control_params(self, policy_type):
         if policy_type == 'Revolute':
-            self.k = [2000.0,20.0]
-            self.d = [250.0,0.45]
+            self.k = [50000.0,20.0]
+            self.d = [0.45,0.45]
         if policy_type == 'Prismatic':
             self.k = [3000.0,20.0]
             self.d = [250.0,0.45]
