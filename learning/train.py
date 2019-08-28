@@ -14,7 +14,6 @@ from gen.generator_busybox import BusyBox, Slider
 from actions import policies
 from learning.test_model import test_env
 import os
-import time
 torch.backends.cudnn.enabled = True
 
 RunData = namedtuple('RunData', 'hdim batch_size run_num max_epoch best_epoch best_val_error')
@@ -120,7 +119,7 @@ def train_eval(args, n_train, data_type, data_dict, hdim, batch_size, pviz, writ
 
                 writer_key = data_type + ',' + val_data_type
                 writers[writer_key].add_scalar('Loss/val/'+str(n_train), curr_val, ex)
-                time.sleep(.1)
+
                 #print('[Epoch {}] - Validation Loss: {}'.format(ex, curr_val))
                 if curr_val < val_errors[val_data_type]:
                     val_errors[val_data_type] = curr_val
@@ -139,7 +138,7 @@ def train_eval(args, n_train, data_type, data_dict, hdim, batch_size, pviz, writ
     for val_data_type in data_dict:
         writer_key = data_type + ',' + val_data_type
         writers[writer_key].add_scalar('ntrain_val_loss', val_errors[val_data_type], n_train)
-        time.sleep(.1)
+        
     #return val_errors, best_epoch
 
 if __name__ == '__main__':
@@ -200,3 +199,5 @@ if __name__ == '__main__':
         for n_train in ns:
             for data_type in data_dict:
                 train_eval(args, n_train, data_type, data_dict, args.hdim, args.batch_size, False, writers)
+    for writer in writers.values():
+        writer.close()
