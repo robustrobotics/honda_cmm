@@ -66,9 +66,9 @@ class ActivePolicyLearner(object):
             interact_result = self.execute_interaction(policy, config_goal)
             self.interactions += [interact_result]
             competence = self.calc_competence(goal_pos, interact_result)
-            if self.viz_plot:
-                self.update_plot((goal, competence))
             region.update(goal, competence)
+            if self.viz_plot:
+                self.update_plot((goal, competence), biased=biased)
             if len(region.attempted_goals) > g_max:
                 new_regions = region.split(self.bb)
                 self.regions.remove(region)
@@ -152,8 +152,8 @@ class ActivePolicyLearner(object):
         return competence
 
     def reset(self):
-        setup_env(self.bb, self.viz_sim, self.debug)
-        self.gripper = Gripper(self.bb.bb_id)
+        p.resetJointState(self.bb.bb_id, self.mech.handle_id, 0.0)
+        self.gripper._set_pose_tip_world(self.gripper.pose_tip_world_reset)
 
     def get_goal_region(self, goal):
         for region in self.regions:
@@ -210,6 +210,9 @@ class Region(object):
         self.attempted_goals = [] # in frame of the region coord
         self.interest = float('inf')
 
+    def size(self):
+        return np.multiply(*self.dims)
+
     def random_coord(self):
         rand_x = np.random.uniform(self.coord.x, self.coord.x-self.dims.width)
         rand_z = np.random.uniform(self.coord.z, self.coord.z+self.dims.height)
@@ -219,10 +222,13 @@ class Region(object):
         if type == 'random':
             return Point(*self.random_coord())
         if type == 'biased':
-            low_comp_goal, _ = min(self.attempted_goals, key=operator.itemgetter(1))
+            high_comp_goal, _ = max(self.attempted_goals, key=operator.itemgetter(1))
             r = R*np.sqrt(np.random.uniform())
             theta = np.random.uniform()*2*np.pi
-            near_goal = np.add(low_comp_goal, [r*np.cos(theta), r*np.sin(theta)])
+            near_goal = np.add(high_comp_goal, [r*np.cos(theta), r*np.sin(theta)])
+
+            #plt.plot([-near_goal[0]], [near_goal[1]], 'r.')
+            #plt.plot([-high_comp_goal.x], [high_comp_goal.z], 'm.')
             return Point(*near_goal)
 
     def update(self, goal, competence):
@@ -240,11 +246,16 @@ class Region(object):
 
     def split(self, bb):
         splits = []
-        # randomly generate splits (half xs half zs)
-        for dim in range(2):
-            for _ in range(m):
-                coord = self.random_coord()
-                splits += [(dim, coord[dim])]
+        ordered_x_goals = sorted(self.attempted_goals, key=lambda goal: goal[0].x)
+        ordered_z_goals = sorted(self.attempted_goals, key=lambda goal: goal[0].z)
+        for i in range(len(ordered_x_goals)-1):
+            diff = abs(ordered_x_goals[i+1][0].x-ordered_x_goals[i][0].x)/2
+            x_split = ordered_x_goals[i][0].x + diff
+            splits += [(0, x_split)]
+        for j in range(len(ordered_z_goals)-1):
+            diff = abs(ordered_z_goals[j+1][0].z-ordered_z_goals[j][0].z)/2
+            z_split = ordered_z_goals[j][0].z + diff
+            splits += [(1, z_split)]
 
         quality_values = []
         for (dim, dim_coord) in splits:
