@@ -68,7 +68,7 @@ class ActivePolicyLearner(object):
             competence = self.calc_competence(goal_pos, interact_result)
             region.update(goal, competence)
             if self.viz_plot:
-                self.update_plot((goal, competence), biased=biased)
+                self.update_plot((goal, competence))
             if len(region.attempted_goals) > g_max:
                 new_regions = region.split(self.bb)
                 self.regions.remove(region)
