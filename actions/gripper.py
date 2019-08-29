@@ -189,11 +189,11 @@ class Gripper:
             if (not last_traj_p) and self._at_des_handle_base_pose(pose_handle_base_world_des, q_offset, mech, 0.01):
                 #print('reached')
                 return handle_base_ps, False
-            elif last_traj_p and self._at_des_handle_base_pose(pose_handle_base_world_des, q_offset, mech, 0.005) and self._stable(handle_base_ps):
+            elif last_traj_p and self._at_des_handle_base_pose(pose_handle_base_world_des, q_offset, mech, 0.001) and self._stable(handle_base_ps):
                 return handle_base_ps, True
             elif self._stable(handle_base_ps) and (i > timeout):
-                if debug:
-                    print('timeout limit reached. moving the next joint')
+                #if debug:
+                #    print('timeout limit reached. moving the next joint')
                 return handle_base_ps, True
 
             # get position error of the handle base, but velocity error of the
