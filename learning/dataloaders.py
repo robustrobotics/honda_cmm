@@ -165,33 +165,39 @@ def create_data_splits(data, val_pct=0.15, test_pct=0.15):
     return train_data, val_data, test_data
 
 
-def setup_data_loaders(data, batch_size=128, use_cuda=True, small_train=0):
+def setup_data_loaders(data, batch_size=128, use_cuda=True, small_train=0, train_only=False):
     #data = parse_pickle_file(fname)
-
-    # Create datasplits.
-    train_data, val_data, test_data = create_data_splits(data)
-    if small_train > 0:
-        train_data = train_data[:small_train]
-
-    # TODO: Populate dataset objects
-
-    train_set = PolicyDataset(train_data)
-    val_set = PolicyDataset(val_data)
-    test_set = PolicyDataset(test_data)
-
     kwargs = {'num_workers': 0,
               'pin_memory': use_cuda}
 
-    train_loader = torch.utils.data.DataLoader(dataset=train_set,
-                                               batch_sampler=CustomSampler(train_set.items, batch_size),
-                                               **kwargs)
-    val_loader = torch.utils.data.DataLoader(dataset=val_set,
-                                             batch_sampler=CustomSampler(val_set.items, batch_size),
-                                             **kwargs)
-    test_loader = torch.utils.data.DataLoader(dataset=test_set,
-                                              batch_sampler=CustomSampler(test_set.items, batch_size),
-                                              **kwargs)
-    return train_loader, val_loader, test_loader
+    if train_only:
+        train_set = PolicyDataset(data)
+        train_loader = torch.utils.data.DataLoader(dataset=train_set,
+                                                   batch_sampler=CustomSampler(train_set.items, batch_size),
+                                                   **kwargs)
+        return train_loader
+    else:
+        # Create datasplits.
+        train_data, val_data, test_data = create_data_splits(data)
+        if small_train > 0:
+            train_data = train_data[:small_train]
+
+        # TODO: Populate dataset objects
+
+        train_set = PolicyDataset(train_data)
+        val_set = PolicyDataset(val_data)
+        test_set = PolicyDataset(test_data)
+
+        train_loader = torch.utils.data.DataLoader(dataset=train_set,
+                                                   batch_sampler=CustomSampler(train_set.items, batch_size),
+                                                   **kwargs)
+        val_loader = torch.utils.data.DataLoader(dataset=val_set,
+                                                 batch_sampler=CustomSampler(val_set.items, batch_size),
+                                                 **kwargs)
+        test_loader = torch.utils.data.DataLoader(dataset=test_set,
+                                                  batch_sampler=CustomSampler(test_set.items, batch_size),
+                                                  **kwargs)
+        return train_loader, val_loader, test_loader
 
 
 if __name__ == '__main__':
