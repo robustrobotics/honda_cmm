@@ -167,8 +167,11 @@ class Prismatic(Policy):
         return Prismatic(rigid_position, rigid_orientation, pitch, yaw, \
                 delta_pitch, delta_yaw)
 
+    def get_goal_from_policy(self, goal_config):#, bb, mech, handle_pose, goal_pos):
+        goal_pose = self._forward_kinematics(goal_config)
+        return goal_pose.p
+
     @staticmethod
-    # TODO: this isn't calculating the correct delta pitch values
     def get_policy_from_goal(bb, mech, handle_pose, goal_pos):
         direction3d = np.subtract(goal_pos, handle_pose.p)
         direction = [direction3d[0], direction3d[2]]
