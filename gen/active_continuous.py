@@ -23,10 +23,10 @@ AttemptedGoal = namedtuple('AttemptedGoal', 'goal competence')
 # params
 #g_max = 10  # max samples per region
 #R = 0.05    # region to sample for low competence
-n_max = 10   # maximum number of samples in a region to calc interest
+n_max = 5   # maximum number of samples in a region to calc interest
 #m = 100      # number of samples used to find optimal split
 num_cs = 100 # number of regions to generate each iteraction
-alpha = .99
+alpha = .97
 R = 0.2
 class ActivePolicyLearner(object):
 
@@ -55,10 +55,7 @@ class ActivePolicyLearner(object):
     def explore(self, n_samples, i, n_bbs):
         for n in range(n_samples):
             sys.stdout.write("\rProcessing sample %i/%i for busybox %i/%i" % (n+1, n_samples, i+1, n_bbs))
-            #if self.debug:
-            #    for region in self.regions:
-            #        region.draw(self.bb)
-            sample_type = np.random.choice(['rand', 'interest'], p=[.25, .75])
+            sample_type = np.random.choice(['rand', 'interest'], p=[.2, .8])
             if sample_type == 'rand' or len(self.attempted_goals) == 0:
                 goal_2D = self.max_region.sample_goal('random')
                 interest = None
@@ -66,14 +63,13 @@ class ActivePolicyLearner(object):
                 R_n = None
             else:
                 region_interests = OrderedDict()
-                #for c in range(num_cs):
                 for g in self.attempted_goals:
-                    #center = self.max_region.sample_goal('random')
                     center = g[0]
-                    R_n = np.power(alpha, n)*R
+                    R_n = max(np.power(alpha, n)*R, 0.04)
+
                     # sort attemped goals by distance from center
-                    sorted_goals = sorted(self.attempted_goals, key=lambda goal: np.linalg.norm(np.subtract(goal[0], center)) ** 2)
-                    region_goals = filter(lambda goal: np.linalg.norm(np.subtract(goal[0], center)) ** 2 < R_n, sorted_goals)
+                    sorted_goals = sorted(self.attempted_goals, key=lambda goal: np.linalg.norm(np.subtract(goal[0], center)))
+                    region_goals = filter(lambda goal: np.linalg.norm(np.subtract(goal[0], center)) < R_n, sorted_goals)
                     # calculate interest in region
                     sorted_region_goals = sorted(region_goals, key=lambda goal: goal[2])
                     interest = self.calc_interest(sorted_region_goals)
@@ -92,10 +88,6 @@ class ActivePolicyLearner(object):
             goal_pos = self.bb.project_onto_backboard([goal_2D[0], 0.0, goal_2D[1]])
             if self.debug:
                 util.vis_frame(goal_pos, [0., 0., 0., 1.], lifeTime=0, length=.05)
-                #for print_region in self.regions:
-                #    for (other_goal, _) in print_region.attempted_goals:
-                #        other_goal_pos = self.bb.project_onto_backboard([other_goal[0], 0.0, other_goal[1]])
-                #        util.vis_frame(other_goal_pos, [0., 0., 0., 1.], lifeTime=0, length=.05)
             handle_pose = self.mech.get_pose_handle_base_world()
             policy, config_goal = policies.Prismatic.get_policy_from_goal(self.bb, self.mech, handle_pose, goal_pos)
             interact_result = self.execute_interaction(policy, config_goal)
@@ -103,15 +95,9 @@ class ActivePolicyLearner(object):
             competence = self.calc_competence(goal_pos, interact_result)
             goal = (goal_2D, competence, n)
             self.attempted_goals += [goal]
-            #region.update(goal, competence)
+
             if self.viz_plot:
                 self.update_plot(goal, interesting_center, R_n, interest, n)
-            #if len(region.attempted_goals) > g_max:
-            #    new_regions = region.split(self.bb)
-            #    self.regions.remove(region)
-            #    self.regions += new_regions
-            #    if self.viz_plot:
-            #        self.update_plot()
             if n != n_samples-1:
                 self.reset()
 
@@ -132,36 +118,6 @@ class ActivePolicyLearner(object):
         start_region = Region(Point(p_bb_ll_w[0], p_bb_ll_w[1]),
                                     Dims(self.bb.width, self.bb.height))
         return start_region
-
-    def region_probs(self):
-        total_interest = sum([region.interest for region in self.regions])
-        return [region.interest/total_interest for region in self.regions]
-
-    def select_goal(self):
-        def interesting_region():
-            probs = self.region_probs()
-            return np.random.choice(self.regions, p=probs)
-
-        if self.all_random:
-            probs = [0., 1., 0.]
-        else:
-            probs = [.7, .2, .1]
-
-        if len(self.regions) > 1:
-            mode = np.random.choice([1,2,3],p=probs)
-        else:
-            mode = 2
-
-        if mode == 1:
-            region = interesting_region()
-            goal = region.sample_goal('random')
-        elif mode == 2:
-            goal = self.max_region.sample_goal('random')
-            region = self.get_goal_region(goal)
-        elif mode == 3:
-            region = interesting_region()
-            goal = region.sample_goal('biased')
-        return region, goal
 
     def execute_interaction(self, policy, config_goal):
         pose_handle_world_init = util.Pose(*p.getLinkState(self.bb.bb_id, self.mech.handle_id)[:2])
@@ -228,13 +184,14 @@ class ActivePolicyLearner(object):
 
 
         # visualize interest instead of competence
+        '''
         if n == 100:
             plt.cla()
             self.reset_plot()
             goals_interests = []
             for goal_c in self.attempted_goals:
-                sorted_goals = sorted(self.attempted_goals, key=lambda goal: np.linalg.norm(np.subtract(goal[0], goal_c[0])) ** 2)
-                region_goals = filter(lambda goal: np.linalg.norm(np.subtract(goal[0], goal_c[0])) ** 2 < R_n, sorted_goals)
+                sorted_goals = sorted(self.attempted_goals, key=lambda goal: np.linalg.norm(np.subtract(goal[0], goal_c[0])))
+                region_goals = filter(lambda goal: np.linalg.norm(np.subtract(goal[0], goal_c[0])) < R_n, sorted_goals)
                 # calculate interest in region
                 sorted_region_goals = sorted(region_goals, key=lambda goal: goal[2])
                 interest = self.calc_interest(sorted_region_goals)
@@ -244,25 +201,12 @@ class ActivePolicyLearner(object):
                 im =  self.ax.scatter([-g.x], [g.z], c=[i], s=4, vmin=0, vmax=max_i)
             #self.fig.colorbar(im)
             input()
+        '''
         plt.cla()
         if interesting_center is not None:
             circle = plt.Circle([-interesting_center.x, interesting_center.z], R_n, facecolor=str(1-interest))
             self.ax.add_artist(circle)
         self.reset_plot()
-        #interest_probs = self.region_probs()
-        #for (region, prob) in zip(self.regions, interest_probs):
-            # draw regions
-        '''
-            corner_coords = region.get_corner_coords()+[region.coord]
-            for i in range(4):
-                # flip since axes are reversed in pybullet
-                self.ax.plot(np.multiply(-1,[corner_coords[i].x, corner_coords[i+1].x]),
-                                [corner_coords[i].z, corner_coords[i+1].z], 'k')
-                self.ax.fill_between([-corner_coords[0].x, -corner_coords[1].x],
-                                        [corner_coords[0].z, corner_coords[1].z],
-                                        [corner_coords[2].z, corner_coords[3].z],
-                                        color=str(prob), alpha=.3)
-        '''
 
         # redraw goals with latest one being blue and the sampled region
 
