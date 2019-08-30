@@ -8,7 +8,7 @@ from util.setup_pybullet import setup_env
 from scipy.optimize import minimize
 from learning.dataloaders import parse_pickle_file, PolicyDataset
 import torch
-from util import util, plot_results
+#from util import util, plot_results
 import numpy as np
 import sys
 import matplotlib.pyplot as plt
