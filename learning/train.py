@@ -138,7 +138,7 @@ def train_eval(args, n_train, data_type, data_dict, hdim, batch_size, pviz, writ
     for val_data_type in data_dict:
         writer_key = data_type + ',' + val_data_type
         writers[writer_key].add_scalar('ntrain_val_loss', val_errors[val_data_type], n_train)
-        
+
     #return val_errors, best_epoch
 
 if __name__ == '__main__':
@@ -197,7 +197,6 @@ if __name__ == '__main__':
     elif args.mode == 'ntrain':
         ns = range(args.step, args.n_train+1, args.step)
         for n_train in ns:
-            for data_type in data_dict:
-                train_eval(args, n_train, data_type, data_dict, args.hdim, args.batch_size, False, writers)
+            train_eval(args, n_train, 'active', data_dict, args.hdim, args.batch_size, False, writers)
     for writer in writers.values():
         writer.close()
