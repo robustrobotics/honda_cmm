@@ -12,6 +12,7 @@ from collections import namedtuple
 from copy import copy
 import operator
 import matplotlib.pyplot as plt
+import random
 
 Point = namedtuple('Point', 'x z')
 Dims = namedtuple('Dims', 'width height')
@@ -25,6 +26,7 @@ R = 0.05    # region to sample for low competence
 n_max = 5   # maximum number of samples in a region to calc interest
 m = 100      # number of samples used to find optimal split
 min_region = 0.003
+alpha = 0.992
 
 class ActivePolicyLearner(object):
 
@@ -49,13 +51,20 @@ class ActivePolicyLearner(object):
             self.reset_plot()
             self.made_colorbar = False
 
-    def explore(self, n_samples, i, n_bbs):
+    def sample(self, n_samples, i, n_bbs):
         for n in range(n_samples):
             sys.stdout.write("\rProcessing sample %i/%i for busybox %i/%i" % (n+1, n_samples, i+1, n_bbs))
             if self.debug:
                 for region in self.regions:
                     region.draw(self.bb)
-            region, goal = self.select_goal()
+            prob_explore = np.power(alpha, n)
+            choice = np.random.choice(['explore', 'exploit'], p=[prob_explore, 1-prob_explore])
+
+            if choice == 'explore':
+                region, goal = self.select_explore_goal()
+            else:
+                region, goal = self.select_exploit_goal()
+
             goal_pos = self.bb.project_onto_backboard([goal[0], 0.0, goal[1]])
             if self.debug:
                 util.vis_frame(goal_pos, [0., 0., 0., 1.], lifeTime=0, length=.05)
@@ -89,7 +98,7 @@ class ActivePolicyLearner(object):
                                     Dims(self.bb.width, self.bb.height))
         return start_region
 
-    def region_probs(self):
+    def region_interest_probs(self):
         relevant_regions = []
         for region in self.regions:
             if not (len(region.attempted_goals) > g_max and np.multiply(*region.dims) < min_region):
@@ -97,9 +106,17 @@ class ActivePolicyLearner(object):
         total_interest = sum([region.interest for region in relevant_regions])
         return [region.interest/total_interest for region in relevant_regions], relevant_regions
 
-    def select_goal(self):
+    def select_exploit_goal(self):
+        probs = []
+        for region in self.regions:
+            probs += [sum([goal[1] for goal in region.attempted_goals])/len(region.attempted_goals)]
+        region = random.choices(self.regions, weights=probs)[0]
+        goal = region.sample_goal('random')
+        return region, goal
+
+    def select_explore_goal(self):
         def interesting_region():
-            probs, rel_regions = self.region_probs()
+            probs, rel_regions = self.region_interest_probs()
             return np.random.choice(rel_regions, p=probs)
 
         if self.all_random:
@@ -144,9 +161,11 @@ class ActivePolicyLearner(object):
             final_pos = init_pos
         else:
             final_pos = result.pose_joint_world_final.p
-        init_dist_to_goal = np.linalg.norm(np.subtract(goal_pos, init_pos))
+        init_dist_to_goal = np.linalg.norm(np.subtract([goal_pos[0], goal_pos[2]], [init_pos[0], init_pos[2]]))
         goal_pos_handle = np.subtract(goal_pos, init_pos)
+        goal_pos_handle = [goal_pos_handle[0], goal_pos_handle[2]]
         final_pos_handle = np.subtract(final_pos, init_pos)
+        final_pos_handle = [final_pos_handle[0], final_pos_handle[2]]
         if np.linalg.norm(final_pos_handle) == 0.0:
             if np.linalg.norm(goal_pos_handle) == 0.0:
                 return 1.0
@@ -187,7 +206,7 @@ class ActivePolicyLearner(object):
             # clear figure
             plt.cla()
             self.reset_plot()
-            interest_probs, rel_regions = self.region_probs()
+            interest_probs, rel_regions = self.region_interest_probs()
             for region in self.regions:
                 if region in rel_regions:
                     prob = str(region.interest)
@@ -251,7 +270,7 @@ class Region(object):
         range_max = min(n_max, n_goals)
         self.interest = 0.0
         if n_goals > 1:
-            for j in enumerate(range(-2,-range_max-1,-1)):
+            for j in range(-2,-range_max-1,-1):
                 self.interest += abs(self.attempted_goals[j+1][1]-self.attempted_goals[j][1])
             self.interest = self.interest/(range_max-1)
 
@@ -325,12 +344,13 @@ class Region(object):
                         inside = True
         return inside
 
-results = []
-def generate_dataset(n_bbs, n_samples, viz, debug, urdf_num, max_mech, viz_plot, all_random):
+def generate_dataset(n_bbs, n_samples, viz, debug, urdf_num, max_mech, viz_plot, all_random, bb=None):
+    results = []
     for i in range(n_bbs):
-        bb = BusyBox.generate_random_busybox(max_mech=max_mech, mech_types=[Slider], urdf_tag=urdf_num, debug=debug)
+        if bb is None:
+            bb = BusyBox.generate_random_busybox(max_mech=max_mech, mech_types=[Slider], urdf_tag=urdf_num, debug=debug)
         active_learner = ActivePolicyLearner(bb, viz, debug, viz_plot, all_random)
-        active_learner.explore(n_samples, i, n_bbs)
+        active_learner.sample(n_samples, i, n_bbs)
         results.extend(active_learner.interactions)
     print()
     return results
@@ -354,7 +374,7 @@ if __name__ == '__main__':
         import pdb; pdb.set_trace()
 
     try:
-        generate_dataset(args.n_bbs, args.n_samples, args.viz, args.debug, args.urdf_num, args.max_mech, args.viz_plot, args.all_random)
+        results = generate_dataset(args.n_bbs, args.n_samples, args.viz, args.debug, args.urdf_num, args.max_mech, args.viz_plot, args.all_random)
         if args.fname:
             util.write_to_file(args.fname, results)
     except KeyboardInterrupt:
