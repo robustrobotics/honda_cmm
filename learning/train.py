@@ -195,8 +195,8 @@ if __name__ == '__main__':
                         run_data += [RunData(hdim, batch_size, n, args.n_epochs, best_epoch, min(val_errors.keys()))]
             util.write_to_file(plot_fname+'_results', run_data)
     elif args.mode == 'ntrain':
-        ns = range(args.step, args.n_train+1, args.step)
-        for n_train in ns:
+        #ns = range(args.step, args.n_train+1, args.step)
+        for n_train in [1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000, 20000, 30000, 40000, 50000]:
             train_eval(args, n_train, 'active', data_dict, args.hdim, args.batch_size, False, writers)
     for writer in writers.values():
         writer.close()
