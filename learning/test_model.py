@@ -8,7 +8,7 @@ from util.setup_pybullet import setup_env
 from scipy.optimize import minimize
 from learning.dataloaders import parse_pickle_file, PolicyDataset
 import torch
-#from util import util, plot_results
+from util import util, plot_results
 import numpy as np
 import sys
 import matplotlib.pyplot as plt
@@ -16,7 +16,7 @@ import pybullet as p
 from torch.utils.tensorboard import SummaryWriter
 import os
 
-def vis_test_error(fname):
+def vis_test_error(test_data, model_path, test_name, hdim):
     ntrain = 10000
     step = 1000
     bbs = util.read_from_file(fname)
@@ -29,8 +29,7 @@ def vis_test_error(fname):
     for train_data_type in data_types:
         for val_data_type in data_types:
             for n in ns:
-                net_file = 'torch_models_2019-08-28_15-54-10/'+train_data_type+'/'+val_data_type+'/'+str(n)+'.pt'
-                net = util.load_model(net_file, hdim=16)
+                net = util.load_model(files[n], hdim=hdim)
                 plot_obj._plot(None, model=net, bbps=bbs)
                 dir = 'test_plots/'+train_data_type+'/'+val_data_type
                 file = str(n)+'.png'
@@ -42,71 +41,69 @@ def vis_test_error(fname):
                 #input()
                 #plt.close()
 
-def calc_test_error(fname):
-    ntrain = 10000
-    step = 1000
-    bbs = util.read_from_file(fname)
-    data_types = ['active', 'random']
-    writers = {}
-    ns = range(step, ntrain+1, step)
-    for train_data_type in data_types:
-        for val_data_type in data_types:
-            writer_key = train_data_type+','+val_data_type
-            writers[writer_key] = SummaryWriter('./test_runs/'+writer_key)
-            for n in ns:
-                test_error = 0
-                for bbp in bbs:
-                    # make new bb object from pickle file
-                    rand_num = np.random.uniform(0,1)
-                    bb = BusyBox.get_busybox(bbp.width, bbp.height, bbp._mechanisms, urdf_tag=str(rand_num))
-                    net_file = 'torch_models_2019-08-28_15-54-10/'+train_data_type+'/'+val_data_type+'/'+str(n)+'.pt'
-                    net = util.load_model(net_file, hdim=16)
-                    true_motion = bb._mechanisms[0].range/2
-                    test_motion = test_env(net, bb=bb, debug=False, plot=False, viz=False)
-                    test_error += np.linalg.norm([true_motion-test_motion])**2
-                test_mse = test_error/len(bbs)
-                writers[writer_key].add_scalar('test_error', test_mse, n)
-                print(writer_key, test_mse, n)
-    for writer in writers.values():
-        writer.close()
+def get_n_from_file(file):
+    n_str = ''
+    for c in file:
+        if c == '.':
+            break
+        else:
+            n_str += c
+    n = int(n_str)
+    return n
 
-def calc_true_error():
-    ntrain = 10000
-    step = 1000
-    bbs = util.read_from_file('data/datasets/40_bb_sliders.pickle')
-    data_types = ['active', 'random']
-    writers = {}
-    ns = range(step, ntrain+1, step)
-    for train_data_type in data_types:
-        for val_data_type in data_types:
-            writer_key = train_data_type+','+val_data_type
-            writers[writer_key] = SummaryWriter('./test_true_runs/'+writer_key)
-            for n in ns:
-                test_error = 0
-                for bbp in bbs:
-                    # make new bb object from pickle file
-                    rand_num = np.random.uniform(0,1)
-                    bb = BusyBox.get_busybox(bbp.width, bbp.height, bbp._mechanisms, urdf_tag=str(rand_num))
-                    mech = bb._mechanisms[0]
-                    image_data = setup_env(bb, False, False)
-                    net_file = 'torch_models_2019-08-28_15-54-10/'+train_data_type+'/'+val_data_type+'/'+str(n)+'.pt'
-                    net = util.load_model(net_file, hdim=16)
-                    mech_tuple = mech.get_mechanism_tuple()
-                    true_policy = policies.generate_policy(bb, mech, True, 0.0)
-                    policy_type = true_policy.type
-                    q = true_policy.generate_config(mech, 1.0)
-                    policy_tuple = true_policy.get_policy_tuple()
-                    results = [util.Result(policy_tuple, mech_tuple, 0.0, 0.0,
-                                            None, None, q, image_data, None, 1.0)]
-                    pred_motion = get_pred_motions(results, net, ret_dataset=False, use_cuda=False)[0]
-                    true_motion = bb._mechanisms[0].range/2
-                    #test_motion = test_env(net, bb=bb, debug=False, plot=False, viz=False)
-                    #test_error += np.linalg.norm([true_motion-test_motion])**2
-                    test_error += np.linalg.norm([true_motion-pred_motion])**2
-                test_mse = test_error/len(bbs)
-                writers[writer_key].add_scalar('test_error', test_mse, n)
-                print(writer_key, test_mse, n)
-    for writer in writers.values():
+def get_ordered_files(path):
+    file_names = os.listdir(path)
+    files = {}
+    for file in file_names:
+        full_model_path = path + file
+        n = get_n_from_file(file)
+        files[n] = full_model_path
+    files = sorted(files.items(), key=operator.itemgetter(0))
+    return files
+
+def calc_test_error(test_data, model_path, test_name, hdim):
+    writer = SummaryWriter('./all_test_errors/'+test_name)
+    files = get_ordered_files(model_path)
+    for (n, file) in files:
+        net = util.load_model(file, hdim=hdim)
+        test_error = 0
+        for bbp in test_data:
+            # make new bb object from pickle file
+            rand_num = np.random.uniform(0,1)
+            bb = BusyBox.get_busybox(bbp.width, bbp.height, bbp._mechanisms, urdf_tag=str(rand_num))
+            true_motion = bb._mechanisms[0].range/2
+            test_motion = test_env(net, bb=bb, debug=False, plot=False, viz=False)
+            test_error += np.linalg.norm([true_motion-test_motion])**2
+        test_mse = test_error/len(test_data)
+        writer.add_scalar('test_error', test_mse, n)
+        print(test_name, test_mse, n)
+    writer.close()
+
+def calc_true_error(test_data, model_path, test_name, hdim):
+    writer = SummaryWriter('./all_true_errors/'+test_name)
+    files = get_ordered_files(model_path)
+    for (n, file) in files:
+        net = util.load_model(file, hdim=hdim)
+        test_error = 0
+        for bbp in test_data:
+            # make new bb object from pickle file
+            rand_num = np.random.uniform(0,1)
+            bb = BusyBox.get_busybox(bbp.width, bbp.height, bbp._mechanisms, urdf_tag=str(rand_num))
+            mech = bb._mechanisms[0]
+            image_data = setup_env(bb, False, False)
+            mech_tuple = mech.get_mechanism_tuple()
+            true_policy = policies.generate_policy(bb, mech, True, 0.0)
+            policy_type = true_policy.type
+            q = true_policy.generate_config(mech, 1.0)
+            policy_tuple = true_policy.get_policy_tuple()
+            results = [util.Result(policy_tuple, mech_tuple, 0.0, 0.0,
+                                    None, None, q, image_data, None, 1.0)]
+            pred_motion = get_pred_motions(results, net, ret_dataset=False, use_cuda=False)[0]
+            true_motion = bb._mechanisms[0].range/2
+            test_error += np.linalg.norm([true_motion-pred_motion])**2
+        test_mse = test_error/len(test_data)
+        writer.add_scalar('true_test_error', test_mse, n)
+        print(test_name, test_mse, n)
         writer.close()
 
 def get_pred_motions(data, model, ret_dataset=False, use_cuda=False):
@@ -196,10 +193,10 @@ def test_env(model, bb=None, plot=False, viz=False, debug=False, use_cuda=False)
         plot_search(bb, samples, q_max, delta_yaw_max, delta_pitch_max, policy_final, config_final, debug)
 
     # test found policy on busybox
-    setup_env(bb, viz, debug=debug)
+    setup_env(bb, True, debug=debug)
     mech = bb._mechanisms[0]
     pose_handle_base_world = mech.get_pose_handle_base_world()
-    traj = policy_final.generate_trajectory(pose_handle_base_world, config_final, False)
+    traj = policy_final.generate_trajectory(pose_handle_base_world, config_final, True)
     gripper = Gripper(bb.bb_id)
     policy_type = policy_final.type
     _, motion, _ = gripper.execute_trajectory(traj, mech, policy_type, debug)
@@ -251,23 +248,45 @@ if __name__ == '__main__':
     #parser.add_argument('--plot', action='store_true')
     parser.add_argument('--debug', action='store_true')
     #parser.add_argument('--n-test', type=int, default=1) # how many mechanisms do you want to test
-    parser.add_argument('--model', type=str)
-    parser.add_argument('--fname', type=str)
     parser.add_argument('--hdim', type=int, default=16)
     #parser.add_argument('--use-cuda', action='store_true')
     parser.add_argument('--mode', choices=['single', 'true', 'test', 'plots'], required=True)
     args = parser.parse_args()
 
+    # test dataset
+    test_file = 'data/datasets/40_bb_sliders.pickle'
+    test_data = util.read_from_file(test_file)
+
+    # model paths
+    models = ['torch_models_expert_rand0/active/active/',
+                'torch_models_expert_rand2/active/active/',
+                'torch_models_expert_rand4/active/active/',
+                #'torch_models_expert_rand6/active/active/',
+                #'torch_models_expert_rand8/active/active/',
+                'torch_models_1_50k/random/active/',
+                'torch_models_1_50k/active/active/',
+                'torch_models_alpha_1_50k/active/active/']
+
+    # plot names
+    names = ['expert',
+                'random_p2',
+                'random_p4',
+                #'random_p6',
+                #'random_p8',
+                'random',
+                'orig_active',
+                'active_alpha']
+
     if args.debug:
         import pdb; pdb.set_trace()
 
-    if args.mode == 'single':
-        model = util.load_model(args.model, args.hdim)
-        np.random.seed(11)
-        test_env(model, plot=args.viz)
-    if args.mode == 'true':
-        calc_true_error(args.fname)
-    if args.mode == 'test':
-        calc_test_error(args.fname)
-    if args.mode == 'plots':
-        vis_test_error(args.fname)
+    for (model_path, test_name) in zip(models, names):
+        if args.mode == 'single':
+            model = util.load_model(args.model, args.hdim)
+            test_env(model, plot=args.viz)
+        if args.mode == 'true':
+            calc_true_error(test_data, model_path, test_name, args.hdim)
+        if args.mode == 'test':
+            calc_test_error(test_data, model_path, test_name, args.hdim)
+        if args.mode == 'plots':
+            vis_test_error(test_data, model_path, test_name, args.hdim)
