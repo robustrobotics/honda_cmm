@@ -157,7 +157,9 @@ class ActivePolicyLearner(object):
         probs = []
         for region in self.regions:
             probs += [sum([goal[1] for goal in region.attempted_goals])/len(region.attempted_goals)]
-        region = random.choices(self.regions, weights=probs)[0]
+        sum_probs = sum(probs)
+        probs = np.divide(probs, sum_probs)
+        region = np.random.choice(self.regions, p=probs)
         goal = region.sample_goal('random')
         return region, goal
 
