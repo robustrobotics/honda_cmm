@@ -87,7 +87,7 @@ if __name__ == '__main__':
     if not os.path.isdir(dir):
         os.makedirs(dir)
     model_path = dir + args.data_type + '.pt'
-    n_samples = 10 # num samples per bb
+    n_samples = 200 # num samples per bb
     n_bbs = int(args.n_max/n_samples)
     dataset = []
     writer = SummaryWriter('./runs_active')
