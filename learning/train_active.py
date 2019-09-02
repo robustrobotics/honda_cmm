@@ -10,6 +10,7 @@ from torch.utils.tensorboard import SummaryWriter
 from gen import active_prior
 from gen.generator_busybox import BusyBox, Slider
 import os
+import shutil
 torch.backends.cudnn.enabled = True
 
 def train_eval(args, parsed_data, plot_fname, pviz=False):
@@ -75,33 +76,43 @@ if __name__ == '__main__':
     parser.add_argument('--use-cuda', default=False, action='store_true')
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--image-encoder', type=str, default='spatial', choices=['spatial', 'cnn'])
-    parser.add_argument('--n-max', type=int, default=3000)
+    parser.add_argument('--n-max', type=int, default=3000) # maximum number of robot interactions
     parser.add_argument('--data-type', default='active', choices=['active', 'random'])
     args = parser.parse_args()
 
     if args.debug:
         import pdb; pdb.set_trace()
 
+    # remove directories for tensorboard logs and torch model then remake
+    model_dir = './torch_models_prior'
+    runs_dir = './runs_active'
+    dirs = [model_dir, runs_dir]
+    for dir in dirs:
+        if os.path.isdir(dir):
+            shutil.rmtree(dir)
+            os.makedirs(dir)
+
     # get list of data_paths to try
-    dir = 'torch_models_prior/'
-    if not os.path.isdir(dir):
-        os.makedirs(dir)
-    model_path = dir + args.data_type + '.pt'
-    n_samples = 200 # num samples per bb
-    n_bbs = int(args.n_max/n_samples)
+    model_path = model_dir + args.data_type + '.pt'
+    n_int_samples = 200 # num samples per bb
+    n_prior_samples = 200
+    n_bbs = int(args.n_max/n_int_samples)
     dataset = []
-    writer = SummaryWriter('./runs_active')
+    writer = SummaryWriter(runs_dir)
     for i in range(1, n_bbs+1):
         print('BusyBox: ', i, '/', n_bbs)
         rand_num = np.random.uniform()
         bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider], urdf_tag=str(rand_num), debug=False)
-        data, prior_fig = active_prior.generate_dataset(1, n_samples, False, False, str(rand_num), 1, False, 'random' == args.data_type, bb=bb, model_path=model_path, hdim=args.hdim)
+        data, prior_figs, final_figs = active_prior.generate_dataset(1, n_int_samples, n_prior_samples, False, False, str(rand_num), 1, True, 'random' == args.data_type, bb=bb, model_path=model_path, hdim=args.hdim)
         dataset += data
         parsed_data = parse_pickle_file(data=dataset)
         plot_fname = args.data_type+'_'+str(i)
         train_error, model = train_eval(args, parsed_data, plot_fname)
         writer.add_scalar('Loss/train', train_error, i)
-        writer.add_figure('Prior/'+str(i), prior_fig)
+        if prior_figs[0]:
+            writer.add_figure('Prior/'+str(i), prior_figs[0])
+        if final_figs[0]:
+            writer.add_figure('Final/'+str(i), final_figs[0])
         path = dir + args.data_type + '.pt'
         torch.save(model, path)
         if i % args.plot_freq == 0:
