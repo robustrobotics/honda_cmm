@@ -15,7 +15,6 @@ import matplotlib.pyplot as plt
 import random
 import os
 from learning.test_model import get_pred_motions
-from copy import copy
 
 Point = namedtuple('Point', 'x z')
 Dims = namedtuple('Dims', 'width height')
@@ -24,11 +23,11 @@ AttemptedGoal = namedtuple('AttemptedGoal', 'goal competence')
 # THIS IS ONLY MADE FOR PRISMATIC POLICIES
 
 # params
-g_max = 5  # max samples per region
+g_max = 7  # max samples per region
 R = 0.05    # region to sample for low competence
 n_max = 3   # maximum number of samples in a region to calc interest
 m = 100      # number of samples used to find optimal split
-min_region = 0.003
+min_region = 0.002
 alpha = 0.992
 
 class ActivePolicyLearner(object):
@@ -46,14 +45,16 @@ class ActivePolicyLearner(object):
         self.regions = [copy(self.max_region)]
         self.interactions = []
         self.all_random = all_random
-        #plt.ion()
 
-        if self.viz_plot:
-            self.fig, self.ax = plt.subplots()
-            self.ax.set_aspect('equal')
+        self.prior_fig, self.prior_ax = plt.subplots()
+        self.prior_ax.set_aspect('equal')
+        self.reset_plot(self.prior_ax)
+        self.made_prior_colorbar = False
 
-            self.reset_plot(self.ax)
-            self.made_colorbar = False
+        self.interact_fig, self.interact_ax = plt.subplots()
+        self.interact_ax.set_aspect('equal')
+        self.reset_plot(self.interact_ax)
+        self.made_interact_colorbar = False
 
     def learn(self, n_int_samples, n_prior_samples, model_path, hdim):
         # if prior model exists then load the model and generate regions from model
@@ -69,8 +70,7 @@ class ActivePolicyLearner(object):
                 self.sample(n, 'predict', model)
                 if n != n_prior_samples-1:
                     self.reset()
-            #if self.viz_plot:
-                #prior_fig = copy(self.fig)
+            self.update_plot('predict', show=True)
         for n in range(n_int_samples):
             sys.stdout.write("\rProcessing interactive sample %i/%i" % (n+1, n_int_samples))
             if self.debug:
@@ -79,9 +79,7 @@ class ActivePolicyLearner(object):
             self.sample(n, 'interact')
             if n != n_int_samples-1:
                 self.reset()
-        if self.viz_plot:
-            final_fig = copy(self.fig)
-        return prior_fig, final_fig
+        self.update_plot('interact', show=True)
 
     def sample(self, n, mode, model=None):
         # select goal and region
@@ -118,15 +116,13 @@ class ActivePolicyLearner(object):
 
         # update regions (potentiall split if big enough or have more than g_max goals in region)
         region.update(goal, competence, mode)
-        if self.viz_plot:
-            self.update_plot((goal, competence), mode=mode)
         if np.multiply(*region.dims) > min_region:
             if len(region.attempted_goals) > g_max:
                 new_regions = region.split(self.bb)
                 self.regions.remove(region)
                 self.regions += new_regions
-                if self.viz_plot:
-                    self.update_plot(mode=mode)
+        if len(self.interactions)>g_max and self.viz_plot:
+            self.update_plot(mode)
 
     def get_max_region(self):
         # for now regions are just in the x-z plane. will need to move to 3d with doors
@@ -176,8 +172,11 @@ class ActivePolicyLearner(object):
             goal = self.max_region.sample_goal('random')
             region = self.get_goal_region(goal)
         elif mode == 3:
-            region = interesting_region()
-            goal = region.sample_goal('biased')
+            orig_region = interesting_region()
+            region = None
+            while region is None:
+                goal = orig_region.sample_goal('biased')
+                region = self.get_goal_region(goal) # could sample in different region
         return region, goal
 
     def execute_interaction(self, policy, config_goal):
@@ -232,47 +231,47 @@ class ActivePolicyLearner(object):
         endpoint1 = np.add(center, np.multiply(-self.mech.range/2, self.mech.axis))
         ax.plot([-endpoint0[0], -endpoint1[0]], [endpoint0[1], endpoint1[1]], '--r')
 
-    def update_plot(self, element=None, mode=None):
-        # is a goal
-        if element:
-            im = self.ax.scatter([-element[0].x], [element[0].z], c=[element[1]], s=4, vmin=0, vmax=1)
-            if not self.made_colorbar:
-                self.fig.colorbar(im)
-                self.made_colorbar = True
-        # just split region, redraw everything
-        else:
-            # clear figure
-            plt.cla()
-            self.reset_plot(self.ax)
-            interest_probs, rel_regions = self.region_interest_probs()
-            for region in self.regions:
-                if region in rel_regions:
-                    i = rel_regions.index(region)
-                    prob = str(interest_probs[i])
-                else:
-                    # regions that we no longer sample (because small and have g_max samples) are white
-                    prob = 'w'
-                # draw regions
-                corner_coords = region.get_corner_coords()+[region.coord]
-                for i in range(4):
-                    # flip since axes are reversed in pybullet
-                    self.ax.plot(np.multiply(-1,[corner_coords[i].x, corner_coords[i+1].x]),
-                                    [corner_coords[i].z, corner_coords[i+1].z], 'k')
-                    self.ax.fill_between([-corner_coords[0].x, -corner_coords[1].x],
-                                            [corner_coords[0].z, corner_coords[1].z],
-                                            [corner_coords[2].z, corner_coords[3].z],
-                                            color=prob, alpha=.3)
-                # redraw goals
-                goals = []
-                for element in region.attempted_goals:
-                    if mode == element[2]:
-                        im = self.ax.scatter([-element[0].x], [element[0].z], c=[element[1]], s=4, vmin=0, vmax=1)
-                        if not self.made_colorbar:
-                            self.fig.colorbar(im)
-                            self.made_colorbar = True
-        self.ax.set_title(mode)
-        plt.draw()
-        plt.pause(0.01)
+    def update_plot(self, mode, show=True):
+        if mode == 'predict':
+            ax, fig = self.prior_ax, self.prior_fig
+            made_colorbar = self.made_prior_colorbar
+        elif mode == 'interact':
+            ax, fig = self.interact_ax, self.interact_fig
+            made_colorbar = self.made_interact_colorbar
+
+        # clear figure
+        plt.cla()
+        self.reset_plot(ax)
+        interest_probs, rel_regions = self.region_interest_probs()
+        for region in self.regions:
+            if region in rel_regions:
+                i = rel_regions.index(region)
+                prob = str(interest_probs[i])
+            else:
+                # regions that we no longer sample (because small and have g_max samples) are white
+                prob = 'w'
+            # draw regions
+            corner_coords = region.get_corner_coords()+[region.coord]
+            for i in range(4):
+                # flip since axes are reversed in pybullet
+                ax.plot(np.multiply(-1,[corner_coords[i].x, corner_coords[i+1].x]),
+                                [corner_coords[i].z, corner_coords[i+1].z], 'k')
+                ax.fill_between([-corner_coords[0].x, -corner_coords[1].x],
+                                        [corner_coords[0].z, corner_coords[1].z],
+                                        [corner_coords[2].z, corner_coords[3].z],
+                                        color=prob, alpha=.3)
+            # redraw goals
+            goals = []
+            for element in region.attempted_goals:
+                if mode == element[2]:
+                    im = ax.scatter([-element[0].x], [element[0].z], c=[element[1]], s=4, vmin=0, vmax=1)
+                    if not made_colorbar:
+                        fig.colorbar(im)
+                        made_colorbar = True
+        ax.set_title(mode)
+        if show:
+            plt.draw()
+            plt.pause(0.01)
 
     def reset_plot(self, ax):
         ax.set_xlim(-self.max_region.coord.x, -1*(self.max_region.coord.x-self.max_region.dims.width))
@@ -400,9 +399,9 @@ def generate_dataset(n_bbs, n_int_samples, n_prior_samples, viz, debug, urdf_num
         if bb is None:
             bb = BusyBox.generate_random_busybox(max_mech=max_mech, mech_types=[Slider], urdf_tag=urdf_num, debug=debug)
         active_learner = ActivePolicyLearner(bb, viz, debug, viz_plot, all_random)
-        prior_fig, final_fig = active_learner.learn(n_int_samples, n_prior_samples, model_path, hdim)
-        prior_figs += [prior_fig]
-        final_figs += [final_fig]
+        active_learner.learn(n_int_samples, n_prior_samples, model_path, hdim)
+        prior_figs += [active_learner.prior_fig]
+        final_figs += [active_learner.interact_fig]
         results.extend(active_learner.interactions)
     print()
     return results, prior_figs, final_figs
