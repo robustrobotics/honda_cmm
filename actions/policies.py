@@ -45,13 +45,14 @@ class Policy(object):
 
         poses = []
         for i in itertools.count():
-            if self._past_goal_config(config_curr, config_goal, config_dir_unit):
-                pose_handle_base_world = self._forward_kinematics(config_goal)
+            if i < 40:
+                if self._past_goal_config(config_curr, config_goal, config_dir_unit):
+                    pose_handle_base_world = self._forward_kinematics(config_goal)
+                    poses += [pose_handle_base_world]
+                    break
+                pose_handle_base_world = self._forward_kinematics(config_curr)
                 poses += [pose_handle_base_world]
-                break
-            pose_handle_base_world = self._forward_kinematics(config_curr)
-            poses += [pose_handle_base_world]
-            config_curr += config_delta
+                config_curr += config_delta
         if debug:
             # draws the planned handle base trajectory
             self._draw_traj(poses)
