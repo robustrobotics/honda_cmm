@@ -26,10 +26,10 @@ AttemptedGoal = namedtuple('AttemptedGoal', 'goal competence')
 # params
 g_max = 5  # max samples per region
 R = 0.05    # region to sample for low competence
-n_max = 5   # maximum number of samples in a region to calc interest
+n_max = 3   # maximum number of samples in a region to calc interest
 m = 100      # number of samples used to find optimal split
 min_region = 0.003
-alpha = 0.2
+alpha = 0.992
 
 class ActivePolicyLearner(object):
 
@@ -162,7 +162,7 @@ class ActivePolicyLearner(object):
         if self.all_random:
             probs = [0., 1., 0.]
         else:
-            probs = [.8, .1, .1]
+            probs = [.7, .2, .1]
 
         if len(self.regions) > 1:
             mode = np.random.choice([1,2,3],p=probs)
