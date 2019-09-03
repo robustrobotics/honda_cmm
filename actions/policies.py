@@ -53,6 +53,8 @@ class Policy(object):
                 pose_handle_base_world = self._forward_kinematics(config_curr)
                 poses += [pose_handle_base_world]
                 config_curr += config_delta
+            else:
+                break
         if debug:
             # draws the planned handle base trajectory
             self._draw_traj(poses)
