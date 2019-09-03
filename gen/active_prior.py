@@ -138,7 +138,11 @@ class ActivePolicyLearner(object):
             if not (len(region.attempted_goals) > g_max and np.multiply(*region.dims) < min_region):
                 relevant_regions += [region]
         total_interest = sum([region.interest for region in relevant_regions])
-        return tuple([region.interest/total_interest for region in relevant_regions]), tuple(relevant_regions)
+        if total_interest == 0:
+            region_interests = tuple([0.0 for region in relevant_regions])
+        else:
+            region_interests = tuple([region.interest/total_interest for region in relevant_regions])
+        return region_interests, tuple(relevant_regions)
 
     def select_exploit_goal(self):
         probs = []
