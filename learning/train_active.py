@@ -72,7 +72,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch-size', type=int, default=16, help='Batch size to use for training.')
     parser.add_argument('--hdim', type=int, default=16, help='Hidden dimensions for the neural nets.')
     parser.add_argument('--n-epochs', type=int, default=10)
-    parser.add_argument('--plot-freq', type=int, default=5)
+    #parser.add_argument('--plot-freq', type=int, default=5)
     parser.add_argument('--use-cuda', default=False, action='store_true')
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--image-encoder', type=str, default='spatial', choices=['spatial', 'cnn'])
@@ -117,12 +117,6 @@ if __name__ == '__main__':
                 writer.add_figure('Final/'+str(i), final_figs[0])
             path = model_dir + args.data_type + '.pt'
             torch.save(model, path)
-            if i % args.plot_freq == 0:
-                save_model_path = dir + plot_fname + '.pt'
-                torch.save(model, path)
-                # TODO: visualize predicted competence
-                # writer figure to tensorboard at this frequency
-
         writer.close()
     except:
         # for post-mortem debugging since can't run module from command line in pdb.pm() mode
