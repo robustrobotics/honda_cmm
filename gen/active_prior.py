@@ -12,7 +12,6 @@ from collections import namedtuple
 from copy import copy
 import operator
 import matplotlib.pyplot as plt
-import random
 import os
 from learning.test_model import get_pred_motions
 
@@ -70,7 +69,7 @@ class ActivePolicyLearner(object):
                 self.sample(n, 'predict', model)
                 if n != n_prior_samples-1:
                     self.reset()
-            self.update_plot('predict', show=True)
+            self.update_plot('predict', show=self.viz_plot)
         for n in range(n_int_samples):
             sys.stdout.write("\rProcessing interactive sample %i/%i" % (n+1, n_int_samples))
             if self.debug:
@@ -79,14 +78,14 @@ class ActivePolicyLearner(object):
             self.sample(n, 'interact')
             if n != n_int_samples-1:
                 self.reset()
-        self.update_plot('interact', show=True)
+        self.update_plot('interact', show=self.viz_plot)
 
     def sample(self, n, mode, model=None):
         # select goal and region
         prob_explore = np.power(alpha, n)
         choice = np.random.choice(['explore', 'exploit'], p=[prob_explore, 1-prob_explore])
         if choice == 'explore':
-            region, goal = self.select_explore_goal()
+            region, goal = self.select_explore_goal(mode)
         else:
             region, goal = self.select_exploit_goal()
 
@@ -112,7 +111,7 @@ class ActivePolicyLearner(object):
                                     None, None, config_goal, self.image_data, None, 1.0)
             pred_motion = get_pred_motions([result], model, ret_dataset=False, use_cuda=False)[0]
             # can't have negative competence scores
-            competence = max(0.0, np.divide(pred_motion, des_dist))
+            competence = pred_motion*max(0.0, np.divide(pred_motion, des_dist))
 
         # update regions (potentiall split if big enough or have more than g_max goals in region)
         region.update(goal, competence, mode)
@@ -122,7 +121,7 @@ class ActivePolicyLearner(object):
                 self.regions.remove(region)
                 self.regions += new_regions
         if len(self.interactions)>g_max and self.viz_plot:
-            self.update_plot(mode)
+            self.update_plot(mode, show=self.viz_plot)
 
     def get_max_region(self):
         # for now regions are just in the x-z plane. will need to move to 3d with doors
@@ -139,7 +138,7 @@ class ActivePolicyLearner(object):
                 relevant_regions += [region]
         total_interest = sum([region.interest for region in relevant_regions])
         if total_interest == 0:
-            region_interests = tuple([0.0 for region in relevant_regions])
+            region_interests = tuple([1.0/len(relevant_regions) for region in relevant_regions])
         else:
             region_interests = tuple([region.interest/total_interest for region in relevant_regions])
         return region_interests, tuple(relevant_regions)
@@ -154,12 +153,12 @@ class ActivePolicyLearner(object):
         goal = region.sample_goal('random')
         return region, goal
 
-    def select_explore_goal(self):
+    def select_explore_goal(self, sample_mode=None):
         def interesting_region():
             probs, rel_regions = self.region_interest_probs()
             return np.random.choice(rel_regions, p=probs)
 
-        if self.all_random:
+        if self.all_random or sample_mode == 'predict':
             probs = [0., 1., 0.]
         else:
             probs = [.7, .2, .1]
@@ -179,7 +178,13 @@ class ActivePolicyLearner(object):
             orig_region = interesting_region()
             region = None
             while region is None:
-                goal = orig_region.sample_goal('biased')
+                goal, high_comp_goal = orig_region.sample_goal('biased')
+                circle = plt.Circle([-high_comp_goal.x, high_comp_goal.z], R, facecolor=str(.5))
+                #self.interact_ax.add_artist(circle)
+                #self.interact_ax.plot([-high_comp_goal.x], [high_comp_goal.z], 'm.')
+                #self.interact_ax.plot([-goal[0]], [goal[1]], 'r.')
+                #plt.show()
+                #input()
                 region = self.get_goal_region(goal) # could sample in different region
         return region, goal
 
@@ -217,7 +222,7 @@ class ActivePolicyLearner(object):
         coeff = np.divide(np.dot(final_pos_handle, final_pos_handle), np.linalg.norm(goal_pos_handle)**2)
         motion_proj_handle = np.dot(coeff, goal_pos_handle)
         motion_towards_goal = np.linalg.norm(motion_proj_handle)
-        competence = np.divide(motion_towards_goal, init_dist_to_goal)
+        competence = motion_towards_goal*np.divide(motion_towards_goal, init_dist_to_goal)
         return competence
 
     def reset(self):
@@ -238,15 +243,17 @@ class ActivePolicyLearner(object):
     def update_plot(self, mode, show=True):
         if mode == 'predict':
             ax, fig = self.prior_ax, self.prior_fig
-            made_colorbar = self.made_prior_colorbar
         elif mode == 'interact':
             ax, fig = self.interact_ax, self.interact_fig
-            made_colorbar = self.made_interact_colorbar
 
         # clear figure
         plt.cla()
         self.reset_plot(ax)
         interest_probs, rel_regions = self.region_interest_probs()
+        all_goals = []
+        for region in self.regions:
+            all_goals += region.attempted_goals
+        max_comp = max([elem[1] for elem in all_goals])
         for region in self.regions:
             if region in rel_regions:
                 i = rel_regions.index(region)
@@ -268,10 +275,13 @@ class ActivePolicyLearner(object):
             goals = []
             for element in region.attempted_goals:
                 if mode == element[2]:
-                    im = ax.scatter([-element[0].x], [element[0].z], c=[element[1]], s=4, vmin=0, vmax=1)
-                    if not made_colorbar:
+                    im = ax.scatter([-element[0].x], [element[0].z], c=[element[1]], s=4, vmin=0, vmax=max_comp)
+                    if (mode == 'predict') and not self.made_prior_colorbar:
                         fig.colorbar(im)
-                        made_colorbar = True
+                        self.made_prior_colorbar = True
+                    if (mode == 'interact') and not self.made_interact_colorbar:
+                        fig.colorbar(im)
+                        self.made_interact_colorbar = True
         ax.set_title(mode)
         if show:
             plt.draw()
@@ -308,9 +318,7 @@ class Region(object):
             theta = np.random.uniform()*2*np.pi
             near_goal = np.add(high_comp_goal, [r*np.cos(theta), r*np.sin(theta)])
 
-            #plt.plot([-near_goal[0]], [near_goal[1]], 'r.')
-            #plt.plot([-high_comp_goal.x], [high_comp_goal.z], 'm.')
-            return Point(*near_goal)
+            return Point(*near_goal), high_comp_goal
 
     def update(self, goal, competence, mode):
         self.attempted_goals += [(goal, competence, mode)]
