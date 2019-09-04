@@ -187,13 +187,10 @@ class Gripper:
             handle_base_ps.append(mech.get_pose_handle_base_world().p)
             self._control_fingers('close', debug=debug)
             if (not last_traj_p) and self._at_des_handle_base_pose(pose_handle_base_world_des, q_offset, mech, 0.01):
-                #print('reached')
                 return handle_base_ps, False
             elif last_traj_p and self._at_des_handle_base_pose(pose_handle_base_world_des, q_offset, mech, 0.001) and self._stable(handle_base_ps):
                 return handle_base_ps, True
             elif self._stable(handle_base_ps) and (i > timeout):
-                #if debug:
-                #    print('timeout limit reached. moving the next joint')
                 return handle_base_ps, True
 
             # get position error of the handle base, but velocity error of the
@@ -238,7 +235,6 @@ class Gripper:
         cumu_motion = 0.0
         for i in range(len(traj)):
             last_traj_p = (i == len(traj)-1)
-            #print(i)
             handle_base_ps, finished = self._move_PD(traj[i], q_offset, mech, last_traj_p, debug)
             cumu_motion = np.add(cumu_motion, np.linalg.norm(np.subtract(handle_base_ps[-1],handle_base_ps[0])))
             if finished:
