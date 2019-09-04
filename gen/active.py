@@ -9,7 +9,7 @@ from actions import policies
 from actions.gripper import Gripper
 from gen.generator_busybox import Slider, Door, BusyBox
 from collections import namedtuple
-from copy import copy
+from copy import copy, deepcopy
 import operator
 import matplotlib.pyplot as plt
 
@@ -120,7 +120,7 @@ class ActivePolicyLearner(object):
         mechanism_params = self.mech.get_mechanism_tuple()
         return util.Result(policy_params, mechanism_params, net_motion, \
                     cumu_motion, pose_handle_world_init, pose_handle_world_final, \
-                    config_goal, self.image_data, None, 1.0)
+                    config_goal, deepcopy(self.image_data), None, 1.0)
 
     def calc_competence(self, goal_pos, result):
         # competence is how much you moved towards the goal over how far you were

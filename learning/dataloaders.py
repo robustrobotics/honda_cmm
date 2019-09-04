@@ -152,6 +152,7 @@ def parse_pickle_file(fname=None, data=None):
 
 
 def create_data_splits(data, val_pct=0.15, test_pct=0.15):
+    # TODO: Shouldn't initially shuffle data - don't want to mix up busyboxes
     np.random.shuffle(data)
     n = len(data)
     val_start = int(n*(1-val_pct-test_pct))
