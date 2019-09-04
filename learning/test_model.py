@@ -8,7 +8,7 @@ from util.setup_pybullet import setup_env
 from scipy.optimize import minimize
 from learning.dataloaders import parse_pickle_file, PolicyDataset
 import torch
-from util import util, plot_results
+from util import util
 import numpy as np
 import sys
 import matplotlib.pyplot as plt
@@ -17,6 +17,8 @@ from torch.utils.tensorboard import SummaryWriter
 import os
 import shutil
 
+#commenting out because circular imports...
+'''
 def vis_test_error(test_data, model_path, test_name, hdim):
     ntrain = 10000
     step = 1000
@@ -41,6 +43,7 @@ def vis_test_error(test_data, model_path, test_name, hdim):
                 #plt.show()
                 #input()
                 #plt.close()
+'''
 
 def get_n_from_file(file):
     n_str = ''
