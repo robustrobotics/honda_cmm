@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 import pybullet as p
 from torch.utils.tensorboard import SummaryWriter
 import os
+import shutil
 
 def vis_test_error(test_data, model_path, test_name, hdim):
     ntrain = 10000
@@ -61,8 +62,8 @@ def get_ordered_files(path):
     files = sorted(files.items(), key=operator.itemgetter(0))
     return files
 
-def calc_test_error(test_data, model_path, test_name, hdim):
-    writer = SummaryWriter('./all_test_errors/'+test_name)
+def calc_test_error(test_data, model_path, test_name, hdim, dir):
+    writer = SummaryWriter(dir+test_name)
     files = get_ordered_files(model_path)
     for (n, file) in files:
         net = util.load_model(file, hdim=hdim)
@@ -79,8 +80,8 @@ def calc_test_error(test_data, model_path, test_name, hdim):
         print(test_name, test_mse, n)
     writer.close()
 
-def calc_true_error(test_data, model_path, test_name, hdim):
-    writer = SummaryWriter('./all_true_errors/'+test_name)
+def calc_true_error(test_data, model_path, test_name, hdim, dir):
+    writer = SummaryWriter(dir+test_name)
     files = get_ordered_files(model_path)
     for (n, file) in files:
         net = util.load_model(file, hdim=hdim)
@@ -193,7 +194,7 @@ def test_env(model, bb=None, plot=False, viz=False, debug=False, use_cuda=False)
         plot_search(bb, samples, q_max, delta_yaw_max, delta_pitch_max, policy_final, config_final, debug)
 
     # test found policy on busybox
-    setup_env(bb, True, debug=debug)
+    setup_env(bb, viz=viz, debug=debug)
     mech = bb._mechanisms[0]
     pose_handle_base_world = mech.get_pose_handle_base_world()
     traj = policy_final.generate_trajectory(pose_handle_base_world, config_final, True)
@@ -258,35 +259,42 @@ if __name__ == '__main__':
     test_data = util.read_from_file(test_file)
 
     # model paths
-    models = ['torch_models_expert_rand0/active/active/',
-                'torch_models_expert_rand2/active/active/',
-                'torch_models_expert_rand4/active/active/',
-                #'torch_models_expert_rand6/active/active/',
-                #'torch_models_expert_rand8/active/active/',
+    models = [#'torch_models_expert_rand0_1_50k/active/active/',
+                #'torch_models_expert_rand2_1_50k/active/active/',
+                #'torch_models_expert_rand4_1_50k/active/active/',
+                #'torch_models_expert_rand6_1_50k/active/active/',
+                #'torch_models_expert_rand8_1_50k/active/active/',
                 'torch_models_1_50k/random/active/',
-                'torch_models_1_50k/active/active/',
+                #'torch_models_1_50k/active/active/',
                 'torch_models_alpha_1_50k/active/active/']
 
     # plot names
-    names = ['expert',
-                'random_p2',
-                'random_p4',
-                #'random_p6',
-                #'random_p8',
+    names = [#'expert',
+            #    'random_p2',
+            #    'random_p4',
+            #    'random_p6',
+            #    'random_p8',
                 'random',
-                'orig_active',
+            #    'orig_active',
                 'active_alpha']
 
     if args.debug:
         import pdb; pdb.set_trace()
+
+    test_dir = './all_test_errors/'
+    true_dir = './all_true_errors/'
+    #if args.mode == 'test' and os.path.isdir(test_dir):
+    #    shutil.rmtree(test_dir)
+    if args.mode == 'true' and os.path.isdir(true_dir):
+        shutil.rmtree(true_dir)
 
     for (model_path, test_name) in zip(models, names):
         if args.mode == 'single':
             model = util.load_model(args.model, args.hdim)
             test_env(model, plot=args.viz)
         if args.mode == 'true':
-            calc_true_error(test_data, model_path, test_name, args.hdim)
+            calc_true_error(test_data, model_path, test_name, args.hdim, true_dir)
         if args.mode == 'test':
-            calc_test_error(test_data, model_path, test_name, args.hdim)
+            calc_test_error(test_data, model_path, test_name, args.hdim, test_dir)
         if args.mode == 'plots':
             vis_test_error(test_data, model_path, test_name, args.hdim)
