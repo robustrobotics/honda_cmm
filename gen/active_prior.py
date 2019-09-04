@@ -27,7 +27,7 @@ R = 0.05    # region to sample for low competence
 n_max = 3   # maximum number of samples in a region to calc interest
 m = 100      # number of samples used to find optimal split
 min_region = 0.002
-alpha = 0.992
+alpha = 1.0 # probability of exploring versus exploting
 
 class ActivePolicyLearner(object):
 
@@ -50,14 +50,17 @@ class ActivePolicyLearner(object):
         #plt.ion()
 
         self.prior_fig, self.prior_ax = plt.subplots()
+        self.prior_fig.suptitle('prior')
         self.prior_ax.set_aspect('equal')
         self.reset_plot(self.prior_ax)
         self.made_prior_colorbar = False
 
         self.interest_fig, self.interest_ax = plt.subplots()
-        self.interest_avgs, self.interest_vars, self.interest_minmax = [], [], None
+        self.interest_fig.suptitle('average interest')
+        self.interest_avgs, self.interest_vars, self.interest_mins, self.interest_maxes = [], [], [], []
 
         self.interact_fig, self.interact_ax = plt.subplots()
+        self.interact_fig.suptitle('interactions')
         self.interact_ax.set_aspect('equal')
         self.reset_plot(self.interact_ax)
         self.made_interact_colorbar = False
@@ -91,12 +94,12 @@ class ActivePolicyLearner(object):
 
     def sample(self, n, mode, model=None):
         # select goal and region
-        prob_explore = np.power(alpha, n)
-        choice = np.random.choice(['explore', 'exploit'], p=[prob_explore, 1-prob_explore])
+        choice = np.random.choice(['explore', 'exploit'], p=[alpha, 1-alpha])
         if choice == 'explore':
-            region, goal = self.select_explore_goal(mode)
+            region, goal, sample_mode = self.select_explore_goal(mode)
         else:
             region, goal = self.select_exploit_goal()
+            sample_mode = 'exploit'
 
         # execute/predict and calculate competence
         goal_pos = self.bb.project_onto_backboard([goal[0], 0.0, goal[1]])
@@ -122,31 +125,25 @@ class ActivePolicyLearner(object):
             # can't have negative competence scores
             competence = pred_motion*max(0.0, np.divide(pred_motion, des_dist))
 
-        # update regions (potentiall split if big enough or have more than g_max goals in region)
+        # update regions (potentially split if big enough or have more than g_max goals in region)
         region.update(goal, competence, mode)
         if mode == 'interact':
-            self.all_interact_goals += [(goal, competence)]
-        #if np.multiply(*region.dims) > min_region:
-        if len(region.attempted_goals) > g_max:
-            new_regions = region.split(self.bb)
-            self.regions.remove(region)
-            self.regions += new_regions
-        if len(self.interactions)>g_max:
-            self.update_plot(mode)
+            self.all_interact_goals += [(goal, competence, sample_mode)]
+        if np.multiply(*region.dims) > min_region:
+            if len(region.attempted_goals) > g_max:
+                new_regions = region.split(self.bb)
+                self.regions.remove(region)
+                self.regions += new_regions
 
-        # update interest stuff for plotting
-        avg_n = np.mean([region.interest for region in self.regions])
-        self.interest_avgs = np.append(self.interest_avgs, avg_n)
-        self.interest_vars = np.append(self.interest_vars, np.var([region.interest for region in self.regions]))
-        min_n = min([region.interest for region in self.regions])
-        max_n = max([region.interest for region in self.regions])
-        yerr = np.expand_dims(np.array([avg_n - min_n, max_n - avg_n]), axis=1)
-        if self.interest_minmax is not None:
-            self.interest_minmax = np.append(self.interest_minmax, yerr, axis=1)
-        else:
-            self.interest_minmax = yerr
+        # update interest plotting values
+        if mode == 'interact':
+            avg_n = np.mean([region.interest for region in self.regions])
+            self.interest_avgs = np.append(self.interest_avgs, avg_n)
+            self.interest_vars = np.append(self.interest_vars, np.var([region.interest for region in self.regions]))
+            self.interest_mins = np.append(self.interest_mins, min([region.interest for region in self.regions]))
+            self.interest_maxes = np.append(self.interest_maxes, max([region.interest for region in self.regions]))
 
-        if self.viz_plot_cont:
+        if len(self.interactions)>g_max and self.viz_plot_cont:
             self.update_plot(mode)
 
     def get_max_region(self):
@@ -163,19 +160,8 @@ class ActivePolicyLearner(object):
             region_interests = tuple([1.0/len(self.regions) for region in self.regions])
         else:
             region_interests = tuple([region.interest/total_interest for region in self.regions])
-        return region_interests, tuple(self.regions)
-        '''
-        relevant_regions = []
-        for region in self.regions:
-            if not (len(region.attempted_goals) > g_max and np.multiply(*region.dims) < min_region):
-                relevant_regions += [region]
-        total_interest = sum([region.interest for region in relevant_regions])
-        if total_interest == 0:
-            region_interests = tuple([1.0/len(relevant_regions) for region in relevant_regions])
-        else:
-            region_interests = tuple([region.interest/total_interest for region in relevant_regions])
-        return region_interests, tuple(relevant_regions)
-        '''
+        return region_interests
+
 
     def select_exploit_goal(self):
         probs = []
@@ -189,8 +175,8 @@ class ActivePolicyLearner(object):
 
     def select_explore_goal(self, sample_mode=None):
         def interesting_region():
-            probs, rel_regions = self.region_interest_probs()
-            return np.random.choice(rel_regions, p=probs)
+            probs = self.region_interest_probs()
+            return np.random.choice(self.regions, p=probs)
 
         if self.all_random or sample_mode == 'predict':
             probs = [0., 1., 0.]
@@ -220,7 +206,7 @@ class ActivePolicyLearner(object):
                 #plt.show()
                 #input()
                 region = self.get_goal_region(goal) # could sample in different region
-        return region, goal
+        return region, goal, mode
 
     def execute_interaction(self, policy, config_goal):
         pose_handle_world_init = util.Pose(*p.getLinkState(self.bb.bb_id, self.mech.handle_id)[:2])
@@ -283,18 +269,15 @@ class ActivePolicyLearner(object):
         # clear figure
         plt.cla()
         self.reset_plot(ax)
-        interest_probs, rel_regions = self.region_interest_probs()
+        interest_probs = self.region_interest_probs()
         all_goals = []
         for region in self.regions:
             all_goals += region.attempted_goals
         max_comp = max([elem[1] for elem in all_goals])
         for region in self.regions:
-            if region in rel_regions:
-                i = rel_regions.index(region)
-                prob = str(interest_probs[i])
-            else:
-                # regions that we no longer sample (because small and have g_max samples) are white
-                prob = 'w'
+            i = self.regions.index(region)
+            prob = str(interest_probs[i])
+
             # draw regions
             corner_coords = region.get_corner_coords()+[region.coord]
             for i in range(4):
@@ -316,11 +299,17 @@ class ActivePolicyLearner(object):
                     if (mode == 'interact') and not self.made_interact_colorbar:
                         fig.colorbar(im)
                         self.made_interact_colorbar = True
+        if mode == 'interact':
+            last_goal = self.all_interact_goals[-1]
+            colors = {1: 'r', 2: 'darkorchid', 3: 'hotpink', 'exploit': 'tan'}
+            ax.plot(-last_goal[0][0], last_goal[0][1], '.', color=colors[last_goal[2]])
         ax.set_title(mode)
 
         minmax = True
         if minmax:
-            self.interest_ax.errorbar(range(len(self.interest_avgs)), self.interest_avgs, yerr=self.interest_minmax, ecolor='b')
+            self.interest_ax.plot(self.interest_mins, '--r')
+            self.interest_ax.plot(self.interest_maxes, '--r')
+            self.interest_ax.plot(self.interest_avgs, 'r')
         else:
             self.interest_ax.errorbar(range(len(self.interest_avgs)), self.interest_avgs, yerr=self.interest_vars, ecolor='b')
 
@@ -331,6 +320,7 @@ class ActivePolicyLearner(object):
             plt.pause(0.01)
         if block:
             plt.show()
+            input('enter to continue')
 
     def reset_plot(self, ax):
         ax.set_xlim(-self.max_region.coord.x, -1*(self.max_region.coord.x-self.max_region.dims.width))
@@ -370,13 +360,15 @@ class Region(object):
         self.update_interest()
 
     def update_interest(self):
-        n_goals = len(self.attempted_goals)
-        range_max = min(n_max, n_goals)
         self.interest = 0.0
-        if n_goals > 1:
-            for j in range(-2,-range_max-1,-1):
-                self.interest += abs(self.attempted_goals[j+1][1]-self.attempted_goals[j][1])
-            self.interest = self.interest/(range_max-1)
+        n_goals = len(self.attempted_goals)
+        # if below min region size and sampled g_max goals then interest = 0
+        if not (n_goals > g_max and np.multiply(*self.dims) < min_region):
+            range_max = min(n_max, n_goals)
+            if n_goals > 1:
+                for j in range(-2,-range_max-1,-1):
+                    self.interest += abs(self.attempted_goals[j+1][1]-self.attempted_goals[j][1])
+                self.interest = self.interest/(range_max-1)
 
     def split(self, bb):
         splits = []
