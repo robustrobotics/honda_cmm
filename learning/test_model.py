@@ -1,4 +1,4 @@
-# read in a learned model and predict for new busybox
+ # read in a learned model and predict for new busybox
 import argparse
 import operator
 from actions import policies
@@ -8,46 +8,160 @@ from util.setup_pybullet import setup_env
 from scipy.optimize import minimize
 from learning.dataloaders import parse_pickle_file, PolicyDataset
 import torch
-from util import util
+from util import util, plot_results
 import numpy as np
 import sys
-from learning.train import name_lookup
 import matplotlib.pyplot as plt
 import pybullet as p
+from torch.utils.tensorboard import SummaryWriter
+import os
+import shutil
 
-def get_pred_motions(data, model, ret_dataset=False):
+def vis_test_error(test_data, model_path, test_name, hdim):
+    ntrain = 10000
+    step = 1000
+    bbs = util.read_from_file(fname)
+    data_types = ['active', 'random']
+    plt.ion()
+    plot_obj = plot_results.TestMechPoliciesPitchOnly()
+    ns = range(step, ntrain+1, step)
+
+    bbs = bbs[:7]
+    for train_data_type in data_types:
+        for val_data_type in data_types:
+            for n in ns:
+                net = util.load_model(files[n], hdim=hdim)
+                plot_obj._plot(None, model=net, bbps=bbs)
+                dir = 'test_plots/'+train_data_type+'/'+val_data_type
+                file = str(n)+'.png'
+                if not os.path.isdir(dir):
+                    os.makedirs(dir)
+                path = dir + '/' + file
+                plt.savefig(path, bbox_inches='tight')
+                #plt.show()
+                #input()
+                #plt.close()
+
+def get_n_from_file(file):
+    n_str = ''
+    for c in file:
+        if c == '.':
+            break
+        else:
+            n_str += c
+    n = int(n_str)
+    return n
+
+def get_ordered_files(path):
+    file_names = os.listdir(path)
+    files = {}
+    for file in file_names:
+        full_model_path = path + file
+        n = get_n_from_file(file)
+        files[n] = full_model_path
+    files = sorted(files.items(), key=operator.itemgetter(0))
+    return files
+
+def calc_test_error(test_data, model_path, test_name, hdim, dir):
+    writer = SummaryWriter(dir+test_name)
+    files = get_ordered_files(model_path)
+    for (n, file) in files:
+        net = util.load_model(file, hdim=hdim)
+        test_error = 0
+        for bbp in test_data:
+            # make new bb object from pickle file
+            rand_num = np.random.uniform(0,1)
+            bb = BusyBox.get_busybox(bbp.width, bbp.height, bbp._mechanisms, urdf_tag=str(rand_num))
+            true_motion = bb._mechanisms[0].range/2
+            test_motion = test_env(net, bb=bb, debug=False, plot=False, viz=False)
+            test_error += np.linalg.norm([true_motion-test_motion])**2
+        test_mse = test_error/len(test_data)
+        writer.add_scalar('test_error', test_mse, n)
+        print(test_name, test_mse, n)
+    writer.close()
+
+def calc_true_error(test_data, model_path, test_name, hdim, dir):
+    writer = SummaryWriter(dir+test_name)
+    files = get_ordered_files(model_path)
+    for (n, file) in files:
+        net = util.load_model(file, hdim=hdim)
+        test_error = 0
+        for bbp in test_data:
+            # make new bb object from pickle file
+            rand_num = np.random.uniform(0,1)
+            bb = BusyBox.get_busybox(bbp.width, bbp.height, bbp._mechanisms, urdf_tag=str(rand_num))
+            mech = bb._mechanisms[0]
+            image_data = setup_env(bb, False, False)
+            mech_tuple = mech.get_mechanism_tuple()
+            true_policy = policies.generate_policy(bb, mech, True, 0.0)
+            policy_type = true_policy.type
+            q = true_policy.generate_config(mech, 1.0)
+            policy_tuple = true_policy.get_policy_tuple()
+            results = [util.Result(policy_tuple, mech_tuple, 0.0, 0.0,
+                                    None, None, q, image_data, None, 1.0)]
+            pred_motion = get_pred_motions(results, net, ret_dataset=False, use_cuda=False)[0]
+            true_motion = bb._mechanisms[0].range/2
+            test_error += np.linalg.norm([true_motion-pred_motion])**2
+        test_mse = test_error/len(test_data)
+        writer.add_scalar('true_test_error', test_mse, n)
+        print(test_name, test_mse, n)
+        writer.close()
+
+def get_pred_motions(data, model, ret_dataset=False, use_cuda=False):
     data = parse_pickle_file(data=data)
     dataset = PolicyDataset(data)
     pred_motions = []
     for i in range(len(dataset.items)):
         policy_type = dataset.items[i]['type']
-        pred_motion = model.forward(torch.Tensor([name_lookup[policy_type]]),
-                                    dataset.tensors[i].unsqueeze(0),
-                                    dataset.configs[i].unsqueeze(0),
-                                    dataset.images[i].unsqueeze(0))
-        pred_motion_float = pred_motion.detach().numpy()[0][0]
+        policy_type_tensor = torch.Tensor([util.name_lookup[policy_type]])
+        policy_tensor = dataset.tensors[i].unsqueeze(0)
+        config_tensor = dataset.configs[i].unsqueeze(0)
+        image_tensor = dataset.images[i].unsqueeze(0)
+        if use_cuda:
+            policy_type_tensor = policy_type_tensor.cuda()
+            policy_tensor = policy_tensor.cuda()
+            config_tensor = config_tensor.cuda()
+            image_tensor = image_tensor.cuda()
+        pred_motion = model.forward(policy_type_tensor,
+                                    policy_tensor,
+                                    config_tensor,
+                                    image_tensor)
+        if use_cuda:
+            pred_motion_float = pred_motion.cpu().detach().numpy()[0][0]
+        else:
+            pred_motion_float = pred_motion.detach().numpy()[0][0]
         pred_motions += [pred_motion_float]
     if ret_dataset:
         return pred_motions, dataset
     else:
         return pred_motions
 
-def objective_func(x, policy_type, image_tensor, model):
-    policy_type_tensor = torch.Tensor([name_lookup[policy_type]])
-    return -model.forward(policy_type_tensor, torch.tensor([x[:-1]]).float(), torch.tensor([[x[-1]]]).float(), image_tensor)
+def objective_func(x, policy_type, image_tensor, model, use_cuda):
+    policy_type_tensor = torch.Tensor([util.name_lookup[policy_type]])
+    x = x.squeeze()
+    policy_tensor = torch.tensor([[x[0], 0.0]]).float() # hard code yaw to be 0
+    config_tensor = torch.tensor([[x[-1]]]).float()
+    if use_cuda:
+        policy_type_tensor = policy_type_tensor.cuda()
+        policy_tensor = policy_tensor.cuda()
+        config_tensor = config_tensor.cuda()
+        image_tensor = image_tensor.cuda()
+    val = -model.forward(policy_type_tensor, policy_tensor, config_tensor, image_tensor)
+    if use_cuda:
+        val = val.cpu()
+    val = val.detach().numpy()
+    val = val.squeeze()
+    return val
 
-def test_random_env(model, viz, debug):
-    bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider])
+def test_env(model, bb=None, plot=False, viz=False, debug=False, use_cuda=False):
+    if bb is None:
+        bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider])
     image_data = setup_env(bb, viz=False, debug=debug)
     mech = bb._mechanisms[0]
     mech_tuple = mech.get_mechanism_tuple()
-    limit = mech_tuple.params.range/2
+
     n_samples = 500
     samples = []
-
-    n_q_bins = 6
-    qs = np.linspace(0.0, limit*1.2, n_q_bins+1)
-    plot_data = {}
     for _ in range(n_samples):
         random_policy = policies.generate_policy(bb, mech, True, 1.0)
         policy_type = random_policy.type
@@ -55,118 +169,132 @@ def test_random_env(model, viz, debug):
         policy_tuple = random_policy.get_policy_tuple()
         results = [util.Result(policy_tuple, mech_tuple, 0.0, 0.0,
                                 None, None, q, image_data, None, 1.0)]
-        sample_disps, dataset = get_pred_motions(results, model, ret_dataset=True)
-        closest_q = min(qs, key=lambda x:abs(x-abs(q)))
-        closest_q_i = list(qs).index(closest_q)
-        if closest_q > abs(q) or closest_q_i == n_q_bins:
-            closest_q_i -= 1
-        if closest_q_i not in plot_data:
-            plot_data[closest_q_i] = [[policy_tuple.delta_values.delta_yaw],
-                                        [policy_tuple.delta_values.delta_pitch],
-                                        [sample_disps[0]]]
-        else:
-            plot_data[closest_q_i][0] += [policy_tuple.delta_values.delta_yaw]
-            plot_data[closest_q_i][1] += [policy_tuple.delta_values.delta_pitch]
-            plot_data[closest_q_i][2] += [sample_disps[0]]
+        sample_disps, dataset = get_pred_motions(results, model, ret_dataset=True, use_cuda=use_cuda)
         samples.append(((policy_type,
                         dataset.tensors[0].detach().numpy(),
                         dataset.configs[0].detach().numpy(),
                         policy_tuple.delta_values.delta_yaw,
                         policy_tuple.delta_values.delta_pitch),
                         sample_disps[0]))
-    #print(samples)
+
     (policy_type_max, params_max, q_max, delta_yaw_max, delta_pitch_max), max_disp = max(samples, key=operator.itemgetter(1))
-    #print((policy_type_max, params_max, q_max, delta_yaw_max, delta_pitch_max), max_disp)
     pose_handle_base_world = mech.get_pose_handle_base_world()
     policy_list = list(pose_handle_base_world.p)+list(pose_handle_base_world.q)+list(params_max)
     # start optimization from here
     # assume you guessed the correct policy type, and optimize for params and configuration
-    x0 = np.concatenate([params_max, q_max])
-    res = minimize(fun=objective_func, x0=x0, args=(policy_type_max, dataset.images[0].unsqueeze(0), model),
-                method='BFGS')#, options={'eps': 10**-3}) # TODO: for some reason get pytorch error when change options
+    x0 = np.concatenate([[params_max[0]], q_max]) # only searching space of pitches!
+    res = minimize(fun=objective_func, x0=x0, args=(policy_type_max, dataset.images[0].unsqueeze(0), model, use_cuda),
+                method='BFGS', options={'eps': 10**-3}) # TODO: for some reason get pytorch error when change options
     x_final = res['x']
-
-    # visualize samples and minimization in parameter space
-    min_motion = float('inf')
-    max_motion = 0.0
-    for i in range(n_q_bins):
-        if i in plot_data:
-            if min(plot_data[i][2])<min_motion:
-                min_motion = min(plot_data[i][2])
-            if max(plot_data[i][2])>max_motion:
-                max_motion = max(plot_data[i][2])
-    plt.ion()
-    fig = plt.figure()
-    axes = fig.subplots(n_q_bins, 1)
-    plt.setp(axes.flat, aspect=1.0, adjustable='box-forced')
-    for j in range(n_q_bins):
-        if j == n_q_bins-1:
-            axes[j].set_title('q>['+str(round(qs[j],2)))
-        else:
-            axes[j].set_title('q=['+str(round(qs[j],2))+','+str(round(qs[j+1],2))+']')
-        if j in plot_data:
-            im = axes[j].scatter(plot_data[j][0], plot_data[j][1], c=plot_data[j][2], vmin=min_motion, vmax=max_motion)
-            axes[j].tick_params(labelcolor='w', top=False, bottom=False, left=False, right=False)
-    fig.colorbar(im, ax=axes.ravel().tolist())
-    fig.suptitle('Limit='+str(round(limit, 2)), fontsize=16)
-
-    # add optimization start and final sample to plot
-    closest_q = min(qs, key=lambda x:abs(x-abs(q_max)))
-    closest_q_i = list(qs).index(closest_q)
-    if closest_q > abs(q_max) or closest_q_i == n_q_bins:
-        closest_q_i -= 1
-    axes[closest_q_i].plot(delta_yaw_max, delta_pitch_max, 'gx')
-
-    # test found policy on busybox
-    setup_env(bb, viz=viz, debug=debug)
-    policy_list = list(pose_handle_base_world.p)+list(pose_handle_base_world.q)+list(x_final[:-1])
+    policy_list = list(pose_handle_base_world.p)+list(pose_handle_base_world.q)+[x_final[0], 0.0] # hard code yaw value
     policy_final = policies.get_policy_from_params(policy_type_max, policy_list, mech)
     config_final = x_final[-1]
 
-    closest_q = min(qs, key=lambda x:abs(x-abs(config_final)))
-    closest_q_i = list(qs).index(closest_q)
-    if closest_q > abs(config_final) or closest_q_i == n_q_bins:
-        closest_q_i -= 1
-    axes[closest_q_i].plot(policy_final.delta_yaw, policy_final.delta_pitch, 'r.')
-    plt.show()
-    if not viz:
-        input('press enter to close plot')
+    if plot:
+        plot_search(bb, samples, q_max, delta_yaw_max, delta_pitch_max, policy_final, config_final, debug)
 
+    # test found policy on busybox
+    setup_env(bb, viz=viz, debug=debug)
+    mech = bb._mechanisms[0]
+    pose_handle_base_world = mech.get_pose_handle_base_world()
     traj = policy_final.generate_trajectory(pose_handle_base_world, config_final, True)
     gripper = Gripper(bb.bb_id)
-    gripper.execute_trajectory(traj, mech, policy_type_max, debug)
-    if viz:
-        try:
-            while True:
-                # so can look at trajectory and interact with sim
-                p.stepSimulation()
-        except KeyboardInterrupt:
-            p.disconnect()
+    policy_type = policy_final.type
+    _, motion, _ = gripper.execute_trajectory(traj, mech, policy_type, debug)
+    p.disconnect()
 
-def test_random_envs(n_test, file_name, hdim, viz, debug):
-    model = util.load_model(file_name, hdim)
+    if plot:
+        plt.close()
+    return motion
 
-    search_results = []
-    for i in range(n_test):
-        sys.stdout.write("\rProcessing mechanism %i/%i" % (i+1, n_test))
-        search_results.append(test_random_env(model, viz, debug))
-    print()
-    return search_results
+def plot_search(bb, samples, q_max, delta_yaw_max, delta_pitch_max, policy_final, config_final, debug):
+    image_data = setup_env(bb, viz=False, debug=debug)
+    mech = bb._mechanisms[0]
+    mech_tuple = mech.get_mechanism_tuple()
+    limit = mech_tuple.params.range/2
+
+    qs = [s[0][2] for s in samples]
+    delta_pitches = [s[0][4] for s in samples]
+    disps = [s[1] for s in samples]
+    mind = min(disps)
+    maxd = max(disps)
+
+    plt.ion()
+    fig, ax = plt.subplots()
+    im = ax.scatter(qs, np.multiply(180/np.pi,delta_pitches), c=disps, vmin=mind, vmax=maxd, s=6)
+    fig.colorbar(im)
+    ax.set_title('Limit ='+str(mech.range/2))
+    ax.set_xlabel('q')
+    ax.set_ylabel('delta_pitch (deg)')
+    ax.plot(q_max, delta_pitch_max, 'gx')
+    ax.plot(config_final, policy_final.delta_pitch, 'r.')
+    plt.show()
+    input('press enter to close plot')
+    #plt.close()
+
+def viz_final(bb, policy_final, config_final, debug):
+    # test found policy on busybox
+    setup_env(bb, True, debug=debug)
+    mech = bb._mechanisms[0]
+    pose_handle_base_world = mech.get_pose_handle_base_world()
+    traj = policy_final.generate_trajectory(pose_handle_base_world, config_final, True)
+    gripper = Gripper(bb.bb_id)
+    policy_type = policy_final.type
+    gripper.execute_trajectory(traj, mech, policy_type, debug)
+    p.disconnect()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--viz', action='store_true')
+    #parser.add_argument('--plot', action='store_true')
     parser.add_argument('--debug', action='store_true')
-    parser.add_argument('--n-test', type=int, default=1) # how many mechanisms do you want to test
-    parser.add_argument('--model-fname', type=str)
-    parser.add_argument('--search-fname', type=str)
+    #parser.add_argument('--n-test', type=int, default=1) # how many mechanisms do you want to test
     parser.add_argument('--hdim', type=int, default=16)
+    #parser.add_argument('--use-cuda', action='store_true')
+    parser.add_argument('--mode', choices=['single', 'true', 'test', 'plots'], required=True)
     args = parser.parse_args()
+
+    # test dataset
+    test_file = 'data/datasets/40_bb_sliders.pickle'
+    test_data = util.read_from_file(test_file)
+
+    # model paths
+    models = [#'torch_models_expert_rand0_1_50k/active/active/',
+                #'torch_models_expert_rand2_1_50k/active/active/',
+                #'torch_models_expert_rand4_1_50k/active/active/',
+                #'torch_models_expert_rand6_1_50k/active/active/',
+                #'torch_models_expert_rand8_1_50k/active/active/',
+                'torch_models_1_50k/random/active/',
+                #'torch_models_1_50k/active/active/',
+                'torch_models_alpha_1_50k/active/active/']
+
+    # plot names
+    names = [#'expert',
+            #    'random_p2',
+            #    'random_p4',
+            #    'random_p6',
+            #    'random_p8',
+                'random',
+            #    'orig_active',
+                'active_alpha']
 
     if args.debug:
         import pdb; pdb.set_trace()
 
-    search_results = test_random_envs(args.n_test, args.model_fname, args.hdim, args.viz, args.debug)
+    test_dir = './all_test_errors/'
+    true_dir = './all_true_errors/'
+    #if args.mode == 'test' and os.path.isdir(test_dir):
+    #    shutil.rmtree(test_dir)
+    if args.mode == 'true' and os.path.isdir(true_dir):
+        shutil.rmtree(true_dir)
 
-    if args.search_fname:
-        util.write_to_file(args.search_fname, search_results)
+    for (model_path, test_name) in zip(models, names):
+        if args.mode == 'single':
+            model = util.load_model(args.model, args.hdim)
+            test_env(model, plot=args.viz)
+        if args.mode == 'true':
+            calc_true_error(test_data, model_path, test_name, args.hdim, true_dir)
+        if args.mode == 'test':
+            calc_test_error(test_data, model_path, test_name, args.hdim, test_dir)
+        if args.mode == 'plots':
+            vis_test_error(test_data, model_path, test_name, args.hdim)

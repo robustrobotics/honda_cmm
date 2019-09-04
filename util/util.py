@@ -13,6 +13,9 @@ from learning.models.nn_disp_pol_mech import DistanceRegressor as NNPolMech
 from actions import policies
 from actions.gripper import Gripper
 from gen.generator_busybox import BusyBox
+import matplotlib.pyplot as plt
+
+name_lookup = {'Prismatic': 0, 'Revolute': 1}
 ### namedtuple Definitions ###
 Pose = namedtuple('Pose', 'p q')
 """
@@ -47,6 +50,13 @@ ImageData contains a subset of the image data returned by pybullet
 :param rgbPixels: list of [char RED,char GREEN,char BLUE, char ALPHA] [0..width*height],
                     list of pixel colors in R,G,B,A format, in range [0..255] for each color
 """
+def imshow(image_data):
+    img = np.reshape(image_data.rgbPixels, [image_data.height, image_data.width, 3])
+    plt.ion()
+    plt.imshow(img)
+    plt.show()
+    input('ENTER to close plot')
+
 ### Sampling Helper Function
 # TODO: want the prob of bin 0 to go to 0 as the slope increases (currently doesn't do that)
 def discrete_sampler(range_vals, slope, n_bins=10):
@@ -65,7 +75,7 @@ def discrete_sampler(range_vals, slope, n_bins=10):
     return val
 
 ### Model Testing Helper Functions ###
-def load_model(model_fname, hdim=32, model_type='polvis', use_cuda=False):
+def load_model(model_fname, hdim=32, model_type='polvis', use_cuda=False, image_encoder='spatial'):
     if model_type == 'pol':
         model = NNPol(policy_names=['Prismatic', 'Revolute'],
                       policy_dims=[2, 12],
@@ -81,7 +91,8 @@ def load_model(model_fname, hdim=32, model_type='polvis', use_cuda=False):
                          hdim=hdim,
                          im_h=53,
                          im_w=115,
-                         kernel_size=3)
+                         kernel_size=3,
+                         image_encoder=image_encoder)
     if use_cuda:
         device = torch.device('cuda')
     else:
@@ -91,7 +102,7 @@ def load_model(model_fname, hdim=32, model_type='polvis', use_cuda=False):
     return model
 
 ### Writing and Reading to File Helper Functions ###
-def write_to_file(file_name, data):
+def write_to_file(file_name, data, verbose=True):
     # make directory if doesn't exist
     dir = '/'.join(file_name.split('/')[:-1])
     if not os.path.isdir(dir) and dir !='':
@@ -100,12 +111,15 @@ def write_to_file(file_name, data):
     # save to pickle
     with open(file_name, 'wb') as handle:
         pickle.dump(data, handle)
-    print('wrote dataset to '+file_name)
+    if verbose:
+        print('wrote dataset to '+file_name)
 
-def read_from_file(file_name):
+def read_from_file(file_name, verbose=True):
+    print('reading in '+file_name)
     with open(file_name, 'rb') as handle:
         data = pickle.load(handle)
-        print('successfully read in '+file_name)
+        if verbose:
+            print('successfully read in '+file_name)
     return data
 
 def merge_files(in_file_names, out_file_name):
