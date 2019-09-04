@@ -11,6 +11,7 @@ from gen import active_prior
 from gen.generator_busybox import BusyBox, Slider
 import os
 import shutil
+import matplotlib.pyplot as plt
 torch.backends.cudnn.enabled = True
 
 def train_eval(args, parsed_data, plot_fname, pviz=False):
@@ -94,19 +95,23 @@ if __name__ == '__main__':
             os.makedirs(dir)
 
         # want to generate the same sequence of BBs every time
-        np.random.seed(0)
+        fig, ax = plt.subplots()
+
+        np.random.seed(1)
         model_path = model_dir + args.data_type + '.pt'
         n_int_samples = 200 # num samples per bb
         n_prior_samples = 100
-        viz_plot = False
+        viz_plot_final = False
+        viz_plot_cont = False
         dataset = []
         writer = SummaryWriter(runs_dir)
+        regrets = []
         for i in range(1, args.n_bbs+1):
             print('BusyBox: ', i, '/', args.n_bbs)
             rand_int = np.random.randint(100000)
             bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider], urdf_tag=str(rand_int), debug=False)
-            data, prior_figs, final_figs = active_prior.generate_dataset(1, n_int_samples, n_prior_samples, False, False, str(rand_int), 1, viz_plot, 'random' == args.data_type, bb=bb, model_path=model_path, hdim=args.hdim)
-            dataset += data
+            learner, prior_figs, final_figs, interest_figs = active_prior.generate_dataset(1, n_int_samples, n_prior_samples, False, False, str(rand_int), 1, viz_plot_final, viz_plot_cont, 'random' == args.data_type, bb=bb, model_path=model_path, hdim=args.hdim)
+            dataset += learner.interactions
             parsed_data = parse_pickle_file(data=dataset)
             plot_fname = args.data_type+'_'+str(i)
             train_error, model = train_eval(args, parsed_data, plot_fname)
@@ -115,8 +120,24 @@ if __name__ == '__main__':
                 writer.add_figure('Prior/'+str(i), prior_figs[0])
             if final_figs[0]:
                 writer.add_figure('Final/'+str(i), final_figs[0])
+            if interest_figs[0]:
+                writer.add_figure('Interest/'+str(i), interest_figs[0])
             path = model_dir + args.data_type + '.pt'
             torch.save(model, path)
+
+            # add to plot of regret
+            max_competence = learner.interactions[0].mechanism_params.params.range/2
+            regrets += [abs(goal[1]-max_competence) for goal in learner.all_interact_goals]
+            regret_avgs = [np.mean(regrets[0:j]) for j in range(len(regrets))]
+            plt.cla()
+            ax.plot(range(0, i*n_int_samples), regrets, label='interaction regret')
+            ax.plot(range(0, i*n_int_samples), regret_avgs, label='average regret')
+            ax.set_ylabel('Regret')
+            ax.set_xlabel('Interaction')
+            fig.canvas.draw()
+            plt.pause(0.01)
+
+            writer.add_figure('Regret/', fig)
         writer.close()
     except:
         # for post-mortem debugging since can't run module from command line in pdb.pm() mode
