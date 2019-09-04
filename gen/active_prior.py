@@ -31,12 +31,13 @@ alpha = 0.992
 
 class ActivePolicyLearner(object):
 
-    def __init__(self, bb, viz_sim, debug, viz_plot, all_random):
+    def __init__(self, bb, viz_sim, debug, viz_plot_final, viz_plot_cont, all_random):
         self.bb = bb
         self.mech = self.bb._mechanisms[0]
         self.debug = debug
         self.viz_sim = viz_sim
-        self.viz_plot = viz_plot
+        self.viz_plot_final = viz_plot_final
+        self.viz_plot_cont = viz_plot_cont
         self.image_data = setup_env(self.bb, self.viz_sim, self.debug)
         self.start_pos = p.getLinkState(self.mech.bb_id, self.mech.handle_id)[0]
         self.gripper = Gripper(self.bb.bb_id)
@@ -44,6 +45,9 @@ class ActivePolicyLearner(object):
         self.regions = [copy(self.max_region)]
         self.interactions = []
         self.all_random = all_random
+        self.all_interact_goals = []
+
+        #plt.ion()
 
         self.prior_fig, self.prior_ax = plt.subplots()
         self.prior_ax.set_aspect('equal')
@@ -72,7 +76,8 @@ class ActivePolicyLearner(object):
                 self.sample(n, 'predict', model)
                 if n != n_prior_samples-1:
                     self.reset()
-            self.update_plot('predict', show=self.viz_plot)
+            if self.viz_plot_final:
+                self.update_plot('predict', self.viz_plot_final)
         for n in range(n_int_samples):
             sys.stdout.write("\rProcessing interactive sample %i/%i" % (n+1, n_int_samples))
             if self.debug:
@@ -81,7 +86,8 @@ class ActivePolicyLearner(object):
             self.sample(n, 'interact')
             if n != n_int_samples-1:
                 self.reset()
-        self.update_plot('interact', show=True)
+        if self.viz_plot_final:
+            self.update_plot('interact', self.viz_plot_final)
 
     def sample(self, n, mode, model=None):
         # select goal and region
@@ -118,13 +124,15 @@ class ActivePolicyLearner(object):
 
         # update regions (potentiall split if big enough or have more than g_max goals in region)
         region.update(goal, competence, mode)
-        if np.multiply(*region.dims) > min_region:
-            if len(region.attempted_goals) > g_max:
-                new_regions = region.split(self.bb)
-                self.regions.remove(region)
-                self.regions += new_regions
-        if len(self.interactions)>g_max and self.viz_plot:
-            self.update_plot(mode, show=self.viz_plot)
+        if mode == 'interact':
+            self.all_interact_goals += [(goal, competence)]
+        #if np.multiply(*region.dims) > min_region:
+        if len(region.attempted_goals) > g_max:
+            new_regions = region.split(self.bb)
+            self.regions.remove(region)
+            self.regions += new_regions
+        if len(self.interactions)>g_max:
+            self.update_plot(mode)
 
         # update interest stuff for plotting
         avg_n = np.mean([region.interest for region in self.regions])
@@ -137,6 +145,10 @@ class ActivePolicyLearner(object):
             self.interest_minmax = np.append(self.interest_minmax, yerr, axis=1)
         else:
             self.interest_minmax = yerr
+
+        if self.viz_plot_cont:
+            self.update_plot(mode)
+
     def get_max_region(self):
         # for now regions are just in the x-z plane. will need to move to 3d with doors
         p_bb_base_w = p.getLinkState(self.bb.bb_id,0)[0]
@@ -146,6 +158,13 @@ class ActivePolicyLearner(object):
         return start_region
 
     def region_interest_probs(self):
+        total_interest = sum([region.interest for region in self.regions])
+        if total_interest == 0:
+            region_interests = tuple([1.0/len(self.regions) for region in self.regions])
+        else:
+            region_interests = tuple([region.interest/total_interest for region in self.regions])
+        return region_interests, tuple(self.regions)
+        '''
         relevant_regions = []
         for region in self.regions:
             if not (len(region.attempted_goals) > g_max and np.multiply(*region.dims) < min_region):
@@ -156,6 +175,7 @@ class ActivePolicyLearner(object):
         else:
             region_interests = tuple([region.interest/total_interest for region in relevant_regions])
         return region_interests, tuple(relevant_regions)
+        '''
 
     def select_exploit_goal(self):
         probs = []
@@ -254,7 +274,7 @@ class ActivePolicyLearner(object):
         endpoint1 = np.add(center, np.multiply(-self.mech.range/2, self.mech.axis))
         ax.plot([-endpoint0[0], -endpoint1[0]], [endpoint0[1], endpoint1[1]], '--r')
 
-    def update_plot(self, mode, show=True):
+    def update_plot(self, mode, block=False):
         if mode == 'predict':
             ax, fig = self.prior_ax, self.prior_fig
         elif mode == 'interact':
@@ -298,17 +318,19 @@ class ActivePolicyLearner(object):
                         self.made_interact_colorbar = True
         ax.set_title(mode)
 
-        minmax = False
+        minmax = True
         if minmax:
             self.interest_ax.errorbar(range(len(self.interest_avgs)), self.interest_avgs, yerr=self.interest_minmax, ecolor='b')
         else:
             self.interest_ax.errorbar(range(len(self.interest_avgs)), self.interest_avgs, yerr=self.interest_vars, ecolor='b')
 
-        if show:
+        if self.viz_plot_cont:
             self.prior_fig.canvas.draw()
             self.interact_fig.canvas.draw()
             self.interest_fig.canvas.draw()
             plt.pause(0.01)
+        if block:
+            plt.show()
 
     def reset_plot(self, ax):
         ax.set_xlim(-self.max_region.coord.x, -1*(self.max_region.coord.x-self.max_region.dims.width))
@@ -426,20 +448,22 @@ class Region(object):
                         inside = True
         return inside
 
-def generate_dataset(n_bbs, n_int_samples, n_prior_samples, viz, debug, urdf_num, max_mech, viz_plot, all_random, bb=None, model_path=None, hdim=16):
+def generate_dataset(n_bbs, n_int_samples, n_prior_samples, viz, debug, urdf_num, max_mech, viz_plot_final, viz_plot_cont, all_random, bb=None, model_path=None, hdim=16):
     results = []
     prior_figs = []
     final_figs = []
+    interest_figs = []
     for i in range(n_bbs):
         if bb is None:
             bb = BusyBox.generate_random_busybox(max_mech=max_mech, mech_types=[Slider], urdf_tag=urdf_num, debug=debug)
-        active_learner = ActivePolicyLearner(bb, viz, debug, viz_plot, all_random)
+        active_learner = ActivePolicyLearner(bb, viz, debug, viz_plot_final, viz_plot_cont, all_random)
         active_learner.learn(n_int_samples, n_prior_samples, model_path, hdim)
         prior_figs += [active_learner.prior_fig]
         final_figs += [active_learner.interact_fig]
+        interest_figs += [active_learner.interest_fig]
         results.extend(active_learner.interactions)
     print()
-    return results, prior_figs, final_figs
+    return active_learner, prior_figs, final_figs, interest_figs
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
