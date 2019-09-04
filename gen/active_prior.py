@@ -50,6 +50,9 @@ class ActivePolicyLearner(object):
         self.reset_plot(self.prior_ax)
         self.made_prior_colorbar = False
 
+        self.interest_fig, self.interest_ax = plt.subplots()
+        self.interest_avgs, self.interest_vars, self.interest_minmax = [], [], None
+
         self.interact_fig, self.interact_ax = plt.subplots()
         self.interact_ax.set_aspect('equal')
         self.reset_plot(self.interact_ax)
@@ -78,7 +81,7 @@ class ActivePolicyLearner(object):
             self.sample(n, 'interact')
             if n != n_int_samples-1:
                 self.reset()
-        self.update_plot('interact', show=self.viz_plot)
+        self.update_plot('interact', show=True)
 
     def sample(self, n, mode, model=None):
         # select goal and region
@@ -123,6 +126,17 @@ class ActivePolicyLearner(object):
         if len(self.interactions)>g_max and self.viz_plot:
             self.update_plot(mode, show=self.viz_plot)
 
+        # update interest stuff for plotting
+        avg_n = np.mean([region.interest for region in self.regions])
+        self.interest_avgs = np.append(self.interest_avgs, avg_n)
+        self.interest_vars = np.append(self.interest_vars, np.var([region.interest for region in self.regions]))
+        min_n = min([region.interest for region in self.regions])
+        max_n = max([region.interest for region in self.regions])
+        yerr = np.expand_dims(np.array([avg_n - min_n, max_n - avg_n]), axis=1)
+        if self.interest_minmax is not None:
+            self.interest_minmax = np.append(self.interest_minmax, yerr, axis=1)
+        else:
+            self.interest_minmax = yerr
     def get_max_region(self):
         # for now regions are just in the x-z plane. will need to move to 3d with doors
         p_bb_base_w = p.getLinkState(self.bb.bb_id,0)[0]
@@ -283,8 +297,17 @@ class ActivePolicyLearner(object):
                         fig.colorbar(im)
                         self.made_interact_colorbar = True
         ax.set_title(mode)
+
+        minmax = False
+        if minmax:
+            self.interest_ax.errorbar(range(len(self.interest_avgs)), self.interest_avgs, yerr=self.interest_minmax, ecolor='b')
+        else:
+            self.interest_ax.errorbar(range(len(self.interest_avgs)), self.interest_avgs, yerr=self.interest_vars, ecolor='b')
+
         if show:
-            plt.draw()
+            self.prior_fig.canvas.draw()
+            self.interact_fig.canvas.draw()
+            self.interest_fig.canvas.draw()
             plt.pause(0.01)
 
     def reset_plot(self, ax):
