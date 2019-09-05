@@ -78,10 +78,10 @@ if __name__ == '__main__':
     parser.add_argument('--use-cuda', default=False, action='store_true')
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--image-encoder', type=str, default='spatial', choices=['spatial', 'cnn'])
-    parser.add_argument('--n-bbs', type=int, default=50) # maximum number of robot interactions
+    parser.add_argument('--n-bbs', type=int, default=5) # maximum number of robot interactions
     parser.add_argument('--data-type', default='active', choices=['active', 'random'])
-    parser.add_argument('--n-inter', default=200, type=int) # number of samples used during interactions
-    parser.add_argument('--n-prior', default=100, type=int) # number of samples used to generate prior
+    parser.add_argument('--n-inter', default=20, type=int) # number of samples used during interactions
+    parser.add_argument('--n-prior', default=10, type=int) # number of samples used to generate prior
     parser.add_argument('--viz-cont', action='store_true') # visualize interactions and prior as they're generated
     parser.add_argument('--viz-final', action='store_true') # visualize final interactions and priors
     args = parser.parse_args()
@@ -136,7 +136,7 @@ if __name__ == '__main__':
             if interest_figs[0]:
                 writer.add_figure('Interest/'+str(i), interest_figs[0])
             path = model_dir + args.data_type + '.pt'
-            torch.save(model, path)
+            torch.save(model, path+'i')
 
         writer.close()
     except:
