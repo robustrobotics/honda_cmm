@@ -79,8 +79,7 @@ class ActivePolicyLearner(object):
                 self.sample(n, 'predict', model)
                 if n != n_prior_samples-1:
                     self.reset()
-            if self.viz_plot_final:
-                self.update_plot('predict', self.viz_plot_final)
+            self.update_plot('predict')
         for n in range(n_int_samples):
             sys.stdout.write("\rProcessing interactive sample %i/%i" % (n+1, n_int_samples))
             if self.debug:
@@ -89,8 +88,7 @@ class ActivePolicyLearner(object):
             self.sample(n, 'interact')
             if n != n_int_samples-1:
                 self.reset()
-        if self.viz_plot_final:
-            self.update_plot('interact', self.viz_plot_final)
+        self.update_plot('interact')
 
     def sample(self, n, mode, model=None):
         # select goal and region
@@ -260,7 +258,7 @@ class ActivePolicyLearner(object):
         endpoint1 = np.add(center, np.multiply(-self.mech.range/2, self.mech.axis))
         ax.plot([-endpoint0[0], -endpoint1[0]], [endpoint0[1], endpoint1[1]], '--r')
 
-    def update_plot(self, mode, block=False):
+    def update_plot(self, mode):
         if mode == 'predict':
             ax, fig = self.prior_ax, self.prior_fig
         elif mode == 'interact':
@@ -318,8 +316,8 @@ class ActivePolicyLearner(object):
             self.interact_fig.canvas.draw()
             self.interest_fig.canvas.draw()
             plt.pause(0.01)
-        if block:
-            plt.show()
+        plt.show()
+        if self.viz_plot_final:
             input('enter to continue')
 
     def reset_plot(self, ax):

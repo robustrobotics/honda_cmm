@@ -82,8 +82,8 @@ if __name__ == '__main__':
     parser.add_argument('--data-type', default='active', choices=['active', 'random'])
     parser.add_argument('--n-inter', default=200, type=int) # number of samples used during interactions
     parser.add_argument('--n-prior', default=100, type=int) # number of samples used to generate prior
-    parser.add_argument('--viz-cont', default=False) # visualize interactions and prior as they're generated
-    parser.add_argument('--viz-final', default=False) # visualize final interactions and priors
+    parser.add_argument('--viz-cont', action='store_true') # visualize interactions and prior as they're generated
+    parser.add_argument('--viz-final', action='store_true') # visualize final interactions and priors
     args = parser.parse_args()
 
     if args.debug:
@@ -101,8 +101,6 @@ if __name__ == '__main__':
 
         # want to generate the same sequence of BBs every time
         plt.ion()
-        test_fig, test_ax = plt.subplots()
-        test_fig.suptitle('test regret')
 
         np.random.seed(1)
         model_path = model_dir + args.data_type + '.pt'
@@ -119,7 +117,10 @@ if __name__ == '__main__':
                 max_motion = bb._mechanisms[0].range/2
                 model = util.load_model(path, hdim=args.hdim)
                 pred_motion = test_env(model, bb=bb, plot=False, viz=False, debug=False, use_cuda=False)
-                test_norm_regrets += [(max_motion - max(0., pred_motion))/max_motion]
+                test_regret = (max_motion - max(0., pred_motion))/max_motion
+                print(i, test_regret)
+                writer.add_scalar('Test_Regret/', test_regret, i-1)
+                test_norm_regrets += [test_regret]
 
             # improve model
             learner, prior_figs, final_figs, interest_figs = active_prior.generate_dataset(1, args.n_inter, args.n_prior, False, False, str(rand_int), 1, args.viz_final, args.viz_cont, 'random' == args.data_type, bb=bb, model_path=model_path, hdim=args.hdim)
@@ -137,14 +138,6 @@ if __name__ == '__main__':
             path = model_dir + args.data_type + '.pt'
             torch.save(model, path)
 
-        if viz_plot_final:
-            test_ax.plot(test_norm_regrets)
-            test_ax.set_xlabel('Number of Busyboxes')
-            test_ax.set_ylabel('Normalized Regret')
-            plt.show()
-            input('enter to continue')
-
-        writer.add_figure('Test Regret/', test_fig)
         writer.close()
     except:
         # for post-mortem debugging since can't run module from command line in pdb.pm() mode
