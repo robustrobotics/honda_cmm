@@ -17,3 +17,4 @@ RUN xargs -n1 pip3 install --trusted-host pypi.python.org < requirements.txt
 RUN apt-get install -y wget && rm -rf /var/lib/apt/lists/*
 RUN wget https://dl.min.io/client/mc/release/linux-amd64/mc && chmod +x mc
 COPY run.sh .
+COPY run_active_train.sh .
