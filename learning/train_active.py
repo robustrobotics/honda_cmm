@@ -4,6 +4,7 @@ import torch
 from learning.models.nn_disp_pol_vis import DistanceRegressor as NNPolVis
 from learning.dataloaders import setup_data_loaders, parse_pickle_file
 import learning.viz as viz
+from learning.test_model import test_env
 from collections import namedtuple
 from util import util
 from torch.utils.tensorboard import SummaryWriter
@@ -77,8 +78,12 @@ if __name__ == '__main__':
     parser.add_argument('--use-cuda', default=False, action='store_true')
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--image-encoder', type=str, default='spatial', choices=['spatial', 'cnn'])
-    parser.add_argument('--n-bbs', type=int, default=5000) # maximum number of robot interactions
+    parser.add_argument('--n-bbs', type=int, default=50) # maximum number of robot interactions
     parser.add_argument('--data-type', default='active', choices=['active', 'random'])
+    parser.add_argument('--n-inter', default=200, type=int) # number of samples used during interactions
+    parser.add_argument('--n-prior', default=100, type=int) # number of samples used to generate prior
+    parser.add_argument('viz-cont', default=False) # visualize interactions and prior as they're generated
+    parser.add_argument('viz-final', default=False) # visualize final interactions and priors
     args = parser.parse_args()
 
     if args.debug:
@@ -95,22 +100,29 @@ if __name__ == '__main__':
             os.makedirs(dir)
 
         # want to generate the same sequence of BBs every time
-        fig, ax = plt.subplots()
+        plt.ion()
+        test_fig, test_ax = plt.subplots()
+        test_fig.suptitle('test regret')
 
         np.random.seed(1)
         model_path = model_dir + args.data_type + '.pt'
-        n_int_samples = 200 # num samples per bb
-        n_prior_samples = 100
-        viz_plot_final = False
-        viz_plot_cont = False
         dataset = []
         writer = SummaryWriter(runs_dir)
-        regrets = []
+        test_norm_regrets = []
         for i in range(1, args.n_bbs+1):
             print('BusyBox: ', i, '/', args.n_bbs)
             rand_int = np.random.randint(100000)
-            bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider], urdf_tag=str(rand_int), debug=False)
-            learner, prior_figs, final_figs, interest_figs = active_prior.generate_dataset(1, n_int_samples, n_prior_samples, False, False, str(rand_int), 1, viz_plot_final, viz_plot_cont, 'random' == args.data_type, bb=bb, model_path=model_path, hdim=args.hdim)
+            bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider], urdf_tag=11, debug=False)
+
+            # test model
+            if os.path.isfile(model_path):
+                max_motion = bb._mechanisms[0].range/2
+                model = util.load_model(path, hdim=args.hdim)
+                pred_motion = test_env(model, bb=bb, plot=False, viz=False, debug=False, use_cuda=False)
+                test_norm_regrets += [(max_motion - max(0., pred_motion))/max_motion]
+
+            # improve model
+            learner, prior_figs, final_figs, interest_figs = active_prior.generate_dataset(1, args.n_inter, args.n_prior, False, False, str(rand_int), 1, args.viz_final, args.viz_cont, 'random' == args.data_type, bb=bb, model_path=model_path, hdim=args.hdim)
             dataset += learner.interactions
             parsed_data = parse_pickle_file(data=dataset)
             plot_fname = args.data_type+'_'+str(i)
@@ -125,19 +137,14 @@ if __name__ == '__main__':
             path = model_dir + args.data_type + '.pt'
             torch.save(model, path)
 
-            # add to plot of regret
-            max_competence = learner.interactions[0].mechanism_params.params.range/2
-            regrets += [abs(goal[1]-max_competence) for goal in learner.all_interact_goals]
-            regret_avgs = [np.mean(regrets[0:j]) for j in range(len(regrets))]
-            plt.cla()
-            ax.plot(range(0, i*n_int_samples), regrets, label='interaction regret')
-            ax.plot(range(0, i*n_int_samples), regret_avgs, label='average regret')
-            ax.set_ylabel('Regret')
-            ax.set_xlabel('Interaction')
-            fig.canvas.draw()
-            plt.pause(0.01)
+        if viz_plot_final:
+            test_ax.plot(test_norm_regrets)
+            test_ax.set_xlabel('Number of Busyboxes')
+            test_ax.set_ylabel('Normalized Regret')
+            plt.show()
+            input('enter to continue')
 
-            writer.add_figure('Regret/', fig)
+        writer.add_figure('Test Regret/', test_fig)
         writer.close()
     except:
         # for post-mortem debugging since can't run module from command line in pdb.pm() mode
