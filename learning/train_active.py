@@ -118,9 +118,9 @@ if __name__ == '__main__':
                 model = util.load_model(path, hdim=args.hdim)
                 pred_motion = test_env(model, bb=bb, plot=False, viz=False, debug=False, use_cuda=False)
                 test_regret = (max_motion - max(0., pred_motion))/max_motion
-                print(i, test_regret)
-                writer.add_scalar('Test_Regret/', test_regret, i-1)
                 test_norm_regrets += [test_regret]
+                writer.add_scalar('Test_Regret/Regret', test_regret, i-1)
+                writer.add_scalar('Test_Regret/Average_Regret', np.mean(test_norm_regrets), i-1)
 
             # improve model
             learner, prior_figs, final_figs, interest_figs = active_prior.generate_dataset(1, args.n_inter, args.n_prior, False, False, str(rand_int), 1, args.viz_final, args.viz_cont, 'random' == args.data_type, bb=bb, model_path=model_path, hdim=args.hdim)
