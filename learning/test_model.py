@@ -187,12 +187,11 @@ def test_env(model, bb=None, plot=False, viz=False, debug=False, use_cuda=False)
     # assume you guessed the correct policy type, and optimize for params and configuration
     x0 = np.concatenate([[params_max[0]], q_max]) # only searching space of pitches!
     res = minimize(fun=objective_func, x0=x0, args=(policy_type_max, dataset.images[0].unsqueeze(0), model, use_cuda),
-                method='BFGS', options={'eps': 10**-3}) # TODO: for some reason get pytorch error when change options
+                method='BFGS', options={'eps': 10**-3})
     x_final = res['x']
-    policy_list = list(pose_handle_base_world.p)+list(pose_handle_base_world.q)+[x_final[0], 0.0] # hard code yaw value
+    policy_list = list(pose_handle_base_world.p)+[0., 0., 0., 1.]+[x_final[0], 0.0] # hard code yaw value
     policy_final = policies.get_policy_from_params(policy_type_max, policy_list, mech)
     config_final = x_final[-1]
-
     if plot:
         plot_search(bb, samples, q_max, delta_yaw_max, delta_pitch_max, policy_final, config_final, debug)
 
@@ -211,10 +210,8 @@ def test_env(model, bb=None, plot=False, viz=False, debug=False, use_cuda=False)
     return motion
 
 def plot_search(bb, samples, q_max, delta_yaw_max, delta_pitch_max, policy_final, config_final, debug):
-    image_data = setup_env(bb, viz=False, debug=debug)
     mech = bb._mechanisms[0]
-    mech_tuple = mech.get_mechanism_tuple()
-    limit = mech_tuple.params.range/2
+    limit = mech.range/2
 
     qs = [s[0][2] for s in samples]
     delta_pitches = [s[0][4] for s in samples]
@@ -224,16 +221,16 @@ def plot_search(bb, samples, q_max, delta_yaw_max, delta_pitch_max, policy_final
 
     plt.ion()
     fig, ax = plt.subplots()
-    im = ax.scatter(qs, np.multiply(180/np.pi,delta_pitches), c=disps, vmin=mind, vmax=maxd, s=6)
+    im = ax.scatter(qs, delta_pitches, c=disps, vmin=mind, vmax=maxd, s=6)
     fig.colorbar(im)
     ax.set_title('Limit ='+str(mech.range/2))
     ax.set_xlabel('q')
     ax.set_ylabel('delta_pitch (deg)')
-    ax.plot(q_max, delta_pitch_max, 'gx')
+    ax.plot(q_max, delta_pitch_max, 'go', mfc='none')
     ax.plot(config_final, policy_final.delta_pitch, 'r.')
     plt.show()
     input('press enter to close plot')
-    #plt.close()
+    plt.close()
 
 def viz_final(bb, policy_final, config_final, debug):
     # test found policy on busybox
@@ -248,13 +245,15 @@ def viz_final(bb, policy_final, config_final, debug):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--viz', action='store_true')
-    #parser.add_argument('--plot', action='store_true')
     parser.add_argument('--debug', action='store_true')
     #parser.add_argument('--n-test', type=int, default=1) # how many mechanisms do you want to test
     parser.add_argument('--hdim', type=int, default=16)
     #parser.add_argument('--use-cuda', action='store_true')
     parser.add_argument('--mode', choices=['single', 'true', 'test', 'plots'], required=True)
+    # args below are only for mode == single
+    parser.add_argument('--model-path', type=str)
+    parser.add_argument('--viz', action='store_true')
+    parser.add_argument('--plot', action='store_true')
     args = parser.parse_args()
 
     # test dataset
@@ -291,10 +290,10 @@ if __name__ == '__main__':
     if args.mode == 'true' and os.path.isdir(true_dir):
         shutil.rmtree(true_dir)
 
+    if args.mode == 'single':
+        model = util.load_model(args.model_path, args.hdim)
+        test_env(model, plot=args.plot, viz=args.viz)
     for (model_path, test_name) in zip(models, names):
-        if args.mode == 'single':
-            model = util.load_model(args.model, args.hdim)
-            test_env(model, plot=args.viz)
         if args.mode == 'true':
             calc_true_error(test_data, model_path, test_name, args.hdim, true_dir)
         if args.mode == 'test':
