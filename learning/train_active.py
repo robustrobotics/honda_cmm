@@ -82,8 +82,8 @@ if __name__ == '__main__':
     parser.add_argument('--data-type', default='active', choices=['active', 'random'])
     parser.add_argument('--n-inter', default=200, type=int) # number of samples used during interactions
     parser.add_argument('--n-prior', default=100, type=int) # number of samples used to generate prior
-    parser.add_argument('viz-cont', default=False) # visualize interactions and prior as they're generated
-    parser.add_argument('viz-final', default=False) # visualize final interactions and priors
+    parser.add_argument('--viz-cont', default=False) # visualize interactions and prior as they're generated
+    parser.add_argument('--viz-final', default=False) # visualize final interactions and priors
     args = parser.parse_args()
 
     if args.debug:
