@@ -84,6 +84,7 @@ if __name__ == '__main__':
     parser.add_argument('--n-prior', default=10, type=int) # number of samples used to generate prior
     parser.add_argument('--viz-cont', action='store_true') # visualize interactions and prior as they're generated
     parser.add_argument('--viz-final', action='store_true') # visualize final interactions and priors
+    parser.add_argument('--lite', default=True) # if used, does not generate or save any plots
     args = parser.parse_args()
 
     if args.debug:
@@ -123,18 +124,35 @@ if __name__ == '__main__':
                 writer.add_scalar('Test_Regret/Average_Regret', np.mean(test_norm_regrets), i-1)
 
             # improve model
-            learner, prior_figs, final_figs, interest_figs = active_prior.generate_dataset(1, args.n_inter, args.n_prior, False, False, str(rand_int), 1, args.viz_final, args.viz_cont, 'random' == args.data_type, bb=bb, model_path=model_path, hdim=args.hdim)
+            return_tup = active_prior.generate_dataset(1, \
+                                                                args.n_inter,
+                                                                args.n_prior,
+                                                                False,
+                                                                False,
+                                                                str(rand_int),
+                                                                1,
+                                                                args.viz_final,
+                                                                args.viz_cont,
+                                                                'random' == args.data_type,
+                                                                bb=bb, model_path=model_path,
+                                                                hdim=args.hdim,
+                                                                lite=args.lite)
+            if args.lite:
+                learner = return_tup
+            else:
+                learner, prior_figs, final_figs, interest_figs = return_tup
             dataset += learner.interactions
             parsed_data = parse_pickle_file(data=dataset)
             plot_fname = args.data_type+'_'+str(i)
             train_error, model = train_eval(args, parsed_data, plot_fname)
             writer.add_scalar('Loss/train', train_error, i)
-            if prior_figs[0]:
-                writer.add_figure('Prior/'+str(i), prior_figs[0])
-            if final_figs[0]:
-                writer.add_figure('Final/'+str(i), final_figs[0])
-            if interest_figs[0]:
-                writer.add_figure('Interest/'+str(i), interest_figs[0])
+            if not args.lite:
+                if prior_figs[0]:
+                    writer.add_figure('Prior/'+str(i), prior_figs[0])
+                if final_figs[0]:
+                    writer.add_figure('Final/'+str(i), final_figs[0])
+                if interest_figs[0]:
+                    writer.add_figure('Interest/'+str(i), interest_figs[0])
             path = model_dir + args.data_type + '.pt'
             torch.save(model, path+'i')
 
