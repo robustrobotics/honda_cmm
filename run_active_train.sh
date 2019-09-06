@@ -3,18 +3,15 @@ git clone https://${GITHUB_USERNAME}:${GITHUB_KEY}@github.com/robustrobotics/hon
 cd honda_cmm
 export OMP_NUM_THREADS=1
 
-/./mc cp csail/carism/expert_rand8_50000.pickle tmp/active
-/./mc cp csail/carism/random_50000.pickle tmp/random
-mkdir runs
-mkdir torch_models
-/./mc rm -r --force csail/carism/runs_running
-/./mc rm -r --force csail/carism/torch_models_running
+/./mc rm -r --force csail/carism/runs_active
+/./mc rm -r --force csail/carism/csail/carism/torch_models_prior
 
-#/./mc mirror -w runs csail/carism/runs_test > /dev/null 2>&1
-python3 -m learning.train --batch-size 16 --hdim 16 --n-epochs 100 --use-cuda --random-data-path tmp/random --active-data-path tmp/active --mode ntrain
-TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
-/./mc cp -r runs/ csail/carism/runs_expert_rand8_1_50k
-/./mc cp -r torch_models/ csail/carism/torch_models_expert_rand8_1_50k
+python3 -m learning.train_active --batch-size 16 --hdim 16 --n-epochs 200 --n-bbs 50 --use-cuda --n-inter 300 --n-prior 100 --lite
+
+/./mc rm -r --force csail/carism/runs_active_cluster
+/./mc rm -r --force csail/carism/csail/carism/torch_models_prior_cluster
+/./mc cp -r runs_active/ csail/carism/runs_active_cluster
+/./mc cp -r torch_models_prior/ csail/carism/torch_models_prior_cluster
 
 # run in terminal to mirror while training (doesn't work)
 # nohup /./mc mirror -w --overwrite --remove honda_cmm/runs csail/carism/runs_running

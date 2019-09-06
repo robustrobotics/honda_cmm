@@ -1,21 +1,14 @@
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: batch/v1
+kind: Job
 metadata:
-  name: honda-cmm
+  name: honda-cmm-prior
 spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: honda_cmm
   template:
-    metadata:
-      labels:
-        app: honda_cmm
     spec:
       containers:
       - name: honda-cmm
         image: carismoses/honda_cmm:latest
-        command: ["bash"]
+        command: ["bash", "run_active_train.sh"]
         resources:
           limits:
             cpu: 8
@@ -25,7 +18,6 @@ spec:
             cpu: 8
             memory: 32Gi
             nvidia.com/gpu: 1
-        tty: true
         ports:
         - containerPort: 6006
         envFrom:
@@ -40,3 +32,5 @@ spec:
         env:
         - name: BRANCH
           value: master
+      restartPolicy: Never
+  backoffLimit: 4
