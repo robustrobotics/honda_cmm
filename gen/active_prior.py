@@ -81,7 +81,7 @@ class ActivePolicyLearner(object):
                 self.sample(n, 'predict', model)
                 if n != n_prior_samples-1:
                     self.reset()
-            if not selt.lite:
+            if not self.lite:
                 self.update_plot('predict')
         for n in range(n_int_samples):
             sys.stdout.write("\rProcessing interactive sample %i/%i" % (n+1, n_int_samples))
