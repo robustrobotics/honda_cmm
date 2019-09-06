@@ -85,6 +85,7 @@ if __name__ == '__main__':
     parser.add_argument('--viz-cont', action='store_true') # visualize interactions and prior as they're generated
     parser.add_argument('--viz-final', action='store_true') # visualize final interactions and priors
     parser.add_argument('--lite', action='store_true') # if used, does not generate or save any plots
+    parser.add_argument('--train-freq', default=1, type=int) # frequency to retrain and test model
     args = parser.parse_args()
 
     if args.debug:
@@ -107,23 +108,13 @@ if __name__ == '__main__':
         dataset = []
         writer = SummaryWriter(runs_dir)
         test_norm_regrets = []
-        for i in range(0, args.n_bbs):
+        model_path = None
+        for i in range(args.n_bbs):
             print('BusyBox: ', i+1, '/', args.n_bbs)
             rand_int = np.random.randint(100000)
-            bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider], urdf_tag=11, debug=False)
-            last_model_path = model_dir + args.data_type + str(i-1) + '.pt'
+            bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider], urdf_tag=rand_int, debug=False)
 
-            # test model
-            if os.path.isfile(last_model_path):
-                max_motion = bb._mechanisms[0].range/2
-                model = util.load_model(last_model_path, hdim=args.hdim)
-                pred_motion = test_env(model, bb=bb, plot=False, viz=False, debug=False, use_cuda=False)
-                test_regret = (max_motion - max(0., pred_motion))/max_motion
-                test_norm_regrets += [test_regret]
-                writer.add_scalar('Test_Regret/Regret', test_regret, i)
-                writer.add_scalar('Test_Regret/Average_Regret', np.mean(test_norm_regrets), i)
-
-            # improve model
+            # generate data
             return_tup = active_prior.generate_dataset(1, \
                                                     args.n_inter,
                                                     args.n_prior,
@@ -134,26 +125,40 @@ if __name__ == '__main__':
                                                     args.viz_final,
                                                     args.viz_cont,
                                                     'random' == args.data_type,
-                                                    bb=bb, model_path=last_model_path,
+                                                    bb=bb, model_path=model_path,
                                                     hdim=args.hdim,
                                                     lite=args.lite)
             if args.lite:
                 learner = return_tup
             else:
                 learner, prior_figs, final_figs, interest_figs = return_tup
-            dataset += learner.interactions
-            parsed_data = parse_pickle_file(data=dataset)
-            train_error, model = train_eval(args, parsed_data)
-            writer.add_scalar('Loss/train', train_error, i)
-            if not args.lite:
                 if prior_figs[0]:
                     writer.add_figure('Prior/'+str(i), prior_figs[0])
                 if final_figs[0]:
                     writer.add_figure('Final/'+str(i), final_figs[0])
                 if interest_figs[0]:
                     writer.add_figure('Interest/'+str(i), interest_figs[0])
-            model_path = model_dir + args.data_type + str(i) + '.pt'
-            torch.save(model, model_path)
+            dataset += learner.interactions
+
+            if not i % args.train_freq:
+                # train model
+                parsed_data = parse_pickle_file(data=dataset)
+                train_error, model = train_eval(args, parsed_data)
+
+                # save model
+                model_path = model_dir + args.data_type + str(i) + '.pt'
+                torch.save(model, model_path)
+
+                # test model
+                max_motion = bb._mechanisms[0].range/2
+                model = util.load_model(model_path, hdim=args.hdim)
+                pred_motion = test_env(model, bb=bb, plot=False, viz=False, debug=False, use_cuda=False)
+                test_regret = (max_motion - max(0., pred_motion))/max_motion
+                test_norm_regrets += [test_regret]
+                writer.add_scalar('Test_Regret/Regret', test_regret, i)
+                writer.add_scalar('Test_Regret/Average_Regret', np.mean(test_norm_regrets), i)
+
+                writer.add_scalar('Loss/train', train_error, i)
 
         writer.close()
     except:

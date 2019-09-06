@@ -71,7 +71,7 @@ class ActivePolicyLearner(object):
         if not self.lite:
             prior_fig = None
             final_fig = None
-        if os.path.isfile(model_path):
+        if model_path:
             model = util.load_model(model_path, hdim=hdim)
             for n in range(n_prior_samples):
                 sys.stdout.write("\rProcessing prior sample %i/%i" % (n+1, n_prior_samples))
