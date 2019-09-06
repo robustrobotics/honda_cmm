@@ -109,12 +109,22 @@ if __name__ == '__main__':
         writer = SummaryWriter(runs_dir)
         test_norm_regrets = []
         model_path = None
-        for i in range(args.n_bbs):
-            print('BusyBox: ', i+1, '/', args.n_bbs)
+        for i in range(1,args.n_bbs+1):
+            print('BusyBox: ', i, '/', args.n_bbs)
             rand_int = np.random.randint(100000)
             bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider], urdf_tag=rand_int, debug=False)
 
-            # generate data
+            # test model on this novel busybox
+            if model_path:
+                max_motion = bb._mechanisms[0].range/2
+                model = util.load_model(model_path, hdim=args.hdim)
+                pred_motion = test_env(model, bb=bb, plot=False, viz=False, debug=False, use_cuda=False)
+                test_regret = (max_motion - max(0., pred_motion))/max_motion
+                test_norm_regrets += [test_regret]
+                writer.add_scalar('Test_Regret/Regret', test_regret, i)
+                writer.add_scalar('Test_Regret/Average_Regret', np.mean(test_norm_regrets), i)
+
+            # generate interaction data
             return_tup = active_prior.generate_dataset(1, \
                                                     args.n_inter,
                                                     args.n_prior,
@@ -148,16 +158,6 @@ if __name__ == '__main__':
                 # save model
                 model_path = model_dir + args.data_type + str(i) + '.pt'
                 torch.save(model, model_path)
-
-                # test model
-                max_motion = bb._mechanisms[0].range/2
-                model = util.load_model(model_path, hdim=args.hdim)
-                pred_motion = test_env(model, bb=bb, plot=False, viz=False, debug=False, use_cuda=False)
-                test_regret = (max_motion - max(0., pred_motion))/max_motion
-                test_norm_regrets += [test_regret]
-                writer.add_scalar('Test_Regret/Regret', test_regret, i)
-                writer.add_scalar('Test_Regret/Average_Regret', np.mean(test_norm_regrets), i)
-
                 writer.add_scalar('Loss/train', train_error, i)
 
         writer.close()
