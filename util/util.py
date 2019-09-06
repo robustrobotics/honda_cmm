@@ -11,8 +11,7 @@ from learning.models.nn_disp_pol import DistanceRegressor as NNPol
 from learning.models.nn_disp_pol_vis import DistanceRegressor as NNPolVis
 from learning.models.nn_disp_pol_mech import DistanceRegressor as NNPolMech
 from actions import policies
-from actions.gripper import Gripper
-from gen.generator_busybox import BusyBox
+import matplotlib.pyplot as plt
 import matplotlib.pyplot as plt
 
 name_lookup = {'Prismatic': 0, 'Revolute': 1}
@@ -132,6 +131,9 @@ def merge_files(in_file_names, out_file_name):
 
 ### PyBullet Helper Functions ###
 def replay_result(result):
+    from actions.gripper import Gripper
+    from gen.generator_busybox import BusyBox
+
     bb = BusyBox.bb_from_result(result)
     image_data = setup_pybullet.setup_env(bb, True, True)
     gripper = Gripper(bb.bb_id)
