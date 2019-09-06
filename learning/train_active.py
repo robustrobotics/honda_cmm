@@ -84,7 +84,7 @@ if __name__ == '__main__':
     parser.add_argument('--n-prior', default=10, type=int) # number of samples used to generate prior
     parser.add_argument('--viz-cont', action='store_true') # visualize interactions and prior as they're generated
     parser.add_argument('--viz-final', action='store_true') # visualize final interactions and priors
-    parser.add_argument('--lite', default=True) # if used, does not generate or save any plots
+    parser.add_argument('--lite', action='store_true') # if used, does not generate or save any plots
     args = parser.parse_args()
 
     if args.debug:
