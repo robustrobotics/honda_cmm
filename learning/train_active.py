@@ -153,8 +153,8 @@ if __name__ == '__main__':
                     writer.add_figure('Final/'+str(i), final_figs[0])
                 if interest_figs[0]:
                     writer.add_figure('Interest/'+str(i), interest_figs[0])
-            path = model_dir + args.data_type + '.pt'
-            torch.save(model, path+'i')
+            path = model_dir + args.data_type + str(i) + '.pt'
+            torch.save(model, path)
 
         writer.close()
     except:
