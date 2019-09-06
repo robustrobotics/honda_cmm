@@ -2,5 +2,8 @@
 models/*.urdf
 
 # generated pickle files
-/data/models
-/data/search
+/data
+
+# tensorflow run log data
+/runs*
+/torch_models*

@@ -15,7 +15,7 @@ import shutil
 import matplotlib.pyplot as plt
 torch.backends.cudnn.enabled = True
 
-def train_eval(args, parsed_data, plot_fname, pviz=False):
+def train_eval(args, parsed_data, pviz=False):
 
     train_set = setup_data_loaders(parsed_data, batch_size=args.batch_size, train_only=True)
 
@@ -78,12 +78,14 @@ if __name__ == '__main__':
     parser.add_argument('--use-cuda', default=False, action='store_true')
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--image-encoder', type=str, default='spatial', choices=['spatial', 'cnn'])
-    parser.add_argument('--n-bbs', type=int, default=50) # maximum number of robot interactions
+    parser.add_argument('--n-bbs', type=int, default=5) # maximum number of robot interactions
     parser.add_argument('--data-type', default='active', choices=['active', 'random'])
-    parser.add_argument('--n-inter', default=200, type=int) # number of samples used during interactions
-    parser.add_argument('--n-prior', default=100, type=int) # number of samples used to generate prior
-    parser.add_argument('viz-cont', default=False) # visualize interactions and prior as they're generated
-    parser.add_argument('viz-final', default=False) # visualize final interactions and priors
+    parser.add_argument('--n-inter', default=20, type=int) # number of samples used during interactions
+    parser.add_argument('--n-prior', default=10, type=int) # number of samples used to generate prior
+    parser.add_argument('--viz-cont', action='store_true') # visualize interactions and prior as they're generated
+    parser.add_argument('--viz-final', action='store_true') # visualize final interactions and priors
+    parser.add_argument('--lite', action='store_true') # if used, does not generate or save any plots
+    parser.add_argument('--train-freq', default=1, type=int) # frequency to retrain and test model
     args = parser.parse_args()
 
     if args.debug:
@@ -101,50 +103,63 @@ if __name__ == '__main__':
 
         # want to generate the same sequence of BBs every time
         plt.ion()
-        test_fig, test_ax = plt.subplots()
-        test_fig.suptitle('test regret')
 
         np.random.seed(1)
-        model_path = model_dir + args.data_type + '.pt'
         dataset = []
         writer = SummaryWriter(runs_dir)
         test_norm_regrets = []
-        for i in range(1, args.n_bbs+1):
-            print('BusyBox: ', i, '/', args.n_bbs)
+        model_path = None
+        for i in range(args.n_bbs):
+            print('BusyBox: ', i+1, '/', args.n_bbs)
             rand_int = np.random.randint(100000)
-            bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider], urdf_tag=11, debug=False)
+            bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider], urdf_tag=rand_int, debug=False)
 
-            # test model
-            if os.path.isfile(model_path):
-                max_motion = bb._mechanisms[0].range/2
-                model = util.load_model(path, hdim=args.hdim)
-                pred_motion = test_env(model, bb=bb, plot=False, viz=False, debug=False, use_cuda=False)
-                test_norm_regrets += [(max_motion - max(0., pred_motion))/max_motion]
-
-            # improve model
-            learner, prior_figs, final_figs, interest_figs = active_prior.generate_dataset(1, args.n_inter, args.n_prior, False, False, str(rand_int), 1, args.viz_final, args.viz_cont, 'random' == args.data_type, bb=bb, model_path=model_path, hdim=args.hdim)
+            # generate data
+            return_tup = active_prior.generate_dataset(1, \
+                                                    args.n_inter,
+                                                    args.n_prior,
+                                                    False,
+                                                    False,
+                                                    str(rand_int),
+                                                    1,
+                                                    args.viz_final,
+                                                    args.viz_cont,
+                                                    'random' == args.data_type,
+                                                    bb=bb, model_path=model_path,
+                                                    hdim=args.hdim,
+                                                    lite=args.lite)
+            if args.lite:
+                learner = return_tup
+            else:
+                learner, prior_figs, final_figs, interest_figs = return_tup
+                if prior_figs[0]:
+                    writer.add_figure('Prior/'+str(i), prior_figs[0])
+                if final_figs[0]:
+                    writer.add_figure('Final/'+str(i), final_figs[0])
+                if interest_figs[0]:
+                    writer.add_figure('Interest/'+str(i), interest_figs[0])
             dataset += learner.interactions
-            parsed_data = parse_pickle_file(data=dataset)
-            plot_fname = args.data_type+'_'+str(i)
-            train_error, model = train_eval(args, parsed_data, plot_fname)
-            writer.add_scalar('Loss/train', train_error, i)
-            if prior_figs[0]:
-                writer.add_figure('Prior/'+str(i), prior_figs[0])
-            if final_figs[0]:
-                writer.add_figure('Final/'+str(i), final_figs[0])
-            if interest_figs[0]:
-                writer.add_figure('Interest/'+str(i), interest_figs[0])
-            path = model_dir + args.data_type + '.pt'
-            torch.save(model, path)
 
-        if viz_plot_final:
-            test_ax.plot(test_norm_regrets)
-            test_ax.set_xlabel('Number of Busyboxes')
-            test_ax.set_ylabel('Normalized Regret')
-            plt.show()
-            input('enter to continue')
+            if not i % args.train_freq:
+                # train model
+                parsed_data = parse_pickle_file(data=dataset)
+                train_error, model = train_eval(args, parsed_data)
 
-        writer.add_figure('Test Regret/', test_fig)
+                # save model
+                model_path = model_dir + args.data_type + str(i) + '.pt'
+                torch.save(model, model_path)
+
+                # test model
+                max_motion = bb._mechanisms[0].range/2
+                model = util.load_model(model_path, hdim=args.hdim)
+                pred_motion = test_env(model, bb=bb, plot=False, viz=False, debug=False, use_cuda=False)
+                test_regret = (max_motion - max(0., pred_motion))/max_motion
+                test_norm_regrets += [test_regret]
+                writer.add_scalar('Test_Regret/Regret', test_regret, i)
+                writer.add_scalar('Test_Regret/Average_Regret', np.mean(test_norm_regrets), i)
+
+                writer.add_scalar('Loss/train', train_error, i)
+
         writer.close()
     except:
         # for post-mortem debugging since can't run module from command line in pdb.pm() mode

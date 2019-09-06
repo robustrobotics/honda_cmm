@@ -120,3 +120,6 @@ models/*.urdf
 
 # generated pickle files
 /data
+
+# tensorboard logs
+/runs*

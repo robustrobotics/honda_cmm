@@ -31,7 +31,7 @@ alpha = 1.0 # probability of exploring versus exploting
 
 class ActivePolicyLearner(object):
 
-    def __init__(self, bb, viz_sim, debug, viz_plot_final, viz_plot_cont, all_random):
+    def __init__(self, bb, viz_sim, debug, viz_plot_final, viz_plot_cont, all_random, lite):
         self.bb = bb
         self.mech = self.bb._mechanisms[0]
         self.debug = debug
@@ -46,51 +46,53 @@ class ActivePolicyLearner(object):
         self.interactions = []
         self.all_random = all_random
         self.all_interact_goals = []
+        self.lite = lite
 
         #plt.ion()
+        if not self.lite:
+            self.prior_fig, self.prior_ax = plt.subplots()
+            self.prior_fig.suptitle('prior')
+            self.prior_ax.set_aspect('equal')
+            self.reset_plot(self.prior_ax)
+            self.made_prior_colorbar = False
 
-        self.prior_fig, self.prior_ax = plt.subplots()
-        self.prior_fig.suptitle('prior')
-        self.prior_ax.set_aspect('equal')
-        self.reset_plot(self.prior_ax)
-        self.made_prior_colorbar = False
+            self.interest_fig, self.interest_ax = plt.subplots()
+            self.interest_fig.suptitle('average interest')
+            self.interest_avgs, self.interest_vars, self.interest_mins, self.interest_maxes = [], [], [], []
 
-        self.interest_fig, self.interest_ax = plt.subplots()
-        self.interest_fig.suptitle('average interest')
-        self.interest_avgs, self.interest_vars, self.interest_mins, self.interest_maxes = [], [], [], []
-
-        self.interact_fig, self.interact_ax = plt.subplots()
-        self.interact_fig.suptitle('interactions')
-        self.interact_ax.set_aspect('equal')
-        self.reset_plot(self.interact_ax)
-        self.made_interact_colorbar = False
+            self.interact_fig, self.interact_ax = plt.subplots()
+            self.interact_fig.suptitle('interactions')
+            self.interact_ax.set_aspect('equal')
+            self.reset_plot(self.interact_ax)
+            self.made_interact_colorbar = False
 
     def learn(self, n_int_samples, n_prior_samples, model_path, hdim):
         # if prior model exists then load the model and generate regions from model
-        prior_fig = None
-        final_fig = None
-        if os.path.isfile(model_path):
+        if not self.lite:
+            prior_fig = None
+            final_fig = None
+        if model_path:
             model = util.load_model(model_path, hdim=hdim)
             for n in range(n_prior_samples):
                 sys.stdout.write("\rProcessing prior sample %i/%i" % (n+1, n_prior_samples))
-                if self.debug:
+                if self.debug and not self.lite:
                     for region in self.regions:
                         region.draw(self.bb)
                 self.sample(n, 'predict', model)
                 if n != n_prior_samples-1:
                     self.reset()
-            if self.viz_plot_final:
-                self.update_plot('predict', self.viz_plot_final)
+            if not self.lite:
+                self.update_plot('predict')
         for n in range(n_int_samples):
             sys.stdout.write("\rProcessing interactive sample %i/%i" % (n+1, n_int_samples))
-            if self.debug:
+            if self.debug and not self.lite:
                 for region in self.regions:
                     region.draw(self.bb)
             self.sample(n, 'interact')
             if n != n_int_samples-1:
                 self.reset()
-        if self.viz_plot_final:
-            self.update_plot('interact', self.viz_plot_final)
+        if not self.lite:
+            self.update_plot('interact')
 
     def sample(self, n, mode, model=None):
         # select goal and region
@@ -103,7 +105,7 @@ class ActivePolicyLearner(object):
 
         # execute/predict and calculate competence
         goal_pos = self.bb.project_onto_backboard([goal[0], 0.0, goal[1]])
-        if self.debug:
+        if self.debug and not self.lite:
             util.vis_frame(goal_pos, [0., 0., 0., 1.], lifeTime=0, length=.05)
             for print_region in self.regions:
                 for (other_goal, _) in print_region.attempted_goals:
@@ -136,14 +138,15 @@ class ActivePolicyLearner(object):
                 self.regions += new_regions
 
         # update interest plotting values
-        if mode == 'interact':
-            avg_n = np.mean([region.interest for region in self.regions])
-            self.interest_avgs = np.append(self.interest_avgs, avg_n)
-            self.interest_vars = np.append(self.interest_vars, np.var([region.interest for region in self.regions]))
-            self.interest_mins = np.append(self.interest_mins, min([region.interest for region in self.regions]))
-            self.interest_maxes = np.append(self.interest_maxes, max([region.interest for region in self.regions]))
+        if not self.lite:
+            if mode == 'interact':
+                avg_n = np.mean([region.interest for region in self.regions])
+                self.interest_avgs = np.append(self.interest_avgs, avg_n)
+                self.interest_vars = np.append(self.interest_vars, np.var([region.interest for region in self.regions]))
+                self.interest_mins = np.append(self.interest_mins, min([region.interest for region in self.regions]))
+                self.interest_maxes = np.append(self.interest_maxes, max([region.interest for region in self.regions]))
 
-        if len(self.interactions)>g_max and self.viz_plot_cont:
+        if len(self.interactions)>g_max and self.viz_plot_cont and not self.lite:
             self.update_plot(mode)
 
     def get_max_region(self):
@@ -260,7 +263,7 @@ class ActivePolicyLearner(object):
         endpoint1 = np.add(center, np.multiply(-self.mech.range/2, self.mech.axis))
         ax.plot([-endpoint0[0], -endpoint1[0]], [endpoint0[1], endpoint1[1]], '--r')
 
-    def update_plot(self, mode, block=False):
+    def update_plot(self, mode):
         if mode == 'predict':
             ax, fig = self.prior_ax, self.prior_fig
         elif mode == 'interact':
@@ -318,8 +321,8 @@ class ActivePolicyLearner(object):
             self.interact_fig.canvas.draw()
             self.interest_fig.canvas.draw()
             plt.pause(0.01)
-        if block:
-            plt.show()
+        plt.show()
+        if self.viz_plot_final:
             input('enter to continue')
 
     def reset_plot(self, ax):
@@ -440,22 +443,28 @@ class Region(object):
                         inside = True
         return inside
 
-def generate_dataset(n_bbs, n_int_samples, n_prior_samples, viz, debug, urdf_num, max_mech, viz_plot_final, viz_plot_cont, all_random, bb=None, model_path=None, hdim=16):
+def generate_dataset(n_bbs, n_int_samples, n_prior_samples, viz, debug, urdf_num, \
+        max_mech, viz_plot_final, viz_plot_cont, all_random, bb=None, model_path=None, hdim=16, lite=False):
     results = []
-    prior_figs = []
-    final_figs = []
-    interest_figs = []
+    if not lite:
+        prior_figs = []
+        final_figs = []
+        interest_figs = []
     for i in range(n_bbs):
         if bb is None:
             bb = BusyBox.generate_random_busybox(max_mech=max_mech, mech_types=[Slider], urdf_tag=urdf_num, debug=debug)
-        active_learner = ActivePolicyLearner(bb, viz, debug, viz_plot_final, viz_plot_cont, all_random)
+        active_learner = ActivePolicyLearner(bb, viz, debug, viz_plot_final, viz_plot_cont, all_random, lite)
         active_learner.learn(n_int_samples, n_prior_samples, model_path, hdim)
-        prior_figs += [active_learner.prior_fig]
-        final_figs += [active_learner.interact_fig]
-        interest_figs += [active_learner.interest_fig]
+        if not lite:
+            prior_figs += [active_learner.prior_fig]
+            final_figs += [active_learner.interact_fig]
+            interest_figs += [active_learner.interest_fig]
         results.extend(active_learner.interactions)
     print()
-    return active_learner, prior_figs, final_figs, interest_figs
+    if lite:
+        return active_learner
+    else:
+        return active_learner, prior_figs, final_figs, interest_figs
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
