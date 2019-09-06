@@ -106,7 +106,7 @@ class Prismatic(Policy):
 
         # derived
         self._M_origin_world = util.pose_to_matrix(self.rigid_position, self.rigid_orientation)
-        super(Prismatic,self).__init__('Prismatic')
+        super(Prismatic, self).__init__('Prismatic')
 
     def _forward_kinematics(self, config):
         q_prismatic_dir = util.quaternion_from_euler(0.0, self.pitch, self.yaw)
@@ -130,7 +130,8 @@ class Prismatic(Policy):
     def generate_config(mech, goal_config):
         if goal_config is None:
             max_config = 0.25 # from generator_busybox
-            return np.random.uniform(-max_config,max_config)
+            # max_config = np.random.uniform(-0.1, 0.1)
+            return np.random.uniform(-max_config, max_config)
         else:
             return goal_config*mech.range/2.0
 
@@ -142,7 +143,7 @@ class Prismatic(Policy):
     def _draw_traj(self, traj):
         for i in range(len(traj)-1):
             # raise so can see above track
-            p.addUserDebugLine(np.add(traj[i].p, [0., .025, 0.]), np.add(traj[i+1].p, [0., .025, 0.]), [0,0,1])
+            p.addUserDebugLine(np.add(traj[i].p, [0., .025, 0.]), np.add(traj[i+1].p, [0., .025, 0.]), [0, 0, 1])
 
     @staticmethod
     def _gen(bb, mech, randomness):

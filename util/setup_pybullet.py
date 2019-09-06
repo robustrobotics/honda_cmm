@@ -3,7 +3,6 @@ import pybullet_data
 import numpy as np
 from util import util
 import numpy as np
-from gen.generator_busybox import Slider, Door, BusyBox
 import matplotlib.pyplot as plt
 
 
@@ -75,6 +74,7 @@ def setup_env(bb, viz, debug):
 def custom_bb_door():
     """ Generate a custom BusyBox environment
     """
+    from gen.generator_busybox import Door, BusyBox
     bb_width = 0.8
     bb_height = 0.4
     door_offset = (0.0, 0.0)
@@ -87,6 +87,7 @@ def custom_bb_door():
 def custom_bb_slider():
     """ Generate a custom BusyBox environment
     """
+    from gen.generator_busybox import Slider, BusyBox
     bb_width = 0.8
     bb_height = 0.4
     x_offset = 0.0
