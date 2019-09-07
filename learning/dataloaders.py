@@ -153,7 +153,6 @@ def parse_pickle_file(fname=None, data=None):
 
 
 def create_data_splits(data, val_pct=0.15, test_pct=0.15):
-    random.Random(0).shuffle(data)
     n = len(data)
     val_start = int(n*(1-val_pct-test_pct))
     test_start = int(n*(1-test_pct))
@@ -170,6 +169,7 @@ def setup_data_loaders(data, batch_size=128, use_cuda=True, small_train=0, train
     kwargs = {'num_workers': 0,
               'pin_memory': use_cuda}
 
+    random.Random(0).shuffle(data)
     if train_only:
         train_set = PolicyDataset(data)
         train_loader = torch.utils.data.DataLoader(dataset=train_set,
