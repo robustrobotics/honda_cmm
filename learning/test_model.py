@@ -17,33 +17,18 @@ from torch.utils.tensorboard import SummaryWriter
 import os
 import shutil
 
-#commenting out because circular imports...
-'''
-def vis_test_error(test_data, model_path, test_name, hdim):
-    ntrain = 10000
-    step = 1000
-    bbs = util.read_from_file(fname)
-    data_types = ['active', 'random']
+def vis_test_error(test_data, model_path, test_name, hdim, plots_dir):
+    from util import plot_results
     plt.ion()
     plot_obj = plot_results.TestMechPoliciesPitchOnly()
-    ns = range(step, ntrain+1, step)
-
-    bbs = bbs[:7]
-    for train_data_type in data_types:
-        for val_data_type in data_types:
-            for n in ns:
-                net = util.load_model(files[n], hdim=hdim)
-                plot_obj._plot(None, model=net, bbps=bbs)
-                dir = 'test_plots/'+train_data_type+'/'+val_data_type
-                file = str(n)+'.png'
-                if not os.path.isdir(dir):
-                    os.makedirs(dir)
-                path = dir + '/' + file
-                plt.savefig(path, bbox_inches='tight')
-                #plt.show()
-                #input()
-                #plt.close()
-'''
+    bbs = test_data[:7]
+    net = util.load_model(model_path, hdim=hdim)
+    plot_obj._plot(None, model=net, bbps=bbs, n_samples=11)#, n_pitches=2)
+    save_path = plots_dir + test_name
+    plt.savefig(save_path, bbox_inches='tight')
+    #plt.show()
+    #input()
+    #plt.close()
 
 def get_n_from_file(file):
     n_str = ''
@@ -257,34 +242,31 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # test dataset
-    test_file = 'data/datasets/40_bb_sliders.pickle'
-    test_data = util.read_from_file(test_file)
-
+    #test_file = 'data/datasets/40_bb_sliders.pickle'
+    #test_data = util.read_from_file(test_file)
+    test_data = []
+    for i in range(7):
+        test_data += [BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider])]
     # model paths
-    models = [#'torch_models_expert_rand0_1_50k/active/active/',
-                #'torch_models_expert_rand2_1_50k/active/active/',
-                #'torch_models_expert_rand4_1_50k/active/active/',
-                #'torch_models_expert_rand6_1_50k/active/active/',
-                #'torch_models_expert_rand8_1_50k/active/active/',
-                'torch_models_1_50k/random/active/',
-                #'torch_models_1_50k/active/active/',
-                'torch_models_alpha_1_50k/active/active/']
+    models = ['tmpc2/active10.pt',
+                'tmpc2/active20.pt',
+                'tmpc2/active30.pt',
+                'tmpc2/active40.pt',
+                'tmpc2/active50.pt']
 
     # plot names
-    names = [#'expert',
-            #    'random_p2',
-            #    'random_p4',
-            #    'random_p6',
-            #    'random_p8',
-                'random',
-            #    'orig_active',
-                'active_alpha']
+    names = ['active10',
+                'active20',
+                'active30',
+                'active40',
+                'active50']
 
     if args.debug:
         import pdb; pdb.set_trace()
 
     test_dir = './all_test_errors/'
     true_dir = './all_true_errors/'
+    plots_dir = './all_plots/'
     #if args.mode == 'test' and os.path.isdir(test_dir):
     #    shutil.rmtree(test_dir)
     if args.mode == 'true' and os.path.isdir(true_dir):
@@ -299,4 +281,4 @@ if __name__ == '__main__':
         if args.mode == 'test':
             calc_test_error(test_data, model_path, test_name, args.hdim, test_dir)
         if args.mode == 'plots':
-            vis_test_error(test_data, model_path, test_name, args.hdim)
+            vis_test_error(test_data, model_path, test_name, args.hdim, plots_dir)

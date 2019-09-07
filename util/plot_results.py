@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from util import util
 import sys
-#from learning.test_model import get_pred_motions
+from learning.test_model import get_pred_motions
 from actions.policies import PrismaticParams, RevoluteParams
 from gen.generator_busybox import BusyBox, Slider, Door
 from learning.dataloaders import parse_pickle_file, PolicyDataset, create_data_splits
@@ -421,10 +421,8 @@ class TestMechPoliciesPitchOnly(PlotFunc):
     def description():
         return 'show performance on policies for a multiple busybox where ONLY PITCH is varied'
 
-    def _plot(self, data, model, bbps=None):
+    def _plot(self, data, model, bbps=None, n_samples=25, n_pitches=5):
         randomness = 0.0
-        n_samples = 25
-        n_pitches = 5
         if bbps is None:
             n_bbs = 25
         else:
