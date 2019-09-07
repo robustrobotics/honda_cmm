@@ -22,12 +22,12 @@ AttemptedGoal = namedtuple('AttemptedGoal', 'goal competence')
 # THIS IS ONLY MADE FOR PRISMATIC POLICIES
 
 # params
-g_max = 7  # max samples per region
+g_max = 10  # max samples per region
 R = 0.05    # region to sample for low competence
-n_int = 3   # maximum number of samples in a region to calc interest
+n_int = 5   # maximum number of samples in a region to calc interest
 min_region = 0.0
-alpha = 0.992 # probability of exploring versus exploting
-discount = True # discount the exploration prob every iteration
+alpha = 1.0 # probability of exploring versus exploting
+discount = False # discount the exploration prob every iteration
 
 class ActivePolicyLearner(object):
 
