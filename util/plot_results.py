@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from util import util
 import sys
-from learning.test_model import get_pred_motions
-from actions.policies import PrismaticParams, RevoluteParams, get_policy_from_params
+#from learning.test_model import get_pred_motions
+from actions.policies import PrismaticParams, RevoluteParams
 from gen.generator_busybox import BusyBox, Slider, Door
 from learning.dataloaders import parse_pickle_file, PolicyDataset, create_data_splits
 import actions.policies as policies
@@ -26,12 +26,34 @@ class DoorRadiusMotion(PlotFunc):
         return 'Plot of the door radius versus the joint motion'
 
     def _plot(self, data, model):
+        plt.figure()
         for data_point in data:
             if data_point.mechanism_params.type == 'Door':
                 plt.plot(data_point.mechanism_params.params.door_size[0], data_point.net_motion, 'b.')
         plt.xlabel('Door Radius')
         plt.ylabel('Motion of Handle')
         plt.title('Motion of Doors')
+
+class DoorConfigMotion(PlotFunc):
+
+    @staticmethod
+    def description():
+        return 'Plot how well door policies perform at reaching goal configs'
+
+    def _plot(self, data, model):
+        plt.figure()
+        for point in data:
+            if point.pose_joint_world_final is None:
+                plt.plot(abs(point.config_goal/(np.pi/2)),
+                        point.net_motion/(2*np.pi*point.mechanism_params.params.door_size[0]/4),
+                        'r.')
+            else:
+                plt.plot(abs(point.config_goal/(np.pi/2)),
+                        point.net_motion/(2*np.pi*point.mechanism_params.params.door_size[0]/4),
+                        'b.')
+        plt.xlabel('Desired final config fraction')
+        plt.ylabel('Actual final config fraction')
+        plt.title('Door Performance')
 
 class SliderRangeMotion(PlotFunc):
 
@@ -117,7 +139,7 @@ class MotionConfig(PlotFunc):
 
     @staticmethod
     def description():
-        return 'Plot motion versus goal configuration (assumes constant policy params)'
+        return 'Plot motion versus goal configuration for slider (assumes constant policy params)'
 
     def _plot(self, data, model):
         motions = [point.net_motion for point in data]
@@ -153,7 +175,7 @@ class SliderPolicyDeltaConfig(PlotFunc):
 
     @staticmethod
     def description():
-        return 'Scatterplot of the motion generated for varying distances from the true slider policy and the goal configuration (along the z axis)'
+        return 'Scatterplot of the motion generated for varying distances from the true slider policy and the goal configuration (along the z axis - 3d Scatterplot)'
 
     def _plot(self, data, model):
         from mpl_toolkits.mplot3d import axes3d, Axes3D
@@ -225,151 +247,6 @@ class DoorPolicyDelta(PlotFunc):
         plt.ylabel('Motion')
         plt.title('Distance from true radius z value versus Motion for a '+data_point.mechanism_params.type)
 
-class VisTrainingPerformance(PlotFunc):
-
-    @staticmethod
-    def description():
-        return 'Network performance scatterplots of net motion for binned limits and goal configurations: training data plot shows net motion, validation and test plots show prediction error'
-
-    def _plot(self, data, model):
-        train_data, val_data, test_data = create_data_splits(data)
-        self._plot_data(train_data, 'Training Data', model)
-        self._plot_data(val_data, 'Validation Prediction Error', model)
-        self._plot_data(test_data, 'Test Prediction Error', model)
-
-    def _plot_data(self, data, title, model):
-        n_q_perc_bins = 6
-        n_limit_bins = 4
-        q_percs = np.linspace(0, 1.2, n_q_perc_bins+1)
-        limits = np.linspace(0.05, 0.25, n_limit_bins+1)
-        plot_data = {}
-        for point in data:
-            if model is not None:
-                pred_motion = get_pred_motions([point], model)[0]
-                plot_motion = abs(point.net_motion - pred_motion)
-            else:
-                plot_motion = point.net_motion
-            limit = point.mechanism_params.params.range/2
-            closest_lim = min(limits, key=lambda x: abs(x-limit))
-            closest_lim_i = list(limits).index(closest_lim)
-            if closest_lim > limit or closest_lim_i == n_limit_bins:
-                closest_lim_i -= 1
-
-            q_perc = abs(point.config_goal/limit)
-            closest_q_perc = min(q_percs, key=lambda x: abs(x-q_perc))
-            closest_q_perc_i = list(q_percs).index(closest_q_perc)
-            if closest_q_perc > q_perc or closest_q_perc_i == n_q_perc_bins:
-                closest_q_perc_i -= 1
-
-            if (closest_lim_i, closest_q_perc_i) not in plot_data:
-                plot_data[(closest_lim_i, closest_q_perc_i)] = [[point.policy_params.delta_values.delta_yaw],
-                                                                [point.policy_params.delta_values.delta_pitch],
-                                                                [plot_motion]]
-            else:
-                plot_data[(closest_lim_i, closest_q_perc_i)][0] += [point.policy_params.delta_values.delta_yaw]
-                plot_data[(closest_lim_i, closest_q_perc_i)][1] += [point.policy_params.delta_values.delta_pitch]
-                plot_data[(closest_lim_i, closest_q_perc_i)][2] += [plot_motion]
-        if model is not None:
-            minm = min([min(plot_data[i,j][2]) for i in range(n_limit_bins) \
-                                                for j in range(n_q_perc_bins)])
-            maxm = max([max(plot_data[i,j][2]) for i in range(n_limit_bins) \
-                                                for j in range(n_q_perc_bins)])
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
-        ax.spines['top'].set_color('none')
-        ax.spines['bottom'].set_color('none')
-        ax.spines['left'].set_color('none')
-        ax.spines['right'].set_color('none')
-        ax.tick_params(labelcolor='w', top=False, bottom=False, left=False, right=False)
-        axes = fig.subplots(n_limit_bins, n_q_perc_bins)
-        for i in range(n_limit_bins):
-            for j in range(n_q_perc_bins):
-                if (i,j) in plot_data:
-                    if model is None:
-                        minm = min(plot_data[i,j][2])
-                        maxm = max(plot_data[i,j][2])
-                    im = axes[i,j].scatter(plot_data[i,j][0], plot_data[i,j][1], c=plot_data[i,j][2], vmin=minm, vmax=maxm)
-                    if j==0:
-                        limit_min = str(round(limits[i],2))
-                        limit_max = str(round(limits[i+1],2))
-                        axes[i,j].set_ylabel('limit=['+limit_min+','+limit_max+']')
-                    if i==0:
-                        q_perc_min = str(round(q_percs[j],2))
-                        q_perc_max = str(round(q_percs[j+1],2))
-                        axes[i,j].set_title('q%=['+q_perc_min+','+q_perc_max+']')
-                    if model is None:
-                        fig.colorbar(im, ax=axes[i,j])
-        if model is not None:
-            fig.colorbar(im, ax=axes.ravel().tolist())
-
-class VisTrainingPerformancePitchOnly(PlotFunc):
-
-    @staticmethod
-    def description():
-        return 'Training data plots for binned limits and goal configurations: plot of delta pitch versus net motion and histogram of delta pitches (when varying pitch only!)'
-
-    def _plot(self, data, model):
-        train_data, val_data, test_data = create_data_splits(data)
-        n_q_perc_bins = 6
-        n_limit_bins = 4
-        q_percs = np.linspace(0, 1.2, n_q_perc_bins+1)
-        limits = np.linspace(0.05, 0.25, n_limit_bins+1)
-        plot_data = {}
-
-        for point in train_data:
-            plot_motion = point.net_motion
-            limit = point.mechanism_params.params.range/2
-            closest_lim = min(limits, key=lambda x: abs(x-limit))
-            closest_lim_i = list(limits).index(closest_lim)
-            if closest_lim > limit or closest_lim_i == n_limit_bins:
-                closest_lim_i -= 1
-
-            q_perc = abs(point.config_goal/limit)
-            closest_q_perc = min(q_percs, key=lambda x: abs(x-q_perc))
-            closest_q_perc_i = list(q_percs).index(closest_q_perc)
-            if closest_q_perc > q_perc or closest_q_perc_i == n_q_perc_bins:
-                closest_q_perc_i -= 1
-
-            if (closest_lim_i, closest_q_perc_i) not in plot_data:
-                plot_data[(closest_lim_i, closest_q_perc_i)] = [[point.policy_params.delta_values.delta_pitch],
-                                                                [plot_motion]]
-            else:
-                plot_data[(closest_lim_i, closest_q_perc_i)][0] += [point.policy_params.delta_values.delta_pitch]
-                plot_data[(closest_lim_i, closest_q_perc_i)][1] += [plot_motion]
-        self._plot_training_motion(n_limit_bins, n_q_perc_bins, limits, q_percs, plot_data)
-        self._plot_motion_hist(n_limit_bins, n_q_perc_bins, limits, q_percs, plot_data)
-
-    def _plot_training_motion(self, n_limit_bins, n_q_perc_bins, limits, q_percs, plot_data):
-        fig = plt.figure()
-        axes = fig.subplots(n_limit_bins, n_q_perc_bins)
-        for i in range(n_limit_bins):
-            for j in range(n_q_perc_bins):
-                if (i,j) in plot_data:
-                    im = axes[i,j].plot(plot_data[i,j][0], plot_data[i,j][1])
-                    if j==0:
-                        limit_min = str(round(limits[i],2))
-                        limit_max = str(round(limits[i+1],2))
-                        axes[i,j].set_ylabel('limit=['+limit_min+','+limit_max+']')
-                    if i==0:
-                        q_perc_min = str(round(q_percs[j],2))
-                        q_perc_max = str(round(q_percs[j+1],2))
-                        axes[i,j].set_title('q%=['+q_perc_min+','+q_perc_max+']')
-
-    def _plot_motion_hist(self, n_limit_bins, n_q_perc_bins, limits, q_percs, plot_data):
-        fig = plt.figure()
-        axes = fig.subplots(n_limit_bins, n_q_perc_bins)
-        for i in range(n_limit_bins):
-            for j in range(n_q_perc_bins):
-                if (i,j) in plot_data:
-                    im = axes[i,j].hist(plot_data[i,j][1], 20, histtype='bar')
-                    if j==0:
-                        limit_min = str(round(limits[i],2))
-                        limit_max = str(round(limits[i+1],2))
-                        axes[i,j].set_ylabel('limit=['+limit_min+','+limit_max+']')
-                    if i==0:
-                        q_perc_min = str(round(q_percs[j],2))
-                        q_perc_max = str(round(q_percs[j+1],2))
-                        axes[i,j].set_title('q%=['+q_perc_min+','+q_perc_max+']')
 
 class DataHist(PlotFunc):
 
@@ -381,6 +258,30 @@ class DataHist(PlotFunc):
         fig, ax = plt.subplots()
         delta_pitches = [point.policy_params.delta_values.delta_pitch for point in data]
         ax.hist(delta_pitches, 20, histtype='bar')
+
+class ConfigHist(PlotFunc):
+
+    @staticmethod
+    def description():
+        return 'Histogram of desired configuration as a percentage of the mechanism range'
+
+    def _plot(self, data, model):
+        fig, ax = plt.subplots()
+        config_ps = [point.config_goal/(point.mechanism_params.params.range/2) for point in data]
+        ax.hist(config_ps, 20, edgecolor='black', histtype='bar')
+
+class MotionHist(PlotFunc):
+
+    @staticmethod
+    def description():
+        return 'Histogram of generated motion as a percentage of the mechanism range'
+
+    def _plot(self, data, model):
+        fig, ax = plt.subplots()
+        config_ps = [point.net_motion/(point.mechanism_params.params.range/2) for point in data]
+        ax.hist(config_ps, 20, edgecolor='black', histtype='bar')
+        plt.grid(b=True, which='major', color='#666666', linestyle='-')
+        ax.set_xlabel('Generated Motion as a % of Slider Length')
 
 class TestMechs(PlotFunc):
 
@@ -514,6 +415,100 @@ class TestMechPolicies(PlotFunc):
                 axes[i, j].set_ylabel('d')
             print(mech.range)
 
+class TestMechPoliciesPitchOnly(PlotFunc):
+
+    @staticmethod
+    def description():
+        return 'show performance on policies for a multiple busybox where ONLY PITCH is varied'
+
+    def _plot(self, data, model, bbps=None):
+        randomness = 0.0
+        n_samples = 25
+        n_pitches = 5
+        if bbps is None:
+            n_bbs = 25
+        else:
+            n_bbs = len(bbps)
+        #delta_yaws = np.zeros((n_policies, n_policies))
+        delta_pitches = np.zeros((n_pitches, n_bbs))
+        motions = np.zeros((n_pitches, n_bbs, n_samples))
+        true_motions = np.zeros((n_pitches, n_bbs, n_samples))
+        d_pitches = np.linspace(-np.pi/2*0.25, np.pi/2*0.25, n_pitches)
+        #d_yaw = np.linspace(-np.pi/2*0.25, np.pi / 2 * 0.25, n_policies)
+        for j in range(n_bbs):
+            # Generate the busybox.
+            if bbps is None:
+                np.random.seed()
+                rand_num = np.random.uniform(0,1)
+                np.random.seed(j)
+                bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider], urdf_tag=str(rand_num))
+            else:
+                rand_num = np.random.uniform(0,1)
+                bb = BusyBox.get_busybox(bbps[j].width, bbps[j].height, bbps[j]._mechanisms, urdf_tag=str(rand_num))
+            mech = bb._mechanisms[0]
+            configs = np.linspace(-mech.range, mech.range, n_samples)
+            mech_tuple = mech.get_mechanism_tuple()
+            #print(mech_tuple)
+            for i in range(len(d_pitches)):
+                image_data = util.setup_pybullet.setup_env(bb, False, False)
+                random_policy = policies.generate_policy(bb, mech, True, randomness)
+                random_policy.pitch = random_policy.pitch - random_policy.delta_pitch + d_pitches[i]
+                random_policy.delta_pitch = d_pitches[i]
+                policy_tuple = random_policy.get_policy_tuple()
+                delta_pitches[i, j] = policy_tuple.delta_values.delta_pitch
+
+                for k in range(n_samples):
+                    util.setup_pybullet.setup_env(bb, False, False)
+                    gripper = Gripper(bb.bb_id)
+                    sample = util.Result(policy_tuple,
+                                         mech_tuple,
+                                         0.0,
+                                         0.0,
+                                         None,
+                                         None,
+                                         configs[k],
+                                         image_data,
+                                         None,
+                                         randomness)
+                    pred_motion = get_pred_motions([sample], model)
+                    motions[i, j, k] = pred_motion[0]
+
+                    # calculate trajectory
+                    pose_handle_base_world = mech.get_pose_handle_base_world()
+                    traj = random_policy.generate_trajectory(pose_handle_base_world,
+                                                             configs[k],
+                                                             False)
+
+                    # execute trajectory
+                    _, net_motion, _ = gripper.execute_trajectory(traj,
+                                                                  mech,
+                                                                  random_policy.type,
+                                                                  False)
+                    true_motions[i, j, k] = net_motion
+                    p.disconnect()
+
+        # TODO: Plot the relevant motions.
+        fig, axes = plt.subplots(n_pitches, n_bbs, sharex=True, sharey=True)
+        plt.setp(axes.flat, adjustable='box-forced')
+        for i in range(n_pitches):
+            for j in range(n_bbs):
+                if n_bbs == 1:
+                    ax = axes[i]
+                else:
+                    ax = axes[i, j]
+                ax.plot(configs,
+                        true_motions[i, j, :],
+                        c='b',
+                        lw=1)
+                ax.plot(configs,
+                        motions[i, j, :],
+                        c='r',
+                        lw=1)
+                ax.set_title('(%.2f, %s)' % (delta_pitches[i, j], j))
+                ax.set_xlabel('q')
+                ax.set_ylabel('d')
+                #ax.set_ylim([-.01, .18])
+
 class TestMechsPitch(PlotFunc):
     @staticmethod
     def description():
@@ -617,13 +612,13 @@ def print_stats(data):
     for (key, val) in stats.items():
         sys.stdout.write('  %s mech, %s policy: %i\n' % (*key, val))
 
-def plot_results(file_name, model):
+def plot_results(file_name, model, hdim):
     data = None
     if file_name:
         data = util.read_from_file(file_name)
         print_stats(data)
     if model is not None:
-        model = util.load_model(model, hdim=16, model_type='polvis')
+        model = util.load_model(model, hdim, model_type='polvis')
 
     plot_funcs = PlotFunc.__subclasses__()
     for (i, func) in enumerate(plot_funcs):
@@ -644,16 +639,17 @@ if __name__ == '__main__':
     parser.add_argument('--fname', type=str)
     parser.add_argument('--model', type=str)
     parser.add_argument('--model2', type=str)
+    parser.add_argument('--hdim', type=int, default=16)
     args = parser.parse_args()
 
     if args.debug:
         import pdb; pdb.set_trace()
 
     if args.model2 is None:
-        plot_results(args.fname, args.model)
+        plot_results(args.fname, args.model, args.hdim)
     else:
-        model0 = util.load_model(args.model)
-        model1 = util.load_model(args.model2)
+        model0 = util.load_model(args.model, hdim=args.hdim)
+        model1 = util.load_model(args.model2, hdim=args.hdim)
         plt.ion()
         plot = TestMechsPitch()
         plot._plot(model0, model1)

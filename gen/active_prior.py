@@ -81,7 +81,7 @@ class ActivePolicyLearner(object):
                 self.sample(n, 'predict', model)
                 if n != n_prior_samples-1:
                     self.reset()
-            if not self.lite:
+            if not self.lite and n_prior_samples>0:
                 self.update_plot('predict')
         for n in range(n_int_samples):
             sys.stdout.write("\rProcessing interactive sample %i/%i" % (n+1, n_int_samples))
@@ -324,6 +324,7 @@ class ActivePolicyLearner(object):
         plt.show()
         if self.viz_plot_final:
             input('enter to continue')
+            plt.close()
 
     def reset_plot(self, ax):
         ax.set_xlim(-self.max_region.coord.x, -1*(self.max_region.coord.x-self.max_region.dims.width))

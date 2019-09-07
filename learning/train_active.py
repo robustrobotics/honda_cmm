@@ -13,6 +13,7 @@ from gen.generator_busybox import BusyBox, Slider
 import os
 import shutil
 import matplotlib.pyplot as plt
+import traceback, sys, pdb
 torch.backends.cudnn.enabled = True
 
 def train_eval(args, parsed_data, pviz=False):
@@ -79,17 +80,19 @@ if __name__ == '__main__':
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--image-encoder', type=str, default='spatial', choices=['spatial', 'cnn'])
     parser.add_argument('--n-bbs', type=int, default=5) # maximum number of robot interactions
-    parser.add_argument('--data-type', default='active', choices=['active', 'random'])
+    parser.add_argument('--data-type', choices=['sagg', 'sagg-learner', 'random', 'random-learner'])
     parser.add_argument('--n-inter', default=20, type=int) # number of samples used during interactions
     parser.add_argument('--n-prior', default=10, type=int) # number of samples used to generate prior
     parser.add_argument('--viz-cont', action='store_true') # visualize interactions and prior as they're generated
     parser.add_argument('--viz-final', action='store_true') # visualize final interactions and priors
     parser.add_argument('--lite', action='store_true') # if used, does not generate or save any plots
     parser.add_argument('--train-freq', default=1, type=int) # frequency to retrain and test model
+    parser.add_argument('--bb-file', type=str)
+    parser.add_argument('--urdf-tag', type=str, default='0')
     args = parser.parse_args()
 
     if args.debug:
-        import pdb; pdb.set_trace()
+        pdb.set_trace()
 
     try:
         # remove directories for tensorboard logs and torch model then remake
@@ -98,21 +101,25 @@ if __name__ == '__main__':
         dirs = [model_dir, runs_dir]
         for dir in dirs:
             if os.path.isdir(dir):
-                shutil.rmtree(dir)
+                input('move this directory so files dont get overitten: '+dir)
+                sys.exit()
             os.makedirs(dir)
-
-        # want to generate the same sequence of BBs every time
         plt.ion()
 
-        np.random.seed(1)
+        if args.bb_file:
+            bbps = util.read_from_file(args.bb_file)
+
         dataset = []
         writer = SummaryWriter(runs_dir)
         test_norm_regrets = []
         model_path = None
         for i in range(1,args.n_bbs+1):
             print('BusyBox: ', i, '/', args.n_bbs)
-            rand_int = np.random.randint(100000)
-            bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider], urdf_tag=rand_int, debug=False)
+            if args.bb_file:
+                bbp = bbps[i-1]
+                bb = BusyBox.get_busybox(bbp.width, bbp.height, bbp._mechanisms, urdf_tag=args.urdf_tag)
+            else:
+                bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider], debug=False, urdf_tag=args.urdf_tag)
 
             # test model on this novel busybox
             if model_path:
@@ -124,17 +131,29 @@ if __name__ == '__main__':
                 writer.add_scalar('Test_Regret/Regret', test_regret, i)
                 writer.add_scalar('Test_Regret/Average_Regret', np.mean(test_norm_regrets), i)
 
-            # generate interaction data
+            # generate data
+            if args.data_type == 'sagg':
+                n_prior = 0
+                random = False
+            if args.data_type == 'sagg-learner':
+                n_prior = args.n_prior
+                random = False
+            if args.data_type =='random':
+                n_prior = 0
+                random = True
+            if args.data_type == 'random-learner':
+                n_prior = args.n_prior
+                random = True
             return_tup = active_prior.generate_dataset(1, \
                                                     args.n_inter,
-                                                    args.n_prior,
+                                                    n_prior,
                                                     False,
                                                     False,
-                                                    str(rand_int),
+                                                    args.urdf_tag,
                                                     1,
                                                     args.viz_final,
                                                     args.viz_cont,
-                                                    'random' == args.data_type,
+                                                    random,
                                                     bb=bb, model_path=model_path,
                                                     hdim=args.hdim,
                                                     lite=args.lite)
@@ -163,7 +182,6 @@ if __name__ == '__main__':
         writer.close()
     except:
         # for post-mortem debugging since can't run module from command line in pdb.pm() mode
-        import traceback, pdb, sys
         traceback.print_exc()
         print('')
         pdb.post_mortem()
