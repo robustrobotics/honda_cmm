@@ -416,7 +416,7 @@ class BusyBox(object):
     def set_mechanism_ids(self, bb_id):
         num_joints = p.getNumJoints(bb_id)
         # joint_id 0 is the busybox back_link
-        for joint_id in range(1,num_joints):
+        for joint_id in range(1, num_joints):
             joint_info = p.getJointInfo(bb_id, joint_id)
             link_name = joint_info[12]
             set = False
@@ -527,8 +527,9 @@ class BusyBox(object):
         if result.mechanism_params.type == 'Slider':
             mech = Slider.mech_from_result(result, dummy_bb)
         elif result.mechanism_params.type == 'Door':
-            mech = Door.mech_from_result(result, deummy_bb)
+            mech = Door.mech_from_result(result, dummy_bb)
         return BusyBox.get_busybox(width, height, [mech])
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
