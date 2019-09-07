@@ -49,7 +49,7 @@ class Gripper:
         :param d: a vector of length 2 where the first entry is the linear derivative
                     (damping) gain and the second entry is the angular derivative gain
         """
-        self._id = p.loadSDF("../models/gripper/gripper_high_fric.sdf")[0]
+        self._id = p.loadSDF("models/gripper/gripper_high_fric.sdf")[0]
         self._bb_id = bb_id
         self._left_finger_tip_id = 2
         self._right_finger_tip_id = 5
