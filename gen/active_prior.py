@@ -249,7 +249,7 @@ class ActivePolicyLearner(object):
         coeff = np.divide(np.dot(final_pos_handle, final_pos_handle), np.linalg.norm(goal_pos_handle)**2)
         motion_proj_handle = np.dot(coeff, goal_pos_handle)
         motion_towards_goal = np.linalg.norm(motion_proj_handle)
-        competence = motion_towards_goal*np.divide(motion_towards_goal, init_dist_to_goal)
+        competence = np.divide(motion_towards_goal, init_dist_to_goal)
         return competence
 
     def reset(self):
