@@ -242,24 +242,30 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # test dataset
-    #test_file = 'data/datasets/40_bb_sliders.pickle'
-    #test_data = util.read_from_file(test_file)
-    test_data = []
-    for i in range(7):
-        test_data += [BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider])]
+    test_file = '100bbs.pickle'
+    test_data = util.read_from_file(test_file)
+    #test_data = []
+    #for i in range(7):
+    #    test_data += [BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider])]
     # model paths
-    models = ['tmpc2/active10.pt',
-                'tmpc2/active20.pt',
-                'tmpc2/active30.pt',
-                'tmpc2/active40.pt',
-                'tmpc2/active50.pt']
+    models = ['torch_models_10000/data_active_ntrain_50000_epoch_20.pt']
+    '''
+    ['tmpc2/active10.pt',
+    'tmpc2/active20.pt',
+    'tmpc2/active30.pt',
+    'tmpc2/active40.pt',
+    'tmpc2/active50.pt']
+    '''
 
     # plot names
-    names = ['active10',
-                'active20',
-                'active30',
-                'active40',
-                'active50']
+    names = ['active10']
+    '''
+    ,
+    'active20',
+    'active30',
+    'active40',
+    'active50']
+    '''
 
     if args.debug:
         import pdb; pdb.set_trace()
