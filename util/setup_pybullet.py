@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 
 
 def setup_env(bb, viz, debug):
-
     # disconnect if already connected (may want to change viz from False to True)
     if p.getConnectionInfo()['isConnected']:
         p.disconnect()

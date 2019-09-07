@@ -2,8 +2,7 @@ import argparse
 import numpy as np
 import torch
 from learning.models.nn_disp_pol_vis import DistanceRegressor as NNPolVis
-from learning.models.nn_disp_pol_mech import DistanceRegressor as NNPolMech
-from learning.dataloaders import setup_data_loaders
+from learning.dataloaders import setup_data_loaders, parse_pickle_file
 import learning.viz as viz
 from collections import namedtuple
 from util import util
@@ -12,9 +11,11 @@ torch.backends.cudnn.enabled = True
 RunData = namedtuple('RunData', 'hdim batch_size run_num max_epoch best_epoch best_val_error')
 name_lookup = {'Prismatic': 0, 'Revolute': 1}
 
+
 def train_eval(args, hdim, batch_size, pviz, fname):
     # Load data
-    train_set, val_set, test_set = setup_data_loaders(fname=args.data_fname,
+    data = parse_pickle_file(fname=args.data_fname)
+    train_set, val_set, test_set = setup_data_loaders(data=data,
                                                       batch_size=batch_size,
                                                       small_train=args.n_train)
 
@@ -26,10 +27,7 @@ def train_eval(args, hdim, batch_size, pviz, fname):
                    im_w=115,  # 205,
                    kernel_size=3,
                    image_encoder=args.image_encoder)
-    # net = NNPolMech(policy_names=['Prismatic'],
-    #                 policy_dims=[2],
-    #                 hdim=hdim,
-    #                 mech_dims=2)
+
     print(sum(p.numel() for p in net.parameters() if p.requires_grad))
     if args.use_cuda:
         net = net.cuda()
@@ -38,7 +36,7 @@ def train_eval(args, hdim, batch_size, pviz, fname):
     optim = torch.optim.Adam(net.parameters())
 
     # Add the graph to TensorBoard viz,
-    k, x, q, im, y = train_set.dataset[0]
+    k, x, q, im, y, _ = train_set.dataset[0]
     pol = torch.Tensor([name_lookup[k]])
     if args.use_cuda:
         x = x.cuda().unsqueeze(0)
