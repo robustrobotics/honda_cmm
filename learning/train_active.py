@@ -70,6 +70,17 @@ def train_eval(args, parsed_data, pviz=False):
         print('[Epoch {}] - Training Loss: {}'.format(ex, train_loss_ex))
     return best_train_error, net.state_dict()
 
+def get_train_params(args):
+    return {'batch_size': args.batch_size,
+            'hdim': args.hdim,
+            'n_epochs': args.n_epochs,
+            'n_bbs': args.n_bbs,
+            'data_type': args.data_type,
+            'n_inter': args.n_inter,
+            'n_prior': args.n_prior,
+            'train_freq': args.train_freq,
+            'bb_file': args.bb_file}
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--batch-size', type=int, default=16, help='Batch size to use for training.')
@@ -180,6 +191,14 @@ if __name__ == '__main__':
                 writer.add_scalar('Loss/train', train_error, i)
 
         writer.close()
+        import git
+        repo = git.Repo(search_parent_directories=True)
+        branch = repo.active_branch
+        git_hash = repo.head.object.hexsha
+        all_params = {'branch': branch, 'hash': git_hash}
+        all_params.update(learner.get_params())
+        all_params.update(get_train_params(args))
+        util.write_to_file('run_params.txt', str(all_params)+'\n')
     except:
         # for post-mortem debugging since can't run module from command line in pdb.pm() mode
         traceback.print_exc()

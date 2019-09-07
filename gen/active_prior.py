@@ -24,10 +24,10 @@ AttemptedGoal = namedtuple('AttemptedGoal', 'goal competence')
 # params
 g_max = 7  # max samples per region
 R = 0.05    # region to sample for low competence
-n_max = 3   # maximum number of samples in a region to calc interest
-m = 100      # number of samples used to find optimal split
+n_int = 3   # maximum number of samples in a region to calc interest
 min_region = 0.0
 alpha = 0.992 # probability of exploring versus exploting
+discount = True # discount the exploration prob every iteration
 
 class ActivePolicyLearner(object):
 
@@ -96,7 +96,10 @@ class ActivePolicyLearner(object):
 
     def sample(self, n, mode, model=None):
         # select goal and region
-        prob_explore = np.power(alpha, n)
+        if discount:
+            prob_explore = np.power(alpha, n)
+        else:
+            prob_explore = alpha
         choice = np.random.choice(['explore', 'exploit'], p=[prob_explore, 1-prob_explore])
         if choice == 'explore':
             region, goal, sample_mode = self.select_explore_goal(mode)
@@ -332,6 +335,15 @@ class ActivePolicyLearner(object):
         ax.set_ylim(self.max_region.coord.z, self.max_region.coord.z+self.max_region.dims.height)
         self.plot_mech(ax)
 
+    def get_params(self):
+        params = {'g_max': g_max,
+                    'R': R,
+                    'n_int': n_int,
+                    'min_region': min_region,
+                    'alpha': alpha,
+                    'discount': discount}
+        return params
+
 class Region(object):
     def __init__(self, coord, dims):
         self.coord = coord # lower left of the region
@@ -369,7 +381,7 @@ class Region(object):
         n_goals = len(self.attempted_goals)
         # if below min region size and sampled g_max goals then interest = 0
         if not (n_goals > g_max and np.multiply(*self.dims) < min_region):
-            range_max = min(n_max, n_goals)
+            range_max = min(n_int, n_goals)
             if n_goals > 1:
                 for j in range(-2,-range_max-1,-1):
                     self.interest += abs(self.attempted_goals[j+1][1]-self.attempted_goals[j][1])
