@@ -56,7 +56,7 @@ class Mechanism(object):
 class Slider(Mechanism):
     n_sliders = 0
 
-    def __init__(self, x_offset, z_offset, range, axis, color, bb_thickness=0.05):
+    def __init__(self, x_offset, z_offset, range, axis, color, bb_thickness=0.05, handle_radius=0.02, track_width=0.02):
         """
 
         :param x_offset: The offset in the x-dimension from the busybox backboard.
@@ -70,7 +70,6 @@ class Slider(Mechanism):
         name = Slider.n_sliders
         Slider.n_sliders += 1
 
-        handle_radius = 0.02
         slider_handle_name = 'slider_{0}_handle'.format(name)
         slider_track_name = 'slider_{0}_track'.format(name)
         handle = urdf.Link(slider_handle_name,
@@ -104,13 +103,13 @@ class Slider(Mechanism):
                            urdf.Collision(
                                urdf.Origin(xyz=(0, 0, 0), rpy=(0, 0, 0)),
                                urdf.Geometry(
-                                   urdf.Box(size=(range, 0.005, 0.02))
+                                   urdf.Box(size=(range, 0.005, track_width))
                                )
                            ),
                            urdf.Visual(
                                urdf.Origin(xyz=(0, 0, 0), rpy=(0, 0, 0)),
                                urdf.Geometry(
-                                   urdf.Box(size=(range, 0.005, 0.02))
+                                   urdf.Box(size=(range, 0.005, track_width))
                                ),
                                urdf.Material('slider_track_color'.format(name),
                                    urdf.Color(rgba=(0.6, 0.6, 0.6, 1.0))
@@ -164,7 +163,7 @@ class Slider(Mechanism):
         return MechanismParams(self.mechanism_type, SliderParams(self.axis, self.range))
 
     @staticmethod
-    def random(width, height, bb_thickness=0.05):
+    def random(width, height, bb_thickness=0.05, visually_diverse=False):
         """
         Generate a random slider within the busybox of dimensions width x height.
         :param width: float, width of the busybox.
@@ -179,8 +178,10 @@ class Slider(Mechanism):
         color = (np.random.uniform(0, 1),
                  np.random.uniform(0, 1),
                  np.random.uniform(0, 1))
-        color = (1, 0, 0)
-        return Slider(x_offset, z_offset, range, axis, color, bb_thickness)
+        # color = (1, 0, 0)
+        # handle_radius = np.random.uniform(0.01, 0.025)
+        track_width = np.random.uniform(0.01, 0.05)
+        return Slider(x_offset, z_offset, range, axis, color, bb_thickness,  track_width=track_width)
 
     @staticmethod
     def mech_from_result(result, dummy_bb):
@@ -317,7 +318,7 @@ class Door(Mechanism):
         return MechanismParams(self.mechanism_type, DoorParams(self.door_size, self.flipped))
 
     @staticmethod
-    def random(width, height, bb_thickness=0.05):
+    def random(width, height, bb_thickness=0.05, visually_diverse=False):
         door_offset = (np.random.uniform(-width/2.0, width/2.0),
                        np.random.uniform(-height/2.0, height/2.0))
         door_size = (np.random.uniform(0.08, 0.15),
@@ -465,7 +466,7 @@ class BusyBox(object):
             return False
 
     @staticmethod
-    def generate_random_busybox(min_mech=1, max_mech=6, mech_types=[Slider, Door], n_tries=10, urdf_tag='', debug=False):
+    def generate_random_busybox(min_mech=1, max_mech=6, mech_types=[Slider, Door], n_tries=10, urdf_tag='', debug=False, visually_diverse=False):
         """
         :param min_mech: int, The minimum number of mechanisms to be included on the busybox.
         :param max_mech: int, The maximum number of classes to be included on the busybox.
@@ -488,7 +489,7 @@ class BusyBox(object):
                 # For each mechanism pick the type.
                 mech_class = np.random.choice(mech_types)
                 for _ in range(n_tries):
-                    mech = mech_class.random(width, height, bb_thickness)
+                    mech = mech_class.random(width, height, bb_thickness, visually_diverse=visually_diverse)
                     # Check for collisions.
                     if not BusyBox._check_collision(width, height, mechs, mech):
                         mechs.append(mech)
