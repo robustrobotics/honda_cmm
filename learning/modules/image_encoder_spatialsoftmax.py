@@ -30,7 +30,7 @@ class ImageEncoder(nn.Module):
         # I am currently just running the network to see what this size should be.
         #self.fc1 = nn.Linear(self.lin_input, hdim)
         self.scale = nn.Linear(2, 2)
-        self.fc2 = nn.Linear(n_features*2, hdim*2)
+        self.fc2 = nn.Linear(n_features*2, hdim)
 
         self.sm = nn.Softmax(dim=1)
         self.temp = nn.Parameter(torch.tensor(1.0))
@@ -71,6 +71,18 @@ class ImageEncoder(nn.Module):
         # imshow(torchvision.utils.make_grid(img), expected_xy.detach().numpy(), pfeatures.detach().numpy())
         # input()
         # sys.exit(0)
+        
+        # Make the features relative.
+        # expected_xy (bs*c, 2)
+        # expected_xy_full (bs, c, 2)
+        expected_xy_full = expected_xy.view(bs, c, 2)
+        # expected_xy_anchor (bs, c, 2)
+        expected_xy_anchor = expected_xy_full[:, 0:1, :].expand_as(expected_xy_full)
+        # expected_xy_rel (bs*c, 2)
+        expected_xy_rel = expected_xy_full - expected_xy_anchor
+
+        expected_xy = expected_xy_rel.view(bs*c, 2)
+        
 
         expected_xy2 = self.scale(expected_xy)
         x = expected_xy2.view(-1, c*2)

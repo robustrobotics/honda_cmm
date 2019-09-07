@@ -12,7 +12,7 @@ torch.backends.cudnn.enabled = True
 RunData = namedtuple('RunData', 'hdim batch_size run_num max_epoch best_epoch best_val_error')
 name_lookup = {'Prismatic': 0, 'Revolute': 1}
 
-def eval(args, hdim, batch_size, pviz, fname):
+def evaluate(args, hdim, batch_size, pviz, fname):
     # Load data
     train_set, _, _ = setup_data_loaders(fname=args.data_fname,
                                          batch_size=batch_size,
@@ -55,7 +55,7 @@ def eval(args, hdim, batch_size, pviz, fname):
 
     curr_val = np.mean(val_losses)
     print('Validation Error:', curr_val)
-    return vals, best_epoch
+
 
 
 if __name__ == '__main__':
@@ -85,4 +85,4 @@ if __name__ == '__main__':
     batch_size = args.batch_size
 
     fname = args.model_name
-    all_vals_epochs, best_epoch = eval(args, hdim, batch_size, False, fname)
+    evaluate(args, hdim, batch_size, False, fname)

@@ -27,8 +27,8 @@ class DistanceRegressor(nn.Module):
         for name, dim in zip(policy_names, policy_dims):
             self.policy_modules[name] = PolicyEncoder(n_params=dim,
                                                       n_q=1,
-                                                      n_layer=2,
-                                                      n_hidden=hdim*2)
+                                                      n_layer=3,
+                                                      n_hidden=hdim)
 
         if image_encoder == 'cnn':
             self.image_module = CNNEncoder(hdim=hdim,
@@ -46,12 +46,13 @@ class DistanceRegressor(nn.Module):
                 p.requires_grad = False
             for p in self.image_module.conv2.parameters():
                 p.requires_grad = False
+            self.image_module.temp.requires_grad = False
 
-        self.fc1 = nn.Linear(hdim*4, hdim*4)
-        self.fc2 = nn.Linear(hdim*4, hdim*2)
-        self.fc3 = nn.Linear(hdim*2, hdim*2)
-        self.fc4 = nn.Linear(hdim, hdim)
-        self.fc5 = nn.Linear(hdim*2, 1)
+        self.fc1 = nn.Linear(hdim*2, hdim//2)
+        self.fc2 = nn.Linear(hdim//2, hdim//2)
+        self.fc3 = nn.Linear(hdim, hdim)
+        #self.fc4 = nn.Linear(hdim, hdim)
+        self.fc5 = nn.Linear(hdim//2, 1)
         # SoftPLUS didn't work well... probably because our outputs are such small numbers.
         self.SOFTPLUS = nn.Softplus()
 
@@ -78,5 +79,6 @@ class DistanceRegressor(nn.Module):
 
         x = F.relu(self.fc1(x)) 
         x = F.relu(self.fc2(x))
+        #x = F.relu(self.fc3(x))
         x = self.fc5(x)
         return x

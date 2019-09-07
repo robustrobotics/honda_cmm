@@ -59,7 +59,7 @@ def train_eval(args, pviz, fname):
 
             train_losses.append(loss.item())
 
-        print('[Epoch {}] - Training Loss: {}'.format(ex, np.mean(train_losses)))
+        print('[Epoch {}] - Training Loss: {} {}'.format(ex, np.mean(train_losses), net.encoder.temp))
 
         if ex % args.val_freq == 0:
             val_losses = []

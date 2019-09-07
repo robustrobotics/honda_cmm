@@ -74,6 +74,7 @@ def imshow(img):
 class PolicyDataset(Dataset):
     def __init__(self, items):
         super(PolicyDataset, self).__init__()
+        items = items
         self.items = items
 
         self.tensors = [torch.tensor(item['params']) for item in items]
@@ -152,7 +153,7 @@ def parse_pickle_file(fname=None, data=None):
 
 
 def create_data_splits(data, val_pct=0.15, test_pct=0.15):
-    np.random.shuffle(data)
+    # np.random.shuffle(data)
     n = len(data)
     val_start = int(n*(1-val_pct-test_pct))
     test_start = int(n*(1-test_pct))

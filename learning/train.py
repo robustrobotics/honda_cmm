@@ -37,7 +37,7 @@ def train_eval(args, hdim, batch_size, pviz, fname):
         net = net.cuda()
 
     loss_fn = torch.nn.MSELoss()
-    optim = torch.optim.Adam(net.parameters())
+    optim = torch.optim.Adam(filter(lambda p: p.requires_grad, net.parameters()))
 
     best_val = 1000
     # Training loop.
