@@ -421,10 +421,10 @@ class TestMechPoliciesPitchOnly(PlotFunc):
     def description():
         return 'show performance on policies for a multiple busybox where ONLY PITCH is varied'
 
-    def _plot(self, data, model, bbps=None, n_samples=25, n_pitches=5):
+    def _plot(self, data, model, bbps=None, n_samples=11, n_pitches=5):
         randomness = 0.0
         if bbps is None:
-            n_bbs = 25
+            n_bbs = 6
         else:
             n_bbs = len(bbps)
         #delta_yaws = np.zeros((n_policies, n_policies))
