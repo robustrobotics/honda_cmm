@@ -26,7 +26,7 @@ g_max = 7  # max samples per region
 R = 0.05    # region to sample for low competence
 n_max = 3   # maximum number of samples in a region to calc interest
 m = 100      # number of samples used to find optimal split
-min_region = 0.002
+min_region = 0.0
 alpha = 1.0 # probability of exploring versus exploting
 
 class ActivePolicyLearner(object):
