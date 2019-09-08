@@ -109,7 +109,7 @@ if __name__ == '__main__':
         # remove directories for tensorboard logs and torch model then remake
         model_dir = './torch_models_prior/'
         runs_dir = './runs_active'
-        '''
+
         dirs = [model_dir, runs_dir]
         for dir in dirs:
             if os.path.isdir(dir):
@@ -117,6 +117,7 @@ if __name__ == '__main__':
                 sys.exit()
             os.makedirs(dir)
         plt.ion()
+        '''
 
         if args.bb_file:
             bbps = util.read_from_file(args.bb_file)
