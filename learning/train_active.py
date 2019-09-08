@@ -18,7 +18,7 @@ torch.backends.cudnn.enabled = True
 
 def train_eval(args, parsed_data, pviz=False):
 
-    train_set = setup_data_loaders(parsed_data, batch_size=args.batch_size, train_only=True)
+    train_set, _, _ = setup_data_loaders(parsed_data, batch_size=args.batch_size, train_only=False, small_train=5000)
 
     # Setup Model (TODO: Update the correct policy dims)
     net = NNPolVis(policy_names=['Prismatic', 'Revolute'],
@@ -109,6 +109,7 @@ if __name__ == '__main__':
         # remove directories for tensorboard logs and torch model then remake
         model_dir = './torch_models_prior/'
         runs_dir = './runs_active'
+        '''
         dirs = [model_dir, runs_dir]
         for dir in dirs:
             if os.path.isdir(dir):
@@ -181,16 +182,19 @@ if __name__ == '__main__':
             dataset += learner.interactions
 
             if not i % args.train_freq:
-                # train model
-                parsed_data = parse_pickle_file(data=dataset)
-                train_error, model = train_eval(args, parsed_data)
+            '''
+        # train model
+        dataset = util.read_from_file('active_50000_new.pickle')
+        parsed_data = parse_pickle_file(data=dataset)
+        train_error, model = train_eval(args, parsed_data)
 
-                # save model and dataset
-                model_path = model_dir + args.data_type + str(i) + '.pt'
-                dataset_path = model_dir + args.data_type + str(i) + '_dataset.pickle'
-                torch.save(model, model_path)
-                util.write_to_file(dataset_path, dataset)
-                writer.add_scalar('Loss/train', train_error, i)
+        # save model and dataset
+        model_path = model_dir + 'new_data_model_5000.pt'
+        #dataset_path = model_dir + args.data_type + str(i) + '_dataset.pickle'
+        torch.save(model, model_path)
+        #util.write_to_file(dataset_path, dataset)
+        #writer.add_scalar('Loss/train', train_error, i)
+        '''
         writer.close()
         import git
         repo = git.Repo(search_parent_directories=True)
@@ -200,6 +204,7 @@ if __name__ == '__main__':
         all_params.update(learner.get_params())
         all_params.update(get_train_params(args))
         util.write_to_file('run_params.txt', str(all_params)+'\n')
+        '''
     except:
         # for post-mortem debugging since can't run module from command line in pdb.pm() mode
         traceback.print_exc()
