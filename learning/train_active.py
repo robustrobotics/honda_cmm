@@ -91,7 +91,7 @@ if __name__ == '__main__':
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--image-encoder', type=str, default='spatial', choices=['spatial', 'cnn'])
     parser.add_argument('--n-bbs', type=int, default=5) # maximum number of robot interactions
-    parser.add_argument('--data-type', choices=['sagg', 'sagg-learner', 'random', 'random-learner'])
+    parser.add_argument('--data-type', required=True, choices=['sagg', 'sagg-learner', 'random', 'random-learner'])
     parser.add_argument('--n-inter', default=20, type=int) # number of samples used during interactions
     parser.add_argument('--n-prior', default=10, type=int) # number of samples used to generate prior
     parser.add_argument('--viz-cont', action='store_true') # visualize interactions and prior as they're generated
@@ -185,11 +185,12 @@ if __name__ == '__main__':
                 parsed_data = parse_pickle_file(data=dataset)
                 train_error, model = train_eval(args, parsed_data)
 
-                # save model
+                # save model and dataset
                 model_path = model_dir + args.data_type + str(i) + '.pt'
+                dataset_path = model_dir + args.data_type + str(i) + '_dataset.pickle'
                 torch.save(model, model_path)
+                util.write_to_file(dataset_path, dataset)
                 writer.add_scalar('Loss/train', train_error, i)
-
         writer.close()
         import git
         repo = git.Repo(search_parent_directories=True)
