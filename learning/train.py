@@ -173,7 +173,7 @@ if __name__ == '__main__':
         #step = 5
         #ns = range(step, args.n_train+1, step)
         #for n in [50000]:
-        for n_bbs in range(10,21,10):
+        for n_bbs in range(30,51,10):
             data_fname = 'active_datasets/active_' + str(n_bbs) + 'bb_200int.pickle'
             fname = 'all_models/'+args.model_prefix+'_nbbs_'+str(n_bbs)+'/'
             os.makedirs(fname)
