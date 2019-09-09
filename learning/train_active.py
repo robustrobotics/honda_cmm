@@ -228,7 +228,7 @@ if __name__ == '__main__':
         '''
         dataset = util.read_from_file(args.bb_train_file)
         # train model (saves to model_path)
-        parsed_train_data = parse_pickle_file(data=dataset[:10])
+        parsed_train_data = parse_pickle_file(data=dataset)
         model_path = model_dir + args.data_type + '.pt'
         train_eval(args, 1, parsed_train_data, parsed_val_data, model_path, writer)
 
