@@ -129,7 +129,11 @@ def optimize_gp(gp, result, ucb=False, beta=100, nn=None):
 
     # Start optimization from here.
     x0 = np.concatenate([[params_max.params.pitch], [q_max]]) # only searching space of pitches!
-    res = minimize(fun=objective_func, x0=x0, args=(gp, ucb, beta, nn, dataset.images[0].unsqueeze(0), False),
+    if nn is None:
+        images = None
+    else:
+        images = dataset.images[0].unsqueeze(0)
+    res = minimize(fun=objective_func, x0=x0, args=(gp, ucb, beta, nn, images, False),
                    method='L-BFGS-B', options={'eps': 10**-3}, bounds=[(-np.pi, 0), (-0.25, 0.25)])
     x_final = res['x']
 
@@ -139,7 +143,7 @@ def optimize_gp(gp, result, ucb=False, beta=100, nn=None):
     return x_final, dataset
 
 
-def test_model(gp, result):
+def test_model(gp, result, nn=None):
     """
     Maximize the GP mean function to get the best policy.
     :param gp: A GP fit to the current BusyBox.
@@ -148,13 +152,13 @@ def test_model(gp, result):
     """
     # TODO: Use the NN if required.
     # Optimize the GP to get the best result.
-    x_final = optimize_gp(gp, result, ucb=False)
+    x_final, _ = optimize_gp(gp, result, ucb=False, nn=nn)
 
     # Execute the policy and observe the true motion.
     bb = BusyBox.bb_from_result(result)
     setup_env(bb, viz=True, debug=False)
     mech = bb._mechanisms[0]
-
+    ps = mech.get_mechanism_tuple().params
     pose_handle_base_world = mech.get_pose_handle_base_world()
     policy_list = list(pose_handle_base_world.p) + [0., 0., 0., 1.] + [x_final[0], 0.0]
     policy = policies.get_policy_from_params('Prismatic', policy_list, mech)
@@ -163,6 +167,8 @@ def test_model(gp, result):
     traj = policy.generate_trajectory(pose_handle_base_world, q, True)
     gripper = Gripper(bb.bb_id)
     _, motion, _ = gripper.execute_trajectory(traj, mech, policy.type, False)
+    # import time
+    # time.sleep(1)
     p.disconnect()
 
     # Calculate the regret.
@@ -187,13 +193,12 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname=''):
     # Load the NN if required.
     nn = None
     if nn_fname != '':
-        # TODO: Load properly using the state_dict.
         nn = util.load_model(nn_fname, 16)
 
-    xs, ys = [], []
+    xs, ys, moves = [], [], []
     for ix in range(0, max_iterations):
         # (1) Choose a point to interact with.
-        if len(xs) < 10 and (nn is None):
+        if len(xs) < 1 and (nn is None):
             # (a) Choose policy randomly.
             bb = BusyBox.bb_from_result(result)
             setup_env(bb, viz=False, debug=False)
@@ -220,7 +225,6 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname=''):
         p.disconnect()
 
         # (3) Update GP.
-        # TODO: Update GP with motion-NN residuals.
         policy_params = policy.get_policy_tuple()
         xs.append([policy_params.params.pitch,
                    policy_params.params.yaw,
@@ -228,15 +232,13 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname=''):
         if nn is None:
             ys.append([motion])
         else:
-            # TODO: Pass the parameters to the NN properly.
             inputs = optim_result_to_torch(x_final, dataset.images[0].unsqueeze(0), False)
             nn_pred = nn.forward(*inputs).detach().numpy().squeeze()
             ys.append([motion-nn_pred])
+        moves.append([motion])
         gp.fit(np.array(xs), np.array(ys))
-        print(gp.kernel_)
 
         # (4) Visualize GP.
-        print(xs[-1])
         if ix % 10 == 0 and plot:
 
             #plt.clf()
@@ -252,11 +254,11 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname=''):
             viz_gp(gp, result, ix, bb, nn=nn)
 
     regrets = []
-    for y in ys:
+    for y in moves:
         max_d = mech.get_mechanism_tuple().params.range/2.0
         regrets.append((max_d - y[0])/max_d)
-    print('Avg. Regret:', np.mean(regrets))
-    return gp, nn
+        print(y, max_d)
+    return gp, nn, np.mean(regrets)
 
 def format_batch(X_pred, bb):
     data = []
@@ -299,7 +301,6 @@ def viz_gp(gp, result, num, bb, nn=None):
             nn_preds = nn(pol, x, q, im).detach().numpy()
             Y_pred += nn_preds
             axes[ix].plot(X_pred[:, 2], nn_preds[:, 0], c='b', ls='-')
-            pass
 
         axes[ix].plot(X_pred[:, 2], Y_pred[:, 0], c='r', ls='-')
         axes[ix].plot(X_pred[:, 2], Y_pred[:, 0] + Y_std, c='r', ls='--')
@@ -342,19 +343,64 @@ def fit_random_dataset(data):
     plt.show()
 
 
+def evaluate_k_busyboxes(k, args):
+    models = ['sagg_learner100/sagg-learner10.pt',
+              'sagg_learner100/sagg-learner20.pt',
+              'sagg_learner100/sagg-learner30.pt',
+              'sagg_learner100/sagg-learner40.pt',
+              'sagg_learner100/sagg-learner50.pt',
+              'sagg_learner100/sagg-learner60.pt',
+              'sagg_learner100/sagg-learner70.pt',
+              'sagg_learner100/sagg-learner80.pt',
+              'sagg_learner100/sagg-learner90.pt',
+              'sagg_learner100/sagg-learner100.pt',
+              'data_active_ntrain_50000_epoch_20.pt',
+              'data/models/prism_gp_nrun_0_epoch_170.pt',
+              'data/models/prism_gp_25bb_0_epoch_220.pt',
+              'data/models/prism_gp_75bb_nrun_0_epoch_180.pt']
+    with open('prism_gp_evals.pickle', 'rb') as handle:
+        data = pickle.load(handle)
+
+    results = []
+    for model in models:
+        avg_regrets, final_regrets = [], []
+        for ix, result in enumerate(data[:k]):
+            print('BusyBox', ix)
+            gp, nn, avg_regret = ucb_interaction(result,
+                                                 max_iterations=args.n_interactions,
+                                                 plot=False,
+                                                 nn_fname=model)
+            regret = test_model(gp, result, nn)
+            avg_regrets.append(avg_regret)
+            print('AVG:', avg_regret)
+            final_regrets.append(regret)
+            print('Reg:', regret)
+        print('Results')
+        print('Avg:', np.mean(avg_regrets))
+        print('Final:', np.mean(final_regrets))
+        res = {'model': model,
+               'avg': np.mean(avg_regrets),
+               'final': np.mean(final_regrets)}
+        results.append(res)
+    with open('regret_results.pickle', 'wb') as handle:
+        pickle.dump(results, handle)
+
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--n-train', type=int)
+    parser.add_argument('--n-interactions', type=int)
     args = parser.parse_args()
 
+    evaluate_k_busyboxes(10, args)
     with open('prism_gp_5.pickle', 'rb') as handle:
         data = pickle.load(handle)
 
-    gp, nn = ucb_interaction(data[0],
-                             max_iterations=101,
-                             plot=True,
-                             nn_fname='data/models/test_model_nrun_0_epoch_100.pt')
-    print('------------ TESTING -------------')
+    gp, nn, _ = ucb_interaction(data[0],
+                                max_iterations=args.n_interactions,
+                                plot=False,
+                                nn_fname='data_active_ntrain_50000_epoch_20.pt')
     regret = test_model(gp, data[0])
     print('Regret:', regret)
 
