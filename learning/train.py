@@ -6,6 +6,7 @@ from learning.dataloaders import setup_data_loaders, parse_pickle_file
 import learning.viz as viz
 from collections import namedtuple
 from util import util
+import os
 torch.backends.cudnn.enabled = True
 
 RunData = namedtuple('RunData', 'hdim batch_size run_num max_epoch best_epoch best_val_error')
@@ -103,7 +104,7 @@ def train_eval(args, hdim, batch_size, pviz, fname, data_fname):
                 best_epoch = ex
 
                 # save model
-                model_fname = fname+'_epoch_'+str(best_epoch)
+                model_fname = fname+'epoch_'+str(best_epoch)
                 full_path = model_fname+'.pt'
                 torch.save(net.state_dict(), full_path)
 
@@ -174,7 +175,8 @@ if __name__ == '__main__':
         #for n in [50000]:
         for n_bbs in range(10,21,10):
             data_fname = 'active_datasets/active_' + str(n_bbs) + 'bb_200int.pickle'
-            fname = args.model_prefix+'_nbbs_'+str(n_bbs)
+            fname = 'all_models/'+args.model_prefix+'_nbbs_'+str(n_bbs)+'/'
+            os.makedirs(fname)
             all_vals_epochs, best_epoch = train_eval(args, args.hdim, args.batch_size, False, fname, data_fname)
             best_val = min([ve[1] for ve in all_vals_epochs])
             vals.append(best_val)
