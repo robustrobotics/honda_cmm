@@ -138,7 +138,7 @@ if __name__ == '__main__':
     parser.add_argument('--train-freq', default=1, type=int) # frequency to retrain and test model
     parser.add_argument('--bb-train-file', type=str)
     parser.add_argument('--val-data-file', type=str, required=True)
-    parser.add_argument('--val-freq', default=5, type=int)
+    parser.add_argument('--val-freq', default=5)
     parser.add_argument('--urdf-tag', type=str, default='0')
     args = parser.parse_args()
 
@@ -158,16 +158,14 @@ if __name__ == '__main__':
         plt.ion()
 
         # read in bb train file and validation data file
-        '''
         if args.bb_train_file:
             bbps = util.read_from_file(args.bb_train_file)
-        '''
         parsed_val_data = parse_pickle_file(fname=args.val_data_file)
+
         dataset = []
         writer = SummaryWriter(runs_dir)
         test_norm_regrets = []
         model_path = None
-        '''
         for i in range(1,args.n_bbs+1):
             print('BusyBox: ', i, '/', args.n_bbs)
             if args.bb_train_file:
@@ -225,23 +223,21 @@ if __name__ == '__main__':
             dataset += learner.interactions
 
             if not i % args.train_freq:
-        '''
-        dataset = util.read_from_file(args.bb_train_file)
-        # train model (saves to model_path)
-        parsed_train_data = parse_pickle_file(data=dataset)
-        model_path = model_dir + args.data_type + '.pt'
-        train_eval(args, 1, parsed_train_data, parsed_val_data, model_path, writer)
+                # train model (saves to model_path)
+                parsed_train_data = parse_pickle_file(data=dataset)
+                model_path = model_dir + args.data_type + str(i) + '.pt'
+                train_eval(args, i, parsed_train_data, parsed_val_data, model_path, writer)
 
-        # save dataset
-        #dataset_path = model_dir + args.data_type + str(i) + '_dataset.pickle'
-        #util.write_to_file(dataset_path, dataset)
+                # save dataset
+                dataset_path = model_dir + args.data_type + str(i) + '_dataset.pickle'
+                util.write_to_file(dataset_path, dataset)
         writer.close()
         import git
         repo = git.Repo(search_parent_directories=True)
         branch = repo.active_branch
         git_hash = repo.head.object.hexsha
         all_params = {'branch': branch, 'hash': git_hash}
-        #all_params.update(learner.get_params())
+        all_params.update(learner.get_params())
         all_params.update(get_train_params(args))
         util.write_to_file('run_params.txt', str(all_params)+'\n')
     except:
