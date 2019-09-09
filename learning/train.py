@@ -170,7 +170,7 @@ if __name__ == '__main__':
         vals = []
         step = 5
         ns = range(step, args.n_train+1, step)
-        for n in [50]:
+        for n in [50000]:
             fname = args.model_prefix+'_ntrain_'+str(n)
             all_vals_epochs, best_epoch = train_eval(args, args.hdim, args.batch_size, False, fname)
             best_val = min([ve[1] for ve in all_vals_epochs])
