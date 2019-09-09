@@ -14,6 +14,8 @@ def generate_dataset(args, git_hash, bb=None):
     for i in range(args.n_bbs):
         if bb is None:
             # TODO: add back doors when working
+            pass
+        if True:
             bb = BusyBox.generate_random_busybox(max_mech=args.max_mech, mech_types=[Slider], urdf_tag=str(args.urdf_num), debug=args.debug)
 
         for j in range(args.n_samples):

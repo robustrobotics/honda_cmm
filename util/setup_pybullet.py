@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def setup_env(bb, viz, debug):
+def setup_env(bb, viz, debug, show_im=False):
     # disconnect if already connected (may want to change viz from False to True)
     if p.getConnectionInfo()['isConnected']:
         p.disconnect()
@@ -53,7 +53,8 @@ def setup_env(bb, viz, debug):
     farPlane = 100
     fov = 60
     projection_matrix = p.computeProjectionMatrixFOV(fov, aspect, nearPlane, farPlane)
-    image_data_pybullet = p.getCameraImage(205, 154, shadow=0, renderer=p.ER_TINY_RENDERER, viewMatrix=view_matrix, projectionMatrix=projection_matrix)
+    image_data_pybullet = p.getCameraImage(205, 154, shadow=0, renderer=p.ER_TINY_RENDERER, viewMatrix=view_matrix, lightDiffuseCoeff=0,
+                                           lightSpecularCoeff=0,projectionMatrix=projection_matrix)
     image_data = util.ImageData(*image_data_pybullet[:3])
 
     w, h, im = image_data_pybullet[:3]
@@ -63,9 +64,10 @@ def setup_env(bb, viz, debug):
     image_data = util.ImageData(w, h, im)
 
     # Display the cropped image.
-    # np_im = np.array(im, dtype=np.uint8).reshape(h, w, 3)
-    # plt.imshow(np_im)
-    # plt.show()
+    if show_im:
+        np_im = np.array(im, dtype=np.uint8).reshape(h, w, 3)
+        plt.imshow(np_im)
+        plt.show()
 
     p.stepSimulation()
     return image_data

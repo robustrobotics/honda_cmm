@@ -448,7 +448,7 @@ class TestMechPoliciesPitchOnly(PlotFunc):
             mech_tuple = mech.get_mechanism_tuple()
             #print(mech_tuple)
             for i in range(len(d_pitches)):
-                image_data = util.setup_pybullet.setup_env(bb, False, False)
+                image_data = util.setup_pybullet.setup_env(bb, False, False, show_im=False)
                 random_policy = policies.generate_policy(bb, mech, True, randomness)
                 random_policy.pitch = random_policy.pitch - random_policy.delta_pitch + d_pitches[i]
                 random_policy.delta_pitch = d_pitches[i]
@@ -468,7 +468,10 @@ class TestMechPoliciesPitchOnly(PlotFunc):
                                          image_data,
                                          None,
                                          randomness)
+
+
                     pred_motion = get_pred_motions([sample], model)
+
                     motions[i, j, k] = pred_motion[0]
 
                     # calculate trajectory
