@@ -300,12 +300,15 @@ class ActivePolicyLearner(object):
             for element in region.attempted_goals:
                 if mode == element[2]:
                     im = ax.scatter([-element[0].x], [element[0].z], c=[element[1]], s=4, vmin=0, vmax=max_comp)
+                    # TODO: colorbar doesn't update with interactive plotting
+                    '''
                     if (mode == 'predict') and not self.made_prior_colorbar:
                         fig.colorbar(im)
                         self.made_prior_colorbar = True
                     if (mode == 'interact') and not self.made_interact_colorbar:
                         fig.colorbar(im)
                         self.made_interact_colorbar = True
+                    '''
         if mode == 'interact':
             last_goal = self.all_interact_goals[-1]
             colors = {1: 'r', 2: 'darkorchid', 3: 'hotpink', 'exploit': 'tan'}
