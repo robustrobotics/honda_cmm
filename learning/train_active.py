@@ -138,7 +138,7 @@ if __name__ == '__main__':
     parser.add_argument('--train-freq', default=1, type=int) # frequency to retrain and test model
     parser.add_argument('--bb-train-file', type=str)
     parser.add_argument('--val-data-file', type=str, required=True)
-    parser.add_argument('--val-freq', default=5)
+    parser.add_argument('--val-freq', default=5, type=int)
     parser.add_argument('--urdf-tag', type=str, default='0')
     args = parser.parse_args()
 
