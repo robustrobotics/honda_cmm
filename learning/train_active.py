@@ -16,9 +16,10 @@ import matplotlib.pyplot as plt
 import traceback, sys, pdb
 torch.backends.cudnn.enabled = True
 
-def train_eval(args, parsed_data, pviz=False):
+def train_eval(args, bb_n, parsed_train_data, parsed_val_data, model_path, writer, pviz=False):
 
-    train_set = setup_data_loaders(parsed_data, batch_size=args.batch_size, train_only=True)
+    train_set = setup_data_loaders(parsed_train_data, batch_size=args.batch_size, single_set=True)
+    val_set = setup_data_loaders(parsed_val_data, batch_size=args.batch_size, single_set=True)
 
     # Setup Model (TODO: Update the correct policy dims)
     net = NNPolVis(policy_names=['Prismatic', 'Revolute'],
@@ -44,6 +45,8 @@ def train_eval(args, parsed_data, pviz=False):
         im = im.cuda().unsqueeze(0)
         pol = pol.cuda()
 
+    best_val = 10000
+    vals = []
     # Training loop.
     best_train_error = 10000
     for ex in range(1, args.n_epochs+1):
@@ -66,9 +69,42 @@ def train_eval(args, parsed_data, pviz=False):
 
             train_losses.append(loss.item())
         train_loss_ex = np.mean(train_losses)
-        best_train_error = min(best_train_error, train_loss_ex)
+        writer.add_scalar('Train-loss/'+str(bb_n), train_loss_ex, ex)
         print('[Epoch {}] - Training Loss: {}'.format(ex, train_loss_ex))
-    return best_train_error, net.state_dict()
+
+        # Validate
+        if ex % args.val_freq == 0:
+            val_losses = []
+            net.eval()
+
+            ys, yhats, types = [], [], []
+            for bx, (k, x, q, im, y, _) in enumerate(val_set):
+                pol = torch.Tensor([util.name_lookup[k[0]]])
+                if args.use_cuda:
+                    x = x.cuda()
+                    q = q.cuda()
+                    im = im.cuda()
+                    y = y.cuda()
+
+                yhat = net.forward(pol, x, q, im)
+
+                loss = loss_fn(yhat, y)
+                val_losses.append(loss.item())
+
+                types += k
+                if args.use_cuda:
+                    y = y.cpu()
+                    yhat = yhat.cpu()
+                ys += y.numpy().tolist()
+                yhats += yhat.detach().numpy().tolist()
+
+            curr_val = np.mean(val_losses)
+            writer.add_scalar('Val-loss/'+str(bb_n), curr_val, ex)
+            print('[Epoch {}] - Validation Loss: {}'.format(ex, curr_val))
+            # if best epoch so far, save model
+            if curr_val < best_val:
+                best_val = curr_val
+                torch.save(net.state_dict(), model_path)
 
 def get_train_params(args):
     return {'batch_size': args.batch_size,
@@ -79,7 +115,9 @@ def get_train_params(args):
             'n_inter': args.n_inter,
             'n_prior': args.n_prior,
             'train_freq': args.train_freq,
-            'bb_file': args.bb_file}
+            'bb_train_file': args.bb_train_file,
+            'val_data_file': args.val_data_file,
+            'val_freq': args.val_freq}
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -98,7 +136,9 @@ if __name__ == '__main__':
     parser.add_argument('--viz-final', action='store_true') # visualize final interactions and priors
     parser.add_argument('--lite', action='store_true') # if used, does not generate or save any plots
     parser.add_argument('--train-freq', default=1, type=int) # frequency to retrain and test model
-    parser.add_argument('--bb-file', type=str)
+    parser.add_argument('--bb-train-file', type=str)
+    parser.add_argument('--val-data-file', type=str, required=True)
+    parser.add_argument('--val-freq', default=5)
     parser.add_argument('--urdf-tag', type=str, default='0')
     args = parser.parse_args()
 
@@ -106,7 +146,7 @@ if __name__ == '__main__':
         pdb.set_trace()
 
     try:
-        # remove directories for tensorboard logs and torch model then remake
+        # move directories for tensorboard logs and torch model then remake
         model_dir = './torch_models_prior/'
         runs_dir = './runs_active'
         dirs = [model_dir, runs_dir]
@@ -117,8 +157,10 @@ if __name__ == '__main__':
             os.makedirs(dir)
         plt.ion()
 
-        if args.bb_file:
-            bbps = util.read_from_file(args.bb_file)
+        # read in bb train file and validation data file
+        if args.bb_train_file:
+            bbps = util.read_from_file(args.bb_train_file)
+        parsed_val_data = parse_pickle_file(fname=args.val_data_file)
 
         dataset = []
         writer = SummaryWriter(runs_dir)
@@ -126,7 +168,7 @@ if __name__ == '__main__':
         model_path = None
         for i in range(1,args.n_bbs+1):
             print('BusyBox: ', i, '/', args.n_bbs)
-            if args.bb_file:
+            if args.bb_train_file:
                 bbp = bbps[i-1]
                 bb = BusyBox.get_busybox(bbp.width, bbp.height, bbp._mechanisms, urdf_tag=args.urdf_tag)
             else:
@@ -181,16 +223,14 @@ if __name__ == '__main__':
             dataset += learner.interactions
 
             if not i % args.train_freq:
-                # train model
-                parsed_data = parse_pickle_file(data=dataset)
-                train_error, model = train_eval(args, parsed_data)
-
-                # save model and dataset
+                # train model (saves to model_path)
+                parsed_train_data = parse_pickle_file(data=dataset)
                 model_path = model_dir + args.data_type + str(i) + '.pt'
+                train_eval(args, i, parsed_train_data, parsed_val_data, model_path, writer)
+
+                # save dataset
                 dataset_path = model_dir + args.data_type + str(i) + '_dataset.pickle'
-                torch.save(model, model_path)
                 util.write_to_file(dataset_path, dataset)
-                writer.add_scalar('Loss/train', train_error, i)
         writer.close()
         import git
         repo = git.Repo(search_parent_directories=True)
