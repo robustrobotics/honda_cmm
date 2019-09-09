@@ -30,29 +30,8 @@ def vis_test_error(test_data, model_path, test_name, hdim, plots_dir):
     #input()
     #plt.close()
 
-def get_n_from_file(file):
-    n_str = ''
-    for c in file:
-        if c == '.':
-            break
-        else:
-            n_str += c
-    n = int(n_str)
-    return n
-
-def get_ordered_files(path):
-    file_names = os.listdir(path)
-    files = {}
-    for file in file_names:
-        full_model_path = path + file
-        n = get_n_from_file(file)
-        files[n] = full_model_path
-    files = sorted(files.items(), key=operator.itemgetter(0))
-    return files
-
 def calc_test_error(test_data, model_path, test_name, hdim, dir, plot=False):
     writer = SummaryWriter(dir+test_name)
-    #files = get_ordered_files(model_path)
     files = [(0, model_path)]
     for (n, file) in files:
         net = util.load_model(file, hdim=hdim)
@@ -71,7 +50,7 @@ def calc_test_error(test_data, model_path, test_name, hdim, dir, plot=False):
 
 def calc_true_error(test_data, model_path, test_name, hdim, dir):
     writer = SummaryWriter(dir+test_name)
-    files = get_ordered_files(model_path)
+    files = [(0, model_path)]
     for (n, file) in files:
         net = util.load_model(file, hdim=hdim)
         test_error = 0
