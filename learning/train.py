@@ -12,9 +12,10 @@ RunData = namedtuple('RunData', 'hdim batch_size run_num max_epoch best_epoch be
 name_lookup = {'Prismatic': 0, 'Revolute': 1}
 
 
-def train_eval(args, hdim, batch_size, pviz, fname):
+def train_eval(args, hdim, batch_size, pviz, fname, data_fname):
     # Load data
-    data = parse_pickle_file(fname=args.data_fname)
+    #data = parse_pickle_file(fname=args.data_fname)
+    data = parse_pickle_file(fname=data_fname)
     train_set, val_set, test_set = setup_data_loaders(data=data,
                                                       batch_size=batch_size,
                                                       small_train=args.n_train)
@@ -133,7 +134,7 @@ if __name__ == '__main__':
     parser.add_argument('--mode', choices=['ntrain', 'normal'], default='normal')
     parser.add_argument('--use-cuda', default=False, action='store_true')
     parser.add_argument('--debug', action='store_true')
-    parser.add_argument('--data-fname', type=str, required=True)
+    parser.add_argument('--data-fname', type=str)
     parser.add_argument('--model-prefix', type=str, default='model')
     # if 0 then use all samples in dataset, else use ntrain number of samples
     parser.add_argument('--n-train', type=int, default=0)
@@ -168,11 +169,13 @@ if __name__ == '__main__':
         util.write_to_file(fname+'_results', run_data)
     elif args.mode == 'ntrain':
         vals = []
-        step = 5
-        ns = range(step, args.n_train+1, step)
-        for n in [50000]:
-            fname = args.model_prefix+'_ntrain_'+str(n)
-            all_vals_epochs, best_epoch = train_eval(args, args.hdim, args.batch_size, False, fname)
+        #step = 5
+        #ns = range(step, args.n_train+1, step)
+        #for n in [50000]:
+        for n_bbs in range(10,21,10):
+            data_fname = 'active_datasets/active_' + str(n_bbs) + 'bb_200int.pickle'
+            fname = args.model_prefix+'_nbbs_'+str(n_bbs)
+            all_vals_epochs, best_epoch = train_eval(args, args.hdim, args.batch_size, False, fname, data_fname)
             best_val = min([ve[1] for ve in all_vals_epochs])
             vals.append(best_val)
         #plot_val_error(ns, vals, 'n train', args.model_prefix+'ntrain')
