@@ -153,7 +153,6 @@ def parse_pickle_file(fname=None, data=None):
 
 
 def create_data_splits(data, val_pct=0.15, test_pct=0.15):
-    random.Random(0).shuffle(data)
     n = len(data)
     val_start = int(n*(1-val_pct-test_pct))
     test_start = int(n*(1-test_pct))
@@ -165,17 +164,18 @@ def create_data_splits(data, val_pct=0.15, test_pct=0.15):
     return train_data, val_data, test_data
 
 
-def setup_data_loaders(data, batch_size=128, use_cuda=True, small_train=0, train_only=False):
+def setup_data_loaders(data, batch_size=128, use_cuda=True, small_train=0, single_set=False):
     #data = parse_pickle_file(fname)
     kwargs = {'num_workers': 0,
               'pin_memory': use_cuda}
 
-    if train_only:
-        train_set = PolicyDataset(data)
-        train_loader = torch.utils.data.DataLoader(dataset=train_set,
-                                                   batch_sampler=CustomSampler(train_set.items, batch_size),
+    random.Random(0).shuffle(data)
+    if single_set:
+        set = PolicyDataset(data)
+        loader = torch.utils.data.DataLoader(dataset=set,
+                                                   batch_sampler=CustomSampler(set.items, batch_size),
                                                    **kwargs)
-        return train_loader
+        return loader
     else:
         # Create datasplits.
         train_data, val_data, test_data = create_data_splits(data)
