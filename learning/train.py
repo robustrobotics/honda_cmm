@@ -7,19 +7,23 @@ import learning.viz as viz
 from collections import namedtuple
 from util import util
 import os
+from torch.utils.tensorboard import SummaryWriter
 torch.backends.cudnn.enabled = True
 
 RunData = namedtuple('RunData', 'hdim batch_size run_num max_epoch best_epoch best_val_error')
 name_lookup = {'Prismatic': 0, 'Revolute': 1}
 
 
-def train_eval(args, hdim, batch_size, pviz, fname, data_fname):
+def train_eval(args, hdim, batch_size, pviz, fname, writer, n=0, data_fname=None):
     # Load data
-    #data = parse_pickle_file(fname=args.data_fname)
-    data = parse_pickle_file(fname=data_fname)
+    if args.data_fname:
+        data = parse_pickle_file(fname=args.data_fname)
+    else:
+        data = parse_pickle_file(fname=data_fname)
+
     train_set, val_set, test_set = setup_data_loaders(data=data,
                                                       batch_size=batch_size,
-                                                      small_train=args.n_train)
+                                                      small_train=n)
 
     # Setup Model (TODO: Update the correct policy dims)
     net = NNPolVis(policy_names=['Prismatic', 'Revolute'],
@@ -30,7 +34,7 @@ def train_eval(args, hdim, batch_size, pviz, fname, data_fname):
                    kernel_size=3,
                    image_encoder=args.image_encoder)
 
-    print(sum(p.numel() for p in net.parameters() if p.requires_grad))
+    #print(sum(p.numel() for p in net.parameters() if p.requires_grad))
     if args.use_cuda:
         net = net.cuda()
 
@@ -68,8 +72,9 @@ def train_eval(args, hdim, batch_size, pviz, fname, data_fname):
             optim.step()
 
             train_losses.append(loss.item())
-
-        print('[Epoch {}] - Training Loss: {}'.format(ex, np.mean(train_losses)))
+        train_loss_ex = np.mean(train_losses)
+        writer.add_scalar('Train-loss/'+fname, train_loss_ex, ex)
+        print('[Epoch {}] - Training Loss: {}'.format(ex, train_loss_ex))
 
         if ex % args.val_freq == 0:
             val_losses = []
@@ -97,34 +102,24 @@ def train_eval(args, hdim, batch_size, pviz, fname, data_fname):
                 yhats += yhat.detach().numpy().tolist()
 
             curr_val = np.mean(val_losses)
-            vals += [[ex, curr_val]]
+            writer.add_scalar('Val-loss/'+fname, curr_val, ex)
             print('[Epoch {}] - Validation Loss: {}'.format(ex, curr_val))
+            # if best epoch so far, save model
             if curr_val < best_val:
                 best_val = curr_val
-                best_epoch = ex
-
-                # save model
-                model_fname = fname+'epoch_'+str(best_epoch)
-                full_path = model_fname+'.pt'
+                full_path = fname+'.pt'
                 torch.save(net.state_dict(), full_path)
 
                 # save plot of prediction error
                 if pviz:
                     viz.plot_y_yhat(ys, yhats, types, ex, fname, title='PolVis')
-    return vals, best_epoch
 
-
-def plot_val_error(ns, vals, type, fname=None, viz=False):
-        import matplotlib.pyplot as plt
-        plt.figure()
-        plt.xlabel(type)
-        plt.ylabel('Val MSE')
-
-        plt.plot(ns, vals)
-        plt.savefig('val_error_'+fname+'.png', bbox_inches='tight')
-        if viz:
-            plt.show()
-
+def get_train_params(args):
+    return {'batch_size': args.batch_size,
+            'hdim': args.hdim,
+            'n_epochs': args.n_epochs,
+            'val_freq': args.val_freq,
+            'data-fname': args.data_fname}
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -138,46 +133,40 @@ if __name__ == '__main__':
     parser.add_argument('--data-fname', type=str)
     parser.add_argument('--model-prefix', type=str, default='model')
     # if 0 then use all samples in dataset, else use ntrain number of samples
-    parser.add_argument('--n-train', type=int, default=0)
+    parser.add_argument('--ntrain-max', type=int, default=0)
+    parser.add_argument('--step', type=int, default=200)
     parser.add_argument('--image-encoder', type=str, default='spatial', choices=['spatial', 'cnn'])
     parser.add_argument('--n-runs', type=int, default=1)
+    parser.add_argument('--pviz', action='store_true')
     args = parser.parse_args()
 
     if args.debug:
         import pdb; pdb.set_trace()
 
-    # if hdim and batch_size given as args then use them, otherwise test a list of them
-    if args.hdim:
-        hdims = [args.hdim]
-    else:
-        hdims = [16, 32]
-    if args.batch_size:
-        batch_sizes = [args.batch_size]
-    else:
-        batch_sizes = [16, 32]
+    # mv directories for tensorboard logs and torch model if exist
+    # remake dirs (don't want to overwrite data)
+
+    model_dir = './torch_models/'
+    runs_dir = './runs'
+    for dir in [model_dir, runs_dir]:
+        if os.path.isdir(dir):
+            input('move this directory so files dont get overitten: '+dir)
+            sys.exit()
+        os.makedirs(dir)
+
+    # make tensorboard writer
+    writer = SummaryWriter(runs_dir)
 
     if args.mode == 'normal':
-        run_data = []
-        for n in range(args.n_runs):
-            for hdim in hdims:
-                for batch_size in batch_sizes:
-                    fname = args.model_prefix+'_nrun_'+str(n)
-                    all_vals_epochs, best_epoch = train_eval(args, hdim, batch_size, False, fname)
-                    es = [v[0] for v in all_vals_epochs]
-                    vals = [v[1] for v in all_vals_epochs]
-                    plot_val_error(es, vals, 'epoch', fname)
-                    run_data += [RunData(hdim, batch_size, n, args.n_epochs, best_epoch, min(vals))]
-        util.write_to_file(fname+'_results', run_data)
+        for n_run in range(args.n_runs):
+            fname = model_dir+args.model_prefix+'_nrun_'+str(n_run)
+            train_eval(args, args.hdim, args.batch_size, args.pviz, fname, writer)
+
     elif args.mode == 'ntrain':
         vals = []
-        #step = 5
-        #ns = range(step, args.n_train+1, step)
-        #for n in [50000]:
-        for n_bbs in range(60,101,10):
-            data_fname = 'active_datasets/active_' + str(n_bbs) + 'bb_200int.pickle'
-            fname = 'all_models/'+args.model_prefix+'_nbbs_'+str(n_bbs)+'/'
-            os.makedirs(fname)
-            all_vals_epochs, best_epoch = train_eval(args, args.hdim, args.batch_size, False, fname, data_fname)
-            best_val = min([ve[1] for ve in all_vals_epochs])
-            vals.append(best_val)
-        #plot_val_error(ns, vals, 'n train', args.model_prefix+'ntrain')
+        ns = range(args.step, args.ntrain_max+1, args.step)
+        for n in ns:
+            fname = model_dir+args.model_prefix+'_ntrain_'+str(n)
+            train_eval(args, args.hdim, args.batch_size, args.pviz, fname, writer, n)
+
+    writer.close()
