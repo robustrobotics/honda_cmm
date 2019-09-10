@@ -158,15 +158,14 @@ if __name__ == '__main__':
         plt.ion()
 
         # read in bb train file and validation data file
-        #if args.bb_train_file:
-        #    bbps = util.read_from_file(args.bb_train_file)
+        if args.bb_train_file:
+            bbps = util.read_from_file(args.bb_train_file)
         parsed_val_data = parse_pickle_file(fname=args.val_data_file)
 
-        #dataset = []
+        dataset = []
         writer = SummaryWriter(runs_dir)
         test_norm_regrets = []
         model_path = None
-        '''
         for i in range(1,args.n_bbs+1):
             print('BusyBox: ', i, '/', args.n_bbs)
             if args.bb_train_file:
@@ -222,24 +221,23 @@ if __name__ == '__main__':
                 if interest_figs[0]:
                     writer.add_figure('Interest/'+str(i), interest_figs[0])
             dataset += learner.interactions
-        '''
-        #if not i % args.train_freq:
-        # train model (saves to model_path)
-        dataset = util.read_from_file(args.bb_train_file)[:3500]
-        parsed_train_data = parse_pickle_file(data=dataset)
-        model_path = model_dir + args.data_type + '.pt'
-        train_eval(args, 0, parsed_train_data, parsed_val_data, model_path, writer)
 
-        # save dataset
-        #dataset_path = model_dir + args.data_type + str(i) + '_dataset.pickle'
-        #util.write_to_file(dataset_path, dataset)
+            if not i % args.train_freq:
+                # train model (saves to model_path)
+                parsed_train_data = parse_pickle_file(data=dataset)
+                model_path = model_dir + args.data_type + str(i) + '.pt'
+                train_eval(args, i, parsed_train_data, parsed_val_data, model_path, writer)
+
+                # save dataset
+                dataset_path = model_dir + args.data_type + str(i) + '_dataset.pickle'
+                util.write_to_file(dataset_path, dataset)
         writer.close()
         import git
         repo = git.Repo(search_parent_directories=True)
         branch = repo.active_branch
         git_hash = repo.head.object.hexsha
         all_params = {'branch': branch, 'hash': git_hash}
-        #all_params.update(learner.get_params())
+        all_params.update(learner.get_params())
         all_params.update(get_train_params(args))
         util.write_to_file('run_params.txt', str(all_params)+'\n')
     except:
