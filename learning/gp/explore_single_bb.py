@@ -230,9 +230,9 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1):
         _, motion, _ = gripper.execute_trajectory(traj, mech, policy.type, False)
         p.disconnect()
 
-        # if ix == 0:
-        #     print('GP:', gp.kernel)
-        #     viz_gp(gp, result, ix, bb, nn=nn)
+        if ix == 0:
+            print('GP:', gp.kernel)
+            viz_gp_circles(gp, result, ix, bb, image_data, nn=nn, kx=kx)
 
         # (3) Update GP.
         policy_params = policy.get_policy_tuple()
@@ -265,7 +265,7 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1):
             # #plt.savefig('gp_samples_%d.png' % ix)
             # plt.show()
             # viz_gp(gp, result, ix, bb, nn=nn)
-            viz_gp_circles(gp, result, ix, bb, image_data, nn=nn, kx=kx)
+            viz_gp_circles(gp, result, ix, bb, image_data, nn=nn, kx=kx, points=xs)
 
     regrets = []
     for y in moves:
@@ -335,17 +335,15 @@ def viz_gp(gp, result, num, bb, nn=None):
     plt.show()
     # plt.savefig('gp_estimates_tuned_%d.png' % num)
 
-def viz_gp_circles(gp, result, num, bb, image_data, nn=None, kx=-1):
-    n_pitch = 40
-    n_q = 20
+def viz_gp_circles(gp, result, num, bb, image_data, nn=None, kx=-1, points=None):
+    n_pitch = 80
+    n_q = 40
 
-    plt.clf()
     radii = np.linspace(-0.25, 0.25, num=n_q)
     thetas = np.linspace(-np.pi, 0, num=n_pitch)
     r, th = np.meshgrid(radii, thetas)
-    print(r.shape, th.shape)
-    colors = np.zeros(r.shape)
-    ref_colors = np.zeros(r.shape)
+    mean_colors = np.zeros(r.shape)
+    std_colors = np.zeros(r.shape)
 
     for ix in range(0, n_pitch):
         x_preds = []
@@ -354,6 +352,8 @@ def viz_gp_circles(gp, result, num, bb, image_data, nn=None, kx=-1):
         X_pred = np.array(x_preds)
 
         Y_pred, Y_std = gp.predict(X_pred, return_std=True)
+        if len(Y_pred.shape) == 1:
+            Y_pred = Y_pred.reshape(-1, 1)
         if not nn is None:
             loader = format_batch(X_pred, bb)
             k, x, q, im, _, _ = next(iter(loader))
@@ -361,38 +361,48 @@ def viz_gp_circles(gp, result, num, bb, image_data, nn=None, kx=-1):
             nn_preds = nn(pol, x, q, im).detach().numpy()
             Y_pred += nn_preds
 
-        # print(Y_pred)
-        if len(Y_pred.shape) == 1:
-            Y_pred = Y_pred.reshape(-1, 1)
-
         for jx in range(0, n_q):
-            colors[ix, jx] = Y_pred[jx, 0]
-    
-    print(len(thetas), len(radii), len(colors))
-    ax0 = plt.subplot(121)
+            mean_colors[ix, jx] = Y_pred[jx, 0]
+            std_colors[ix, jx] = Y_std[jx]
+
+    plt.clf()
+    plt.figure(figsize=(20, 5))
+    ax0 = plt.subplot(131)
     w, h, im = image_data
     np_im = np.array(im, dtype=np.uint8).reshape(h, w, 3)
     ax0.imshow(np_im)
+    mps = bb._mechanisms[0].get_mechanism_tuple().params
+    print('Angle:', np.rad2deg(np.arctan2(mps.axis[1], mps.axis[0])))
+    ax1 = plt.subplot(132, projection='polar')
+    ax1.set_title('mean')
+    max_d = bb._mechanisms[0].get_mechanism_tuple().params.range / 2.0
+    polar_plots(ax1, mean_colors, vmax=max_d)
+
+    ax2 = plt.subplot(133, projection='polar')
+    ax2.set_title('variance')
+    polar_plots(ax2, std_colors, vmax=None, points=points)
+    # plt.show()
+    plt.savefig('gp_polar_bb_%d_%d.png' % (kx, num), bbox_inches='tight')
 
 
-    ax1 = plt.subplot(122, projection='polar')
-    colors = colors
-    print(th[:,0])
-
+def polar_plots(ax, colors, vmax, points=None):
+    n_pitch, n_q = colors.shape
     thp, rp = np.linspace(0, 2*np.pi, n_pitch*2), np.linspace(0, 0.25, n_q//2)
     rp, thp = np.meshgrid(rp, thp)
     cp = np.zeros(rp.shape)
 
-    cp[0:n_pitch,:] = colors[:, 0:n_q//2]
-    cp[n_pitch:,:] = colors[:, n_q//2:]
+    cp[0:n_pitch, :] = colors[:, 0:n_q//2][:, ::-1]
+    cp[n_pitch:, :] = np.copy(colors[:, n_q//2:])
 
-    #sys.exit(0)
+    ax.pcolormesh(thp, rp, cp, vmax=vmax)
+    if not points is None:
+        for x in points:
+            print([np.rad2deg(x[0]), x[2]])
+            if x[2] < 0:
+                ax.scatter(x[0] - np.pi, -1*x[2], c='r', s=10)
+            else:
+                ax.scatter(x[0], x[2], c='r', s=10)
 
-    #plt.pcolormesh(th, r, colors, vmax=0.25)
-    max_d = bb._mechanisms[0].get_mechanism_tuple().params.range/2.0
-    ax1.pcolormesh(thp, rp, cp, vmax=max_d)
-    # plt.show()
-    plt.savefig('gp_polar_bb_%d_%d.png' % (kx, num), bbox_inches='tight')
 
 def fit_random_dataset(data):
     X, Y, X_pred = process_data(data, n_train=args.n_train)
@@ -420,11 +430,12 @@ def fit_random_dataset(data):
 
 
 def evaluate_k_busyboxes(k, args):
-    models = ['sagg_noprior_090919_1506/10bbs.pt',
-              'sagg_noprior_090919_1506/20bbs.pt',
-              'sagg_noprior_090919_1506/30bbs.pt',
-              'sagg_noprior_090919_1506/40bbs.pt',
-              'sagg_noprior_090919_1506/50bbs.pt',
+    models = ['',
+              # 'sagg_noprior_090919_1506/10bbs.pt',
+              # 'sagg_noprior_090919_1506/20bbs.pt',
+              # 'sagg_noprior_090919_1506/30bbs.pt',
+              # 'sagg_noprior_090919_1506/40bbs.pt',
+              # 'sagg_noprior_090919_1506/50bbs.pt',
               '']
     # models = ['sagg_learner100/sagg-learner10.pt',
     #           'sagg_learner100/sagg-learner20.pt',
@@ -444,7 +455,8 @@ def evaluate_k_busyboxes(k, args):
     with open('prism_gp_evals.pickle', 'rb') as handle:
         data = pickle.load(handle)
     results = []
-    models = ['']
+    # k=1
+    # data = [data[4]]
     for model in models:
         avg_regrets, final_regrets = [], []
         for ix, result in enumerate(data[:k]):
