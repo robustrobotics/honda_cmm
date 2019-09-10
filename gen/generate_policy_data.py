@@ -10,11 +10,10 @@ from actions.gripper import Gripper
 from gen.generator_busybox import Slider, Door, BusyBox
 
 results = []
-def generate_dataset(args, git_hash, bb=None):
+def generate_dataset(args, git_hash):
     for i in range(args.n_bbs):
-        if bb is None:
-            # TODO: add back doors when working
-            bb = BusyBox.generate_random_busybox(max_mech=args.max_mech, mech_types=[Slider], urdf_tag=str(args.urdf_num), debug=args.debug)
+        # TODO: add back doors when working
+        bb = BusyBox.generate_random_busybox(max_mech=args.max_mech, mech_types=[Slider], urdf_tag=str(args.urdf_num), debug=args.debug)
 
         for j in range(args.n_samples):
             sys.stdout.write("\rProcessing sample %i/%i for busybox %i/%i" % (j+1, args.n_samples, i+1, args.n_bbs))
