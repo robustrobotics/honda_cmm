@@ -59,7 +59,7 @@ def setup_env(bb, viz, debug, show_im=False):
 
     w, h, im = image_data_pybullet[:3]
     np_im = np.array(im, dtype=np.uint8).reshape(h, w, 4)[:, :, 0:3]
-    np_im = np_im[37:90, 45:160, :]
+    np_im = np_im[7:125, 44:160, :]
     w, h, im = np_im.shape[1], np_im.shape[0], np_im.flatten().tolist()
     image_data = util.ImageData(w, h, im)
 
