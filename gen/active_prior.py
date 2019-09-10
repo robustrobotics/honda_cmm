@@ -266,7 +266,7 @@ class ActivePolicyLearner(object):
         endpoint0 = np.add(center, np.multiply(self.mech.range/2, self.mech.axis))
         endpoint1 = np.add(center, np.multiply(-self.mech.range/2, self.mech.axis))
         #ax.plot([-endpoint0[0], -endpoint1[0]], [endpoint0[1], endpoint1[1]], '--r')
-        image = util.imshow(self.image_data)
+        image = util.imshow(self.image_data, False)
         ax.imshow(image, extent=(*self.x_lims, *self.y_lims))
 
     def update_plot(self, mode):
