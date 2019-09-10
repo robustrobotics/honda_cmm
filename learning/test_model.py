@@ -30,29 +30,9 @@ def vis_test_error(test_data, model_path, test_name, hdim, plots_dir):
     #input()
     #plt.close()
 
-def get_n_from_file(file):
-    n_str = ''
-    for c in file:
-        if c == '.':
-            break
-        else:
-            n_str += c
-    n = int(n_str)
-    return n
-
-def get_ordered_files(path):
-    file_names = os.listdir(path)
-    files = {}
-    for file in file_names:
-        full_model_path = path + file
-        n = get_n_from_file(file)
-        files[n] = full_model_path
-    files = sorted(files.items(), key=operator.itemgetter(0))
-    return files
-
-def calc_test_error(test_data, model_path, test_name, hdim, dir):
+def calc_test_error(test_data, model_path, test_name, hdim, dir, plot=False):
     writer = SummaryWriter(dir+test_name)
-    files = get_ordered_files(model_path)
+    files = [(0, model_path)]
     for (n, file) in files:
         net = util.load_model(file, hdim=hdim)
         test_error = 0
@@ -61,7 +41,7 @@ def calc_test_error(test_data, model_path, test_name, hdim, dir):
             rand_num = np.random.uniform(0,1)
             bb = BusyBox.get_busybox(bbp.width, bbp.height, bbp._mechanisms, urdf_tag=str(rand_num))
             true_motion = bb._mechanisms[0].range/2
-            test_motion = test_env(net, bb=bb, debug=False, plot=False, viz=False)
+            test_motion = test_env(net, bb=bb, debug=False, plot=plot, viz=False)
             test_error += np.linalg.norm([true_motion-test_motion])**2
         test_mse = test_error/len(test_data)
         writer.add_scalar('test_error', test_mse, n)
@@ -70,7 +50,7 @@ def calc_test_error(test_data, model_path, test_name, hdim, dir):
 
 def calc_true_error(test_data, model_path, test_name, hdim, dir):
     writer = SummaryWriter(dir+test_name)
-    files = get_ordered_files(model_path)
+    files = [(0, model_path)]
     for (n, file) in files:
         net = util.load_model(file, hdim=hdim)
         test_error = 0
@@ -172,13 +152,13 @@ def test_env(model, bb=None, plot=False, viz=False, debug=False, use_cuda=False)
     # assume you guessed the correct policy type, and optimize for params and configuration
     x0 = np.concatenate([[params_max[0]], q_max]) # only searching space of pitches!
     res = minimize(fun=objective_func, x0=x0, args=(policy_type_max, dataset.images[0].unsqueeze(0), model, use_cuda),
-                method='BFGS', options={'eps': 10**-3})
+                method='L-BFGS-B', bounds=((-np.pi, 0.0), (-0.25, 0.25))) #, options={'eps': 10**-3})
     x_final = res['x']
     policy_list = list(pose_handle_base_world.p)+[0., 0., 0., 1.]+[x_final[0], 0.0] # hard code yaw value
     policy_final = policies.get_policy_from_params(policy_type_max, policy_list, mech)
     config_final = x_final[-1]
     if plot:
-        plot_search(bb, samples, q_max, delta_yaw_max, delta_pitch_max, policy_final, config_final, debug)
+        plot_search(bb, samples, q_max, params_max, delta_yaw_max, delta_pitch_max, policy_final, config_final, debug)
 
     # test found policy on busybox
     setup_env(bb, viz=viz, debug=debug)
@@ -194,25 +174,30 @@ def test_env(model, bb=None, plot=False, viz=False, debug=False, use_cuda=False)
         plt.close()
     return motion
 
-def plot_search(bb, samples, q_max, delta_yaw_max, delta_pitch_max, policy_final, config_final, debug):
+def plot_search(bb, samples, q_max, params_max, delta_yaw_max, delta_pitch_max, policy_final, config_final, debug):
     mech = bb._mechanisms[0]
     limit = mech.range/2
-
+    true_policy = policies.generate_policy(bb, mech, True, 0.0)
+    true_pitch = true_policy.pitch
     qs = [s[0][2] for s in samples]
+    pitches = [s[0][1][0] for s in samples]
     delta_pitches = [s[0][4] for s in samples]
     disps = [s[1] for s in samples]
     mind = min(disps)
     maxd = max(disps)
 
+
+
     plt.ion()
     fig, ax = plt.subplots()
-    im = ax.scatter(qs, delta_pitches, c=disps, vmin=mind, vmax=maxd, s=6)
+    im = ax.scatter(qs, pitches, c=disps, vmin=mind, vmax=maxd, s=6)
     fig.colorbar(im)
     ax.set_title('Limit ='+str(mech.range/2))
     ax.set_xlabel('q')
-    ax.set_ylabel('delta_pitch (deg)')
-    ax.plot(q_max, delta_pitch_max, 'go', mfc='none')
-    ax.plot(config_final, policy_final.delta_pitch, 'r.')
+    ax.set_ylabel('pitch (deg)')
+    ax.plot(q_max, params_max[0], 'go', mfc='none')
+    ax.plot(config_final, policy_final.pitch, 'r.')
+    ax.plot([-.25, .25], [true_pitch, true_pitch], 'k--')
     plt.show()
     input('press enter to close plot')
     plt.close()
@@ -235,18 +220,17 @@ if __name__ == '__main__':
     parser.add_argument('--hdim', type=int, default=16)
     #parser.add_argument('--use-cuda', action='store_true')
     parser.add_argument('--mode', choices=['single', 'true', 'test', 'plots'], required=True)
+    parser.add_argument('--test-file', type=str)
+    parser.add_argument('--plot', action='store_true')
+
     # args below are only for mode == single
     parser.add_argument('--model-path', type=str)
     parser.add_argument('--viz', action='store_true')
-    parser.add_argument('--plot', action='store_true')
     args = parser.parse_args()
 
     # test dataset
-    test_file = '100bbs.pickle'
-    test_data = util.read_from_file(test_file)
-    #test_data = []
-    #for i in range(7):
-    #    test_data += [BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider])]
+    test_data = util.read_from_file(args.test_file)
+
     # model paths
     models = ['torch_models_10000/data_active_ntrain_50000_epoch_20.pt']
     '''
@@ -285,6 +269,6 @@ if __name__ == '__main__':
         if args.mode == 'true':
             calc_true_error(test_data, model_path, test_name, args.hdim, true_dir)
         if args.mode == 'test':
-            calc_test_error(test_data, model_path, test_name, args.hdim, test_dir)
+            calc_test_error(test_data, model_path, test_name, args.hdim, test_dir, args.plot)
         if args.mode == 'plots':
             vis_test_error(test_data, model_path, test_name, args.hdim, plots_dir)
