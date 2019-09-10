@@ -49,12 +49,14 @@ ImageData contains a subset of the image data returned by pybullet
 :param rgbPixels: list of [char RED,char GREEN,char BLUE, char ALPHA] [0..width*height],
                     list of pixel colors in R,G,B,A format, in range [0..255] for each color
 """
-def imshow(image_data):
+def imshow(image_data, show=False):
     img = np.reshape(image_data.rgbPixels, [image_data.height, image_data.width, 3])
-    plt.ion()
-    plt.imshow(img)
-    plt.show()
-    input('ENTER to close plot')
+    if show:
+        plt.ion()
+        plt.imshow(img)
+        plt.show()
+        input('ENTER to close plot')
+    return img
 
 ### Sampling Helper Function
 # TODO: want the prob of bin 0 to go to 0 as the slope increases (currently doesn't do that)
