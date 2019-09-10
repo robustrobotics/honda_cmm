@@ -46,6 +46,10 @@ def viz_train_test_data(train_data, test_data):
     import matplotlib.pyplot as plt
     from gen.generator_busybox import BusyBox
 
+    n_inter_per_bb = 1
+    n_bbs = int(len(train_data)/n_inter_per_bb)
+    training_dataset_size = n_bbs #10
+
     plt.ion()
     angle_fig, angle_ax = plt.subplots()
     pos_fig, pos_ax = plt.subplots()
@@ -68,12 +72,11 @@ def viz_train_test_data(train_data, test_data):
                 angle_ax.plot(true_policy.pitch, 2.0, 'k.')
             angle_ax.annotate(i, (true_policy.pitch, 2.0))
 
-    n_bbs = int(len(train_data)/200)
-    dataset_sizes = list(range(10, 101, 10))
+    dataset_sizes = list(range(training_dataset_size, n_bbs+1, training_dataset_size))
     pitches = []
     # plot training data angles and positions
-    for n in range(n_bbs):
-        point = train_data[n*200]
+    for n in range(1,n_bbs+1):
+        point = train_data[(n-1)*n_inter_per_bb]
         if p.getConnectionInfo()['isConnected']:
             p.disconnect()
         bb = BusyBox.bb_from_result(point)
@@ -92,9 +95,9 @@ def viz_train_test_data(train_data, test_data):
             angle_ax.set_title('Historgram of Training Data Angle, n_bbs='+str(n))
             angle_ax.hist(pitches, 30)
             plot_test_set()
-            angle_fig.savefig('dataset_imgs/pitches_n_bbs'+str(n))
-            #plt.show()
-            #input('enter to close')
+            #angle_fig.savefig('dataset_imgs/pitches_n_bbs'+str(n))
+            plt.show()
+            input('enter to close')
 
 ImageData = namedtuple('ImageData', 'width height rgbPixels')
 """
@@ -347,7 +350,6 @@ def quaternion_from_euler(roll, pitch, yaw):
     return to_pyquat(trans_q)
 
 if __name__ == '__main__':
-    import pdb; pdb.set_trace()
-    train_data = read_from_file('active_datasets/active_100bb_200int.pickle')
+    train_data = read_from_file('square_bb_100.pickle')
     test_data = read_from_file('prism_gp_evals.pickle')
     viz_train_test_data(train_data, test_data)
