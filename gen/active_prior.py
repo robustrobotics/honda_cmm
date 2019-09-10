@@ -466,8 +466,7 @@ def generate_dataset(n_bbs, n_int_samples, n_prior_samples, viz, debug, urdf_num
         final_figs = []
         interest_figs = []
     for i in range(n_bbs):
-        if bb is None:
-            bb = BusyBox.generate_random_busybox(max_mech=max_mech, mech_types=[Slider], urdf_tag=urdf_num, debug=debug)
+        bb = BusyBox.generate_random_busybox(max_mech=max_mech, mech_types=[Slider], urdf_tag=urdf_num, debug=debug)
         active_learner = ActivePolicyLearner(bb, viz, debug, viz_plot_final, viz_plot_cont, all_random, lite)
         active_learner.learn(n_int_samples, n_prior_samples, model_path, hdim)
         if not lite:
