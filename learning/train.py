@@ -131,7 +131,7 @@ if __name__ == '__main__':
     parser.add_argument('--use-cuda', default=False, action='store_true')
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--data-fname', type=str)
-    parser.add_argument('--model-prefix', type=str, default='model')
+    parser.add_argument('--save-dir', required=True, type=str)
     # if 0 then use all samples in dataset, else use ntrain number of samples
     parser.add_argument('--ntrain-max', type=int, default=0)
     parser.add_argument('--step', type=int, default=200)
@@ -143,30 +143,35 @@ if __name__ == '__main__':
     if args.debug:
         import pdb; pdb.set_trace()
 
-    # mv directories for tensorboard logs and torch model if exist
     # remake dirs (don't want to overwrite data)
-
-    model_dir = './torch_models/'
-    runs_dir = './runs'
-    for dir in [model_dir, runs_dir]:
-        if os.path.isdir(dir):
-            input('move this directory so files dont get overitten: '+dir)
-            sys.exit()
-        os.makedirs(dir)
+    model_dir = './'+args.save_dir+'/torch_models/'
+    runs_dir = './'+args.save_dir+'/runs'
+    os.makedirs('./'+args.save_dir+'/')
+    os.makedirs(model_dir)
+    os.makedirs(runs_dir)
 
     # make tensorboard writer
     writer = SummaryWriter(runs_dir)
 
     if args.mode == 'normal':
         for n_run in range(args.n_runs):
-            fname = model_dir+args.model_prefix+'_nrun_'+str(n_run)
+            fname = model_dir+'model_nrun_'+str(n_run)
             train_eval(args, args.hdim, args.batch_size, args.pviz, fname, writer)
 
     elif args.mode == 'ntrain':
         vals = []
         ns = range(args.step, args.ntrain_max+1, args.step)
         for n in ns:
-            fname = model_dir+args.model_prefix+'_ntrain_'+str(n)
+            fname = model_dir+'model_ntrain_'+str(n)
             train_eval(args, args.hdim, args.batch_size, args.pviz, fname, writer, n)
 
     writer.close()
+
+    # save run params to text file in models dir
+    import git
+    repo = git.Repo(search_parent_directories=True)
+    branch = repo.active_branch
+    git_hash = repo.head.object.hexsha
+    all_params = {'branch': branch, 'hash': git_hash}
+    all_params.update(get_train_params(args))
+    util.write_to_file(args.save_dir+'/run_params.txt', str(all_params)+'\n')
