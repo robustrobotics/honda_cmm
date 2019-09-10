@@ -476,7 +476,7 @@ class BusyBox(object):
         # Sample busybox dimensions.
         width = np.random.uniform(0.4, 0.8)
         height = np.random.uniform(0.2, 0.4)
-        width, height = 0.6, 0.3
+        width, height = 0.6, 0.6
         bb_thickness = 0.05
 
         # Sample number of mechanisms.
@@ -522,7 +522,7 @@ class BusyBox(object):
 
     @staticmethod
     def bb_from_result(result):
-        width, height = 0.6, 0.3
+        width, height = 0.6, 0.6
         dummy_bb = BusyBox.get_busybox(width, height, [])
         if result.mechanism_params.type == 'Slider':
             mech = Slider.mech_from_result(result, dummy_bb)
