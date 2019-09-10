@@ -45,6 +45,7 @@ def generate_dataset(args, git_hash):
 
             p.disconnect()
     print()
+    return results
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
