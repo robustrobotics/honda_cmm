@@ -15,7 +15,8 @@ from actions.gripper import Gripper
 from learning.test_model import get_pred_motions as get_nn_preds
 import torch
 from learning.dataloaders import PolicyDataset, parse_pickle_file
-
+from gen.generate_policy_data import generate_dataset
+from collections import namedtuple
 
 def process_data(data, n_train):
     """
@@ -179,13 +180,6 @@ def test_model(gp, result, nn=None):
 
 
 def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1):
-    # Create the BusyBox.
-
-    # Create a GP.
-    # 0.0328**2 * RBF(length_scale=0.0705) + WhiteKernel(noise_level=1e-05)
-    # kernel = ConstantKernel(1) * RBF(length_scale=1, length_scale_bounds=(1e-1, 1e2)) + WhiteKernel(noise_level=0.01, noise_level_bounds=(1e-5, 1e5))
-    # kernel = ConstantKernel(0.04, constant_value_bounds=(0.02, 0.04)) * RBF(length_scale=(0.05, 0.05, 0.05), length_scale_bounds=(1e-2, 1)) + WhiteKernel(noise_level=0.01, noise_level_bounds=(1e-5, 1e5))
-    # ConstantKernel(0.00038416, constant_value_bounds=(0.00038416, 0.00038416))
     # Pretrained Kernel
     # kernel = ConstantKernel(0.005, constant_value_bounds=(0.005, 0.005)) * RBF(length_scale=(0.247, 0.084, 0.0592), length_scale_bounds=(0.0592, 0.247)) + WhiteKernel(noise_level=1e-5, noise_level_bounds=(1e-5, 1e2))
     variance = 0.005
@@ -201,6 +195,7 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1):
     if nn_fname != '':
         nn = util.load_model(nn_fname, 16)
 
+    interaction_data = []
     xs, ys, moves = [], [], []
     for ix in range(0, max_iterations):
         # (1) Choose a point to interact with.
@@ -227,8 +222,13 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1):
         # (2) Interact with BusyBox to get result.
         traj = policy.generate_trajectory(pose_handle_base_world, q, True)
         gripper = Gripper(bb.bb_id)
-        _, motion, _ = gripper.execute_trajectory(traj, mech, policy.type, False)
+        c_motion, motion, handle_pose_final = gripper.execute_trajectory(traj, mech, policy.type, False)
         p.disconnect()
+
+        result = util.Result(policy.get_policy_tuple(), mech.get_mechanism_tuple(), \
+                             motion, c_motion, handle_pose_final, handle_pose_final, \
+                             q, image_data, None, -1)
+        interaction_data.append(result)
 
         if ix == 0:
             print('GP:', gp.kernel)
@@ -272,7 +272,8 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1):
         max_d = mech.get_mechanism_tuple().params.range/2.0
         regrets.append((max_d - y[0])/max_d)
         print(y, max_d)
-    return gp, nn, np.mean(regrets)
+    return gp, nn, np.mean(regrets), interaction_data
+
 
 def format_batch(X_pred, bb):
     data = []
@@ -294,6 +295,7 @@ def format_batch(X_pred, bb):
     train_loader = torch.utils.data.DataLoader(dataset=dataset,
                                                batch_size=len(dataset))
     return train_loader
+
 
 def viz_gp(gp, result, num, bb, nn=None):
     n_pitch = 10
@@ -334,6 +336,7 @@ def viz_gp(gp, result, num, bb, nn=None):
         axes[ix].set_title('pitch=%.2f' % pitch, fontsize=fs)
     plt.show()
     # plt.savefig('gp_estimates_tuned_%d.png' % num)
+
 
 def viz_gp_circles(gp, result, num, bb, image_data, nn=None, kx=-1, points=None):
     n_pitch = 80
@@ -461,11 +464,11 @@ def evaluate_k_busyboxes(k, args):
         avg_regrets, final_regrets = [], []
         for ix, result in enumerate(data[:k]):
             print('BusyBox', ix)
-            gp, nn, avg_regret = ucb_interaction(result,
-                                                 max_iterations=args.n_interactions,
-                                                 plot=True,
-                                                 nn_fname=model,
-                                                 kx=ix)
+            gp, nn, avg_regret, _ = ucb_interaction(result,
+                                                    max_iterations=args.n_interactions,
+                                                    plot=True,
+                                                    nn_fname=model,
+                                                    kx=ix)
             regret = test_model(gp, result, nn)
             avg_regrets.append(avg_regret)
             print('AVG:', avg_regret)
@@ -482,6 +485,44 @@ def evaluate_k_busyboxes(k, args):
         #     pickle.dump(results, handle)
 
 
+def create_gpucb_dataset(L=50, M=200, fname=''):
+    """
+    :param L: The number of BusyBoxes to include in the dataset.
+    :param M: The number of interactions per BusyBox.
+    :return:
+    """
+    # TODO: Load in a file with predetermined BusyBoxes.
+
+    # Create a dataset of L busyboxes.
+    Args = namedtuple('args', 'max_mech, urdf_num, debug, n_bbs, n_samples, viz, match_policies, randomness, goal_config')
+    args = Args(max_mech=1,
+                urdf_num=0,
+                debug=False,
+                n_bbs=L,
+                n_samples=1,
+                viz=False,
+                match_policies=True,
+                randomness=1.0,
+                goal_config=None)
+    busybox_data = generate_dataset(args, None)
+    print('BusyBoxes created.')
+
+    # TODO: Do a GP-UCB interaction and return Result tuples.
+    dataset = []
+    for ix, result in enumerate(busybox_data):
+        _, _, _, interaction_data = ucb_interaction(result,
+                                                    max_iterations=M,
+                                                    plot=False,
+                                                    nn_fname='',
+                                                    kx=-1)
+        dataset.extend(interaction_data)
+        print('Interacted with BusyBox %d.' % ix)
+
+    # Save the dataset.
+    if fname != '':
+        with open(fname, 'wb') as handle:
+            pickle.dump(dataset, handle)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -489,17 +530,9 @@ if __name__ == '__main__':
     parser.add_argument('--n-interactions', type=int)
     args = parser.parse_args()
 
-    evaluate_k_busyboxes(10, args)
-    # with open('prism_gp_5.pickle', 'rb') as handle:
-    #     data = pickle.load(handle)
-    #
-    # gp, nn, _ = ucb_interaction(data[0],
-    #                             max_iterations=args.n_interactions,
-    #                             plot=False,
-    #                             nn_fname='data_active_ntrain_50000_epoch_20.pt')
-    # regret = test_model(gp, data[0])
-    # print('Regret:', regret)
+    create_gpucb_dataset(L=10, M=200)
 
+    # evaluate_k_busyboxes(10, args)
 
     # fit_random_dataset(data)
 
