@@ -178,7 +178,7 @@ def test_model(gp, result, nn=None):
     return regret
 
 
-def ucb_interaction(result, max_iterations=50, plot=False, nn_fname=''):
+def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1):
     # Create the BusyBox.
 
     # Create a GP.
@@ -207,7 +207,7 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname=''):
         if len(xs) < 1 and (nn is None):
             # (a) Choose policy randomly.
             bb = BusyBox.bb_from_result(result)
-            setup_env(bb, viz=False, debug=False)
+            image_data = setup_env(bb, viz=False, debug=False)
             mech = bb._mechanisms[0]
             pose_handle_base_world = mech.get_pose_handle_base_world()
             policy = policies.generate_policy(bb, mech, True, 1.0)
@@ -217,7 +217,7 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname=''):
             x_final, dataset = optimize_gp(gp, result, ucb=True, beta=40, nn=nn)
 
             bb = BusyBox.bb_from_result(result)
-            setup_env(bb, viz=False, debug=False)
+            image_data = setup_env(bb, viz=False, debug=False)
             mech = bb._mechanisms[0]
             pose_handle_base_world = mech.get_pose_handle_base_world()
             policy_list = list(pose_handle_base_world.p) + [0., 0., 0., 1.] + [x_final[0], 0.0]
@@ -249,7 +249,7 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname=''):
         gp.fit(np.array(xs), np.array(ys))
 
         # (4) Visualize GP.
-        if ix % 5 == 0 and plot:
+        if ix % 10 == 0 and plot:
             params = mech.get_mechanism_tuple().params
             print('Range:', params.range/2.0)
             print('Angle:', np.arctan2(params.axis[1], params.axis[0]))
@@ -264,8 +264,8 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname=''):
             # plt.ylabel('q')
             # #plt.savefig('gp_samples_%d.png' % ix)
             # plt.show()
-
-            viz_gp(gp, result, ix, bb, nn=nn)
+            # viz_gp(gp, result, ix, bb, nn=nn)
+            viz_gp_circles(gp, result, ix, bb, image_data, nn=nn, kx=kx)
 
     regrets = []
     for y in moves:
@@ -335,6 +335,65 @@ def viz_gp(gp, result, num, bb, nn=None):
     plt.show()
     # plt.savefig('gp_estimates_tuned_%d.png' % num)
 
+def viz_gp_circles(gp, result, num, bb, image_data, nn=None, kx=-1):
+    n_pitch = 40
+    n_q = 20
+
+    plt.clf()
+    radii = np.linspace(-0.25, 0.25, num=n_q)
+    thetas = np.linspace(-np.pi, 0, num=n_pitch)
+    r, th = np.meshgrid(radii, thetas)
+    print(r.shape, th.shape)
+    colors = np.zeros(r.shape)
+    ref_colors = np.zeros(r.shape)
+
+    for ix in range(0, n_pitch):
+        x_preds = []
+        for jx in range(0, n_q):
+            x_preds.append([thetas[ix], 0, radii[jx]])
+        X_pred = np.array(x_preds)
+
+        Y_pred, Y_std = gp.predict(X_pred, return_std=True)
+        if not nn is None:
+            loader = format_batch(X_pred, bb)
+            k, x, q, im, _, _ = next(iter(loader))
+            pol = torch.Tensor([util.name_lookup[k[0]]])
+            nn_preds = nn(pol, x, q, im).detach().numpy()
+            Y_pred += nn_preds
+
+        # print(Y_pred)
+        if len(Y_pred.shape) == 1:
+            Y_pred = Y_pred.reshape(-1, 1)
+
+        for jx in range(0, n_q):
+            colors[ix, jx] = Y_pred[jx, 0]
+    
+    print(len(thetas), len(radii), len(colors))
+    ax0 = plt.subplot(121)
+    w, h, im = image_data
+    np_im = np.array(im, dtype=np.uint8).reshape(h, w, 3)
+    ax0.imshow(np_im)
+
+
+    ax1 = plt.subplot(122, projection='polar')
+    colors = colors
+    print(th[:,0])
+
+    thp, rp = np.linspace(0, 2*np.pi, n_pitch*2), np.linspace(0, 0.25, n_q//2)
+    rp, thp = np.meshgrid(rp, thp)
+    cp = np.zeros(rp.shape)
+
+    cp[0:n_pitch,:] = colors[:, 0:n_q//2]
+    cp[n_pitch:,:] = colors[:, n_q//2:]
+
+    #sys.exit(0)
+
+    #plt.pcolormesh(th, r, colors, vmax=0.25)
+    max_d = bb._mechanisms[0].get_mechanism_tuple().params.range/2.0
+    ax1.pcolormesh(thp, rp, cp, vmax=max_d)
+    # plt.show()
+    plt.savefig('gp_polar_bb_%d_%d.png' % (kx, num), bbox_inches='tight')
+
 def fit_random_dataset(data):
     X, Y, X_pred = process_data(data, n_train=args.n_train)
 
@@ -393,7 +452,8 @@ def evaluate_k_busyboxes(k, args):
             gp, nn, avg_regret = ucb_interaction(result,
                                                  max_iterations=args.n_interactions,
                                                  plot=True,
-                                                 nn_fname=model)
+                                                 nn_fname=model,
+                                                 kx=ix)
             regret = test_model(gp, result, nn)
             avg_regrets.append(avg_regret)
             print('AVG:', avg_regret)
