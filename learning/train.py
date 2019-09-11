@@ -21,9 +21,11 @@ def train_eval(args, hdim, batch_size, pviz, fname, writer, n=0, data_fname=None
     else:
         data = parse_pickle_file(fname=data_fname)
 
-    train_set, val_set, test_set = setup_data_loaders(data=data,
-                                                      batch_size=batch_size,
-                                                      small_train=n)
+    if n > 0:
+        data = data[:n]
+
+    train_set, val_set, _ = setup_data_loaders(data=data,
+                                              batch_size=batch_size)
 
     # Setup Model (TODO: Update the correct policy dims)
     net = NNPolVis(policy_names=['Prismatic', 'Revolute'],
@@ -52,7 +54,6 @@ def train_eval(args, hdim, batch_size, pviz, fname, writer, n=0, data_fname=None
 
     best_val = 1000
     # Training loop.
-    vals = []
     for ex in range(1, args.n_epochs+1):
         train_losses = []
         net.train()
@@ -119,7 +120,10 @@ def get_train_params(args):
             'hdim': args.hdim,
             'n_epochs': args.n_epochs,
             'val_freq': args.val_freq,
-            'data-fname': args.data_fname}
+            'data-fname': args.data_fname,
+            'ntrain-max': args.ntrain_max,
+            'step': args.step,
+            'n_runs': args.n_runs}
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -159,7 +163,6 @@ if __name__ == '__main__':
             train_eval(args, args.hdim, args.batch_size, args.pviz, fname, writer)
 
     elif args.mode == 'ntrain':
-        vals = []
         ns = range(args.step, args.ntrain_max+1, args.step)
         for n in ns:
             fname = model_dir+'model_ntrain_'+str(n)

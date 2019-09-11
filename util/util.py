@@ -40,6 +40,64 @@ Result contains the performance information after the gripper tries to move a me
 :param git_hash: None or str representing the git hash when the data was collected
 :param randomness: float in [0,1] representing how far from the true policy the random samples came from
 """
+## Visualization Helper Functions
+
+def viz_train_test_data(train_data, test_data):
+    import matplotlib.pyplot as plt
+    from gen.generator_busybox import BusyBox
+
+    n_inter_per_bb = 1
+    n_bbs = int(len(train_data)/n_inter_per_bb)
+    training_dataset_size = n_bbs #10
+
+    plt.ion()
+    angle_fig, angle_ax = plt.subplots()
+    pos_fig, pos_ax = plt.subplots()
+
+    def plot_test_set():
+        # plot test data angles and positions
+        for (i, point) in enumerate(test_data[:10]):
+            bb = BusyBox.bb_from_result(point)
+            if p.getConnectionInfo()['isConnected']:
+                p.disconnect()
+            setup_pybullet.setup_env(bb, False, False)
+            mech = bb._mechanisms[0]
+            true_policy = policies.generate_policy(bb, mech, True, 0.0)
+            pos = (true_policy.rigid_position[0], true_policy.rigid_position[2])
+            pos_ax.plot(*pos, 'm.')
+            pos_ax.annotate(i, pos)
+            if i == len(test_data):
+                angle_ax.plot(true_policy.pitch, 2.0, 'k.', label = 'test data')
+            else:
+                angle_ax.plot(true_policy.pitch, 2.0, 'k.')
+            angle_ax.annotate(i, (true_policy.pitch, 2.0))
+
+    dataset_sizes = list(range(training_dataset_size, n_bbs+1, training_dataset_size))
+    pitches = []
+    # plot training data angles and positions
+    for n in range(1,n_bbs+1):
+        point = train_data[(n-1)*n_inter_per_bb]
+        if p.getConnectionInfo()['isConnected']:
+            p.disconnect()
+        bb = BusyBox.bb_from_result(point)
+        setup_pybullet.setup_env(bb, False, False)
+        mech = bb._mechanisms[0]
+        true_policy = policies.generate_policy(bb, mech, True, 0.0)
+        pitches += [true_policy.pitch]
+        pos = (true_policy.rigid_position[0], true_policy.rigid_position[2])
+        pos_ax.plot(*pos, 'c.')
+
+        if n in dataset_sizes:
+            angle_ax.clear()
+            pos_ax.set_title('Positions of Training and Test Data, n_bbs='+str(n))
+            pos_fig.savefig('dataset_imgs/poss_n_bbs'+str(n))
+
+            angle_ax.set_title('Historgram of Training Data Angle, n_bbs='+str(n))
+            angle_ax.hist(pitches, 30)
+            plot_test_set()
+            #angle_fig.savefig('dataset_imgs/pitches_n_bbs'+str(n))
+            plt.show()
+            input('enter to close')
 
 ImageData = namedtuple('ImageData', 'width height rgbPixels')
 """
@@ -49,12 +107,14 @@ ImageData contains a subset of the image data returned by pybullet
 :param rgbPixels: list of [char RED,char GREEN,char BLUE, char ALPHA] [0..width*height],
                     list of pixel colors in R,G,B,A format, in range [0..255] for each color
 """
-def imshow(image_data):
+def imshow(image_data, show=True):
     img = np.reshape(image_data.rgbPixels, [image_data.height, image_data.width, 3])
-    plt.ion()
-    plt.imshow(img)
-    plt.show()
-    input('ENTER to close plot')
+    if show:
+        plt.ion()
+        plt.imshow(img)
+        plt.show()
+        input('ENTER to close plot')
+    return img
 
 ### Sampling Helper Function
 # TODO: want the prob of bin 0 to go to 0 as the slope increases (currently doesn't do that)
@@ -290,21 +350,6 @@ def quaternion_from_euler(roll, pitch, yaw):
     return to_pyquat(trans_q)
 
 if __name__ == '__main__':
-    # testing the sampler
-    # import matplotlib.pyplot as plt
-    # n_bins = 10
-    # range_s = [0.,.25]
-    # hist_data = {}
-    # vals = np.linspace(range_s[0], range_s[1], n_bins+1)
-    # keys = vals[:-1]
-    # slope = .1
-    # samples = []
-    # for _ in range(1000):
-    #     samples += [discrete_sampler(range_s, slope, n_bins)]
-    # plt.ion()
-    # plt.hist(samples, n_bins)
-    # plt.show()
-    # input()
-    in_names = ['prism_rand05_20k.pickle', 'prism_rand05_20k_2.pickle']
-    out_name = 'prism_rand05_40k.pickle'
-    merge_files(in_names, out_name)
+    train_data = read_from_file('square_bb_100.pickle')
+    test_data = read_from_file('prism_gp_evals.pickle')
+    viz_train_test_data(train_data, test_data)
