@@ -21,7 +21,7 @@ AttemptedGoal = namedtuple('AttemptedGoal', 'goal competence')
 
 # params
 g_max = 10  # max samples per region
-R = 0.05    # region to sample for low competence
+R = 0.05    # region to sample for high competence
 n_max = 5   # maximum number of samples in a region to calc interest
 m = 100      # number of samples used to find optimal split
 class ActivePolicyLearner(object):
@@ -315,9 +315,14 @@ class Region(object):
         return inside
 
 results = []
-def generate_dataset(n_bbs, n_samples, viz, debug, urdf_num, max_mech, viz_plot, all_random):
+def generate_dataset(n_bbs, n_samples, viz, debug, urdf_num, max_mech, viz_plot, all_random, bb_file):
+    if bb_file is not None:
+        bb_data = util.read_from_file(bb_file)
     for i in range(n_bbs):
-        bb = BusyBox.generate_random_busybox(max_mech=max_mech, mech_types=[Slider], urdf_tag=urdf_num, debug=debug)
+        if bb_file is not None:
+            bb = BusyBox.bb_from_result(bb_data[i])
+        else:
+            bb = BusyBox.generate_random_busybox(max_mech=max_mech, mech_types=[Slider], urdf_tag=urdf_num, debug=debug)
         active_learner = ActivePolicyLearner(bb, viz, debug, viz_plot, all_random)
         active_learner.explore(n_samples, i, n_bbs)
         results.extend(active_learner.interactions)
@@ -337,13 +342,14 @@ if __name__ == '__main__':
     parser.add_argument('--match-policies', action='store_true') # if want to only use correct policy class on mechanisms
     parser.add_argument('--viz-plot', action='store_true') # if want to run a matplotlib visualization of sampling and competence
     parser.add_argument('--all-random', action='store_true') # if want to only sample randomly
+    parser.add_argument('--bb-file', type=str)
     args = parser.parse_args()
 
     if args.debug:
         import pdb; pdb.set_trace()
 
     try:
-        generate_dataset(args.n_bbs, args.n_samples, args.viz, args.debug, args.urdf_num, args.max_mech, args.viz_plot, args.all_random)
+        generate_dataset(args.n_bbs, args.n_samples, args.viz, args.debug, args.urdf_num, args.max_mech, args.viz_plot, args.all_random, args.bb_file)
         if args.fname:
             util.write_to_file(args.fname, results)
     except KeyboardInterrupt:
