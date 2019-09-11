@@ -252,12 +252,14 @@ class DataHist(PlotFunc):
 
     @staticmethod
     def description():
-        return 'Histogram of delta pitches in a dataset'
+        return 'Histogram of pitches in a dataset'
 
     def _plot(self, data, model):
         fig, ax = plt.subplots()
-        delta_pitches = [point.policy_params.delta_values.delta_pitch for point in data]
-        ax.hist(delta_pitches, 20, edgecolor='black', histtype='bar')
+        pitches = [point.policy_params.params.pitch for point in data]
+        #delta_pitches = [point.policy_params.delta_values.delta_pitch for point in data]
+        ax.hist(pitches, 20, edgecolor='black', histtype='bar')
+        ax.set_xlabel('Pitch')
         plt.grid(b=True, which='major', color='#666666', linestyle='-')
 
 class ConfigHist(PlotFunc):
@@ -423,12 +425,9 @@ class TestMechPoliciesPitchOnly(PlotFunc):
     def description():
         return 'show performance on policies for a multiple busybox where ONLY PITCH is varied'
 
-    def _plot(self, data, model, bbps=None, n_samples=11, n_pitches=5):
+    def _plot(self, data, model, bbps=None, n_samples=11, n_pitches=5, urdf_tag=4):
         randomness = 0.0
-        if bbps is None:
-            n_bbs = 6
-        else:
-            n_bbs = len(bbps)
+        n_bbs = 6
         #delta_yaws = np.zeros((n_policies, n_policies))
         delta_pitches = np.zeros((n_pitches, n_bbs))
         motions = np.zeros((n_pitches, n_bbs, n_samples))
@@ -437,14 +436,11 @@ class TestMechPoliciesPitchOnly(PlotFunc):
         #d_yaw = np.linspace(-np.pi/2*0.25, np.pi / 2 * 0.25, n_policies)
         for j in range(n_bbs):
             # Generate the busybox.
-            if bbps is None:
-                np.random.seed()
-                rand_num = np.random.uniform(0,1)
-                np.random.seed(j)
-                bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider], urdf_tag=str(rand_num))
+            if data is None:
+                bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider], urdf_tag=str(urdf_tag))
             else:
                 rand_num = np.random.uniform(0,1)
-                bb = BusyBox.bb_from_result(bbps[j])
+                bb = BusyBox.bb_from_result(data[j], urdf_tag=str(urdf_tag))
             mech = bb._mechanisms[0]
             configs = np.linspace(-mech.range, mech.range, n_samples)
             mech_tuple = mech.get_mechanism_tuple()
@@ -510,7 +506,8 @@ class TestMechPoliciesPitchOnly(PlotFunc):
                 ax.set_title('(%.2f, %s)' % (delta_pitches[i, j], j))
                 ax.set_xlabel('q')
                 ax.set_ylabel('d')
-                ax.set_ylim([-.01, .2])
+                ax.set_ylim([-0.01, 0.2])
+                #ax.set_ylim([-.01, .18])
 
 class TestMechsPitch(PlotFunc):
     @staticmethod
