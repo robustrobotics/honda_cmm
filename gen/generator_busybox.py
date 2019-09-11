@@ -189,6 +189,8 @@ class Slider(Mechanism):
 
         # get busybox back_link pose
         client = p.connect(p.DIRECT)
+        bb_file = dummy_bb.file_name
+
         model = p.loadURDF(dummy_bb.file_name, [0., -.3, 0.])
         dummy_bb.set_mechanism_ids(model)
         p_dummy_bb = p.getLinkState(dummy_bb.bb_id, 0)[0]
@@ -521,9 +523,9 @@ class BusyBox(object):
         return bb
 
     @staticmethod
-    def bb_from_result(result, urdf_tag=6):
+    def bb_from_result(result, urdf_tag=str(6)):
         width, height = 0.6, 0.6
-        dummy_bb = BusyBox.get_busybox(width, height, [])
+        dummy_bb = BusyBox.get_busybox(width, height, [], urdf_tag=urdf_tag+'1')
         if result.mechanism_params.type == 'Slider':
             mech = Slider.mech_from_result(result, dummy_bb)
         elif result.mechanism_params.type == 'Door':
