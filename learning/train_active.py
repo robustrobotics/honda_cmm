@@ -5,6 +5,7 @@ from learning.models.nn_disp_pol_vis import DistanceRegressor as NNPolVis
 from learning.dataloaders import setup_data_loaders, parse_pickle_file
 import learning.viz as viz
 from learning.test_model import test_env
+from learning.train import train_eval
 from collections import namedtuple
 from util import util
 from torch.utils.tensorboard import SummaryWriter
@@ -16,118 +17,31 @@ import matplotlib.pyplot as plt
 import traceback, sys, pdb
 torch.backends.cudnn.enabled = True
 
-def train_eval(args, bb_n, parsed_train_data, parsed_val_data, model_path, writer, pviz=False):
-
-    train_set = setup_data_loaders(parsed_train_data, batch_size=args.batch_size, single_set=True)
-    val_set = setup_data_loaders(parsed_val_data, batch_size=args.batch_size, single_set=True)
-
-    # Setup Model (TODO: Update the correct policy dims)
-    net = NNPolVis(policy_names=['Prismatic', 'Revolute'],
-                   policy_dims=[2, 12],
-                   hdim=args.hdim,
-                   im_h=53,  # 154,
-                   im_w=115,  # 205,
-                   kernel_size=3,
-                   image_encoder=args.image_encoder)
-
-    if args.use_cuda:
-        net = net.cuda()
-
-    loss_fn = torch.nn.MSELoss()
-    optim = torch.optim.Adam(net.parameters())
-
-    # Add the graph to TensorBoard viz,
-    k, x, q, im, y, _ = train_set.dataset[0]
-    pol = torch.Tensor([util.name_lookup[k]])
-    if args.use_cuda:
-        x = x.cuda().unsqueeze(0)
-        q = q.cuda().unsqueeze(0)
-        im = im.cuda().unsqueeze(0)
-        pol = pol.cuda()
-
-    best_val = 10000
-    vals = []
-    # Training loop.
-    best_train_error = 10000
-    for ex in range(1, args.n_epochs+1):
-        train_losses = []
-        net.train()
-        for bx, (k, x, q, im, y, _) in enumerate(train_set):
-            pol = util.name_lookup[k[0]]
-            if args.use_cuda:
-                x = x.cuda()
-                q = q.cuda()
-                im = im.cuda()
-                y = y.cuda()
-            optim.zero_grad()
-            yhat = net.forward(pol, x, q, im)
-
-            loss = loss_fn(yhat, y)
-            loss.backward()
-
-            optim.step()
-
-            train_losses.append(loss.item())
-        train_loss_ex = np.mean(train_losses)
-        writer.add_scalar('Train-loss/'+str(bb_n), train_loss_ex, ex)
-        print('[Epoch {}] - Training Loss: {}'.format(ex, train_loss_ex))
-
-        # Validate
-        if ex % args.val_freq == 0:
-            val_losses = []
-            net.eval()
-
-            ys, yhats, types = [], [], []
-            for bx, (k, x, q, im, y, _) in enumerate(val_set):
-                pol = torch.Tensor([util.name_lookup[k[0]]])
-                if args.use_cuda:
-                    x = x.cuda()
-                    q = q.cuda()
-                    im = im.cuda()
-                    y = y.cuda()
-
-                yhat = net.forward(pol, x, q, im)
-
-                loss = loss_fn(yhat, y)
-                val_losses.append(loss.item())
-
-                types += k
-                if args.use_cuda:
-                    y = y.cpu()
-                    yhat = yhat.cpu()
-                ys += y.numpy().tolist()
-                yhats += yhat.detach().numpy().tolist()
-
-            curr_val = np.mean(val_losses)
-            writer.add_scalar('Val-loss/'+str(bb_n), curr_val, ex)
-            print('[Epoch {}] - Validation Loss: {}'.format(ex, curr_val))
-            # if best epoch so far, save model
-            if curr_val < best_val:
-                best_val = curr_val
-                torch.save(net.state_dict(), model_path)
-
-def get_train_params(args):
-    return {'batch_size': args.batch_size,
-            'hdim': args.hdim,
-            'n_epochs': args.n_epochs,
-            'n_bbs': args.n_bbs,
+def get_cont_learning_params(args):
+    return {'n_bbs': args.n_bbs,
             'data_type': args.data_type,
             'n_inter': args.n_inter,
             'n_prior': args.n_prior,
             'train_freq': args.train_freq,
             'bb_train_file': args.bb_train_file,
             'val_data_file': args.val_data_file,
-            'val_freq': args.val_freq}
+            }
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+
+    # arguments for training
     parser.add_argument('--batch-size', type=int, default=16, help='Batch size to use for training.')
     parser.add_argument('--hdim', type=int, default=16, help='Hidden dimensions for the neural nets.')
     parser.add_argument('--n-epochs', type=int, default=10)
-    #parser.add_argument('--plot-freq', type=int, default=5)
+    parser.add_argument('--val-freq', default=5, type=int)
+    parser.add_argument('--mode', choices=['ntrain', 'normal'], default='normal')
     parser.add_argument('--use-cuda', default=False, action='store_true')
-    parser.add_argument('--debug', action='store_true')
     parser.add_argument('--image-encoder', type=str, default='spatial', choices=['spatial', 'cnn'])
+
+    # arguments for continual learning
+    parser.add_argument('--debug', action='store_true')
+    #parser.add_argument('--plot-freq', type=int, default=5)
     parser.add_argument('--n-bbs', type=int, default=5) # maximum number of robot interactions
     parser.add_argument('--data-type', required=True, choices=['sagg', 'sagg-learner', 'random', 'random-learner'])
     parser.add_argument('--n-inter', default=20, type=int) # number of samples used during interactions
@@ -138,7 +52,7 @@ if __name__ == '__main__':
     parser.add_argument('--train-freq', default=1, type=int) # frequency to retrain and test model
     parser.add_argument('--bb-train-file', type=str)
     parser.add_argument('--val-data-file', type=str, required=True)
-    parser.add_argument('--val-freq', default=5, type=int)
+
     parser.add_argument('--urdf-tag', type=str, default='0')
     args = parser.parse_args()
 
