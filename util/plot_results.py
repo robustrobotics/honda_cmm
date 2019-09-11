@@ -506,6 +506,7 @@ class TestMechPoliciesPitchOnly(PlotFunc):
                 ax.set_title('(%.2f, %s)' % (delta_pitches[i, j], j))
                 ax.set_xlabel('q')
                 ax.set_ylabel('d')
+                ax.set_ylim([-0.01, 0.2])
                 #ax.set_ylim([-.01, .18])
 
 class TestMechsPitch(PlotFunc):
