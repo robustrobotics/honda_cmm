@@ -17,20 +17,20 @@ from torch.utils.tensorboard import SummaryWriter
 import os
 import shutil
 
-def vis_test_error(test_data, model_path, test_name, hdim, plots_dir):
+def vis_test_error(test_data, model_path, test_name, urdf_tag, hdim, plots_dir):
     from util import plot_results
     plt.ion()
     plot_obj = plot_results.TestMechPoliciesPitchOnly()
     bbs = test_data[:7]
     net = util.load_model(model_path, hdim=hdim)
-    plot_obj._plot(None, model=net, bbps=bbs, n_samples=11)#, n_pitches=2)
+    plot_obj._plot(None, model=net, bbps=bbs, n_samples=11, urdf_tag=urdf_tag)#, n_pitches=2)
     save_path = plots_dir + test_name
     plt.savefig(save_path, bbox_inches='tight')
     #plt.show()
     #input()
     #plt.close()
 
-def calc_test_error(test_data, model_path, test_name, hdim, dir, plot=False):
+def calc_test_error(test_data, model_path, test_name, urdf_tag, hdim, dir, plot=False):
     writer = SummaryWriter(dir+test_name)
     files = [(0, model_path)]
     for (n, file) in files:
@@ -38,8 +38,7 @@ def calc_test_error(test_data, model_path, test_name, hdim, dir, plot=False):
         test_error = 0
         for bbp in test_data:
             # make new bb object from pickle file
-            rand_num = np.random.uniform(0,1)
-            bb = BusyBox.get_busybox(bbp.width, bbp.height, bbp._mechanisms, urdf_tag=str(rand_num))
+            bb = BusyBox.get_busybox(bbp.width, bbp.height, bbp._mechanisms, urdf_tag=str(urdf_tag))
             true_motion = bb._mechanisms[0].range/2
             test_motion = test_env(net, bb=bb, debug=False, plot=plot, viz=False)
             test_error += np.linalg.norm([true_motion-test_motion])**2
@@ -48,7 +47,7 @@ def calc_test_error(test_data, model_path, test_name, hdim, dir, plot=False):
         print(test_name, test_mse, n)
     writer.close()
 
-def calc_true_error(test_data, model_path, test_name, hdim, dir):
+def calc_true_error(test_data, model_path, test_name, urdf_tag, hdim, dir):
     writer = SummaryWriter(dir+test_name)
     files = [(0, model_path)]
     for (n, file) in files:
@@ -56,8 +55,7 @@ def calc_true_error(test_data, model_path, test_name, hdim, dir):
         test_error = 0
         for bbp in test_data:
             # make new bb object from pickle file
-            rand_num = np.random.uniform(0,1)
-            bb = BusyBox.get_busybox(bbp.width, bbp.height, bbp._mechanisms, urdf_tag=str(rand_num))
+            bb = BusyBox.get_busybox(bbp.width, bbp.height, bbp._mechanisms, urdf_tag=str(urdf_tag))
             mech = bb._mechanisms[0]
             image_data = setup_env(bb, False, False)
             mech_tuple = mech.get_mechanism_tuple()
@@ -222,6 +220,7 @@ if __name__ == '__main__':
     parser.add_argument('--mode', choices=['single', 'true', 'test', 'plots'], required=True)
     parser.add_argument('--test-file', type=str)
     parser.add_argument('--plot', action='store_true')
+    parser.add_argument('--urdf-tag', default=2)
 
     # args below are only for mode == single
     parser.add_argument('--model-path', type=str)
@@ -232,7 +231,11 @@ if __name__ == '__main__':
     test_data = util.read_from_file(args.test_file)
 
     # model paths
-    models = ['torch_models_10000/data_active_ntrain_50000_epoch_20.pt']
+    models = ['random_50bbs_200ints_10freq/torch_models/model_ntrain_2000.pt',
+                'random_50bbs_200ints_10freq/torch_models/model_ntrain_4000.pt',
+                'random_50bbs_200ints_10freq/torch_models/model_ntrain_6000.pt',
+                'random_50bbs_200ints_10freq/torch_models/model_ntrain_8000.pt',
+                'random_50bbs_200ints_10freq/torch_models/model_ntrain_10000.pt']
     '''
     ['tmpc2/active10.pt',
     'tmpc2/active20.pt',
@@ -242,7 +245,11 @@ if __name__ == '__main__':
     '''
 
     # plot names
-    names = ['active10']
+    names = ['random10_square',
+    'random20_square',
+    'random30_square',
+    'random40_square',
+    'random50_square']
     '''
     ,
     'active20',
@@ -267,8 +274,8 @@ if __name__ == '__main__':
         test_env(model, plot=args.plot, viz=args.viz)
     for (model_path, test_name) in zip(models, names):
         if args.mode == 'true':
-            calc_true_error(test_data, model_path, test_name, args.hdim, true_dir)
+            calc_true_error(test_data, model_path, test_name, args.urdf_tag, args.hdim, true_dir)
         if args.mode == 'test':
-            calc_test_error(test_data, model_path, test_name, args.hdim, test_dir, args.plot)
+            calc_test_error(test_data, model_path, test_name, args.urdf_tag, args.hdim, test_dir, args.plot)
         if args.mode == 'plots':
-            vis_test_error(test_data, model_path, test_name, args.hdim, plots_dir)
+            vis_test_error(test_data, model_path, test_name, args.urdf_tag, args.hdim, plots_dir)
