@@ -10,18 +10,21 @@ from actions.gripper import Gripper
 from gen.generator_busybox import Slider, Door, BusyBox
 
 results = []
-def generate_dataset(args, git_hash, bb=None):
+def generate_dataset(args, git_hash):
+    if args.bb_file is not None:
+        bb_data = util.read_from_file(args.bb_file)
     for i in range(args.n_bbs):
-        if bb is None:
-            # TODO: add back doors when working
-            pass
-        if True:
-            bb = BusyBox.generate_random_busybox(max_mech=args.max_mech, mech_types=[Slider], urdf_tag=str(args.urdf_num), debug=args.debug)
+        if args.bb_file is not None:
+            bb = BusyBox.bb_from_result(bb_data[i])
+        else:
+            bb = BusyBox.generate_random_busybox(max_mech=max_mech, mech_types=[Slider], urdf_tag=args.urdf_num, debug=args.debug)
+
+        image_data = setup_env(bb, args.viz, args.debug)
 
         for j in range(args.n_samples):
             sys.stdout.write("\rProcessing sample %i/%i for busybox %i/%i" % (j+1, args.n_samples, i+1, args.n_bbs))
             # setup env and get image before load gripper
-            image_data = setup_env(bb, args.viz, args.debug)
+            setup_env(bb, args.viz, args.debug)
             gripper = Gripper(bb.bb_id)
 
             for mech in bb._mechanisms:
@@ -63,6 +66,7 @@ if __name__ == '__main__':
     parser.add_argument('--randomness', type=float, default=1.0) # how far from true policy parameters to sample (as a fraction)
     # desired goal config represented as a percentage of the max config, if unused then random config is generated
     parser.add_argument('--goal-config', type=float)
+    parser.add_argument('--bb-file', type=str)
     args = parser.parse_args()
 
     if args.debug:
