@@ -120,7 +120,10 @@ def get_train_params(args):
             'hdim': args.hdim,
             'n_epochs': args.n_epochs,
             'val_freq': args.val_freq,
-            'data-fname': args.data_fname}
+            'data-fname': args.data_fname,
+            'ntrain-max': args.ntrain_max,
+            'step':, args.step,
+            'n_runs': args.n_runs}
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
