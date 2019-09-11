@@ -31,7 +31,7 @@ class ImageEncoder(nn.Module):
         self.fc2 = nn.Linear(hdim*2, hdim*2)
         self.scale = nn.Linear(2, 2)
         self.sm = nn.Softmax(dim=1)
-        self.temp = nn.Parameter(torch.tensor(0.1))
+        self.temp = nn.Parameter(torch.tensor(1.0))
 
     def forward(self, img):
         img = img[:, :, 1:, 1:]
@@ -53,7 +53,7 @@ class ImageEncoder(nn.Module):
         # Do a spatial softmax.
         bs, c, h, w = x.shape
         features = self.sm(x.view(bs*c, -1)/self.temp)
-        
+
         # Get expected feature points.
         pfeatures = features.view([-1, h, w])
 
@@ -100,5 +100,3 @@ def imshow(img, points, maps):
 
     plt.show()
     input()
-
-
