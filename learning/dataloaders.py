@@ -152,7 +152,7 @@ def parse_pickle_file(fname=None, data=None):
     return parsed_data
 
 
-def create_data_splits(data, val_pct=0.15, test_pct=0.15):
+def create_data_splits(data, val_pct=0.15, test_pct=0.0):
     n = len(data)
     val_start = int(n*(1-val_pct-test_pct))
     test_start = int(n*(1-test_pct))
@@ -179,8 +179,8 @@ def setup_data_loaders(data, batch_size=128, use_cuda=True, small_train=0, singl
     else:
         # Create datasplits.
         train_data, val_data, test_data = create_data_splits(data)
-        if small_train > 0:
-            train_data = train_data[:small_train]
+        #if small_train > 0:
+        #    train_data = train_data[:small_train]
 
         # TODO: Populate dataset objects
 
