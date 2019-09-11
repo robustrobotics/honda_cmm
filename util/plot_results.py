@@ -257,7 +257,8 @@ class DataHist(PlotFunc):
     def _plot(self, data, model):
         fig, ax = plt.subplots()
         delta_pitches = [point.policy_params.delta_values.delta_pitch for point in data]
-        ax.hist(delta_pitches, 20, histtype='bar')
+        ax.hist(delta_pitches, 20, edgecolor='black', histtype='bar')
+        plt.grid(b=True, which='major', color='#666666', linestyle='-')
 
 class ConfigHist(PlotFunc):
 
@@ -269,6 +270,7 @@ class ConfigHist(PlotFunc):
         fig, ax = plt.subplots()
         config_ps = [point.config_goal/(point.mechanism_params.params.range/2) for point in data]
         ax.hist(config_ps, 20, edgecolor='black', histtype='bar')
+        plt.grid(b=True, which='major', color='#666666', linestyle='-')
 
 class MotionHist(PlotFunc):
 
@@ -421,10 +423,10 @@ class TestMechPoliciesPitchOnly(PlotFunc):
     def description():
         return 'show performance on policies for a multiple busybox where ONLY PITCH is varied'
 
-    def _plot(self, data, model, bbps=None, n_samples=25, n_pitches=5):
+    def _plot(self, data, model, bbps=None, n_samples=11, n_pitches=5):
         randomness = 0.0
         if bbps is None:
-            n_bbs = 25
+            n_bbs = 6
         else:
             n_bbs = len(bbps)
         #delta_yaws = np.zeros((n_policies, n_policies))
@@ -442,7 +444,7 @@ class TestMechPoliciesPitchOnly(PlotFunc):
                 bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider], urdf_tag=str(rand_num))
             else:
                 rand_num = np.random.uniform(0,1)
-                bb = BusyBox.get_busybox(bbps[j].width, bbps[j].height, bbps[j]._mechanisms, urdf_tag=str(rand_num))
+                bb = BusyBox.bb_from_result(bbps[j])
             mech = bb._mechanisms[0]
             configs = np.linspace(-mech.range, mech.range, n_samples)
             mech_tuple = mech.get_mechanism_tuple()
