@@ -169,7 +169,7 @@ def setup_data_loaders(data, batch_size=128, use_cuda=True, small_train=0, singl
     kwargs = {'num_workers': 0,
               'pin_memory': use_cuda}
 
-    random.Random(0).shuffle(data)
+
     if single_set:
         set = PolicyDataset(data)
         loader = torch.utils.data.DataLoader(dataset=set,
@@ -178,7 +178,10 @@ def setup_data_loaders(data, batch_size=128, use_cuda=True, small_train=0, singl
         return loader
     else:
         # Create datasplits.
-        train_data, val_data, test_data = create_data_splits(data)
+        train_data, val_data, test_data = create_data_splits(data, val_pct=.2)
+        random.Random(0).shuffle(train_data)
+        random.Random(0).shuffle(val_data)
+        random.Random(0).shuffle(test_data)
         #if small_train > 0:
         #    train_data = train_data[:small_train]
 
