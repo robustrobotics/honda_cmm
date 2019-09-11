@@ -122,7 +122,7 @@ def get_train_params(args):
             'val_freq': args.val_freq,
             'data-fname': args.data_fname,
             'ntrain-max': args.ntrain_max,
-            'step':, args.step,
+            'step': args.step,
             'n_runs': args.n_runs}
 
 if __name__ == '__main__':
