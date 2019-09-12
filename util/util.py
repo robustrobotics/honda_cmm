@@ -46,7 +46,7 @@ def viz_train_test_data(train_data, test_data):
     import matplotlib.pyplot as plt
     from gen.generator_busybox import BusyBox
 
-    n_inter_per_bb = 1
+    n_inter_per_bb = 100
     n_bbs = int(len(train_data)/n_inter_per_bb)
     training_dataset_size = n_bbs #10
 
@@ -350,6 +350,12 @@ def quaternion_from_euler(roll, pitch, yaw):
     return to_pyquat(trans_q)
 
 if __name__ == '__main__':
-    train_data = read_from_file('square_bb_100.pickle')
-    test_data = read_from_file('prism_gp_evals.pickle')
-    viz_train_test_data(train_data, test_data)
+    # train_data = read_from_file('active_100bb_100i.pickle')
+    # test_data = read_from_file('active_100bb_100i.pickle')
+    # viz_train_test_data(train_data, test_data)
+    data = read_from_file('active_100bb_100i.pickle')
+    new_data = []
+    for i in range(0, 10000, 100):
+        new_data.append(data[i])
+    with open('active_100bbs.pickle', 'wb') as handle:
+        pickle.dump(new_data, handle)

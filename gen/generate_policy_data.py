@@ -17,7 +17,7 @@ def generate_dataset(args, git_hash):
         if args.bb_file is not None:
             bb = BusyBox.bb_from_result(bb_data[i])
         else:
-            bb = BusyBox.generate_random_busybox(max_mech=max_mech, mech_types=[Slider], urdf_tag=args.urdf_num, debug=args.debug)
+            bb = BusyBox.generate_random_busybox(max_mech=args.max_mech, mech_types=[Slider], urdf_tag=args.urdf_num, debug=args.debug)
 
         image_data = setup_env(bb, args.viz, args.debug)
 
