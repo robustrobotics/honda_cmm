@@ -17,6 +17,7 @@ import torch
 from learning.dataloaders import PolicyDataset, parse_pickle_file
 from gen.generate_policy_data import generate_dataset
 from collections import namedtuple
+from torch.utils.tensorboard import SummaryWriter
 
 def process_data(data, n_train):
     """
@@ -64,6 +65,7 @@ def objective_func(x, gp, ucb, beta=100, nn=None, image_tensor=None, use_cuda=Fa
     if not nn is None:
         inputs = optim_result_to_torch(x, image_tensor, use_cuda)
         val = nn.forward(*inputs)
+        val = val[0]
         if use_cuda:
             val = val.cpu()
         val = val.detach().numpy()
@@ -83,6 +85,7 @@ def get_pred_motions(data, model, ucb, beta=100, nn=None):
     dataset = None
     if not nn is None:
         nn_preds, dataset = get_nn_preds(data, nn, ret_dataset=True)
+        nn_preds = nn_preds[0]
         y_pred += np.array(nn_preds)
 
     if ucb:
@@ -244,7 +247,8 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1):
             ys.append([motion])
         else:
             inputs = optim_result_to_torch(x_final, dataset.images[0].unsqueeze(0), False)
-            nn_pred = nn.forward(*inputs).detach().numpy().squeeze()
+            nn_pred = nn.forward(*inputs)
+            nn_pred = nn_pred[0].detach().numpy().squeeze()
             ys.append([motion-nn_pred])
         moves.append([motion])
         gp.fit(np.array(xs), np.array(ys))
@@ -438,17 +442,19 @@ def fit_random_dataset(data):
 
 
 def evaluate_k_busyboxes(k, args):
-    models = ['',
-              'conv2_models/model_ntrain_1000.pt',
-              'conv2_models/model_ntrain_2000.pt',
-              'conv2_models/model_ntrain_3000.pt',
-              'conv2_models/model_ntrain_4000.pt',
-              'conv2_models/model_ntrain_5000.pt',
-              'conv2_models/model_ntrain_6000.pt',
-              'conv2_models/model_ntrain_7000.pt',
-              'conv2_models/model_ntrain_8000.pt',
-              'conv2_models/model_ntrain_9000.pt',
-              'conv2_models/model_ntrain_10000.pt']
+    writer = SummaryWriter('regret_results')
+    models = [('random_100bb_100int/torch_models/model_ntrain_500.pt', 5),
+              ('random_100bb_100int/torch_models/model_ntrain_1000.pt', 10),
+              ('random_100bb_100int/torch_models/model_ntrain_1500.pt', 15),
+              ('random_100bb_100int/torch_models/model_ntrain_2000.pt', 20),
+              ('random_100bb_100int/torch_models/model_ntrain_3000.pt', 30),
+              ('random_100bb_100int/torch_models/model_ntrain_4000.pt', 40),
+              ('random_100bb_100int/torch_models/model_ntrain_5000.pt', 50),
+              ('random_100bb_100int/torch_models/model_ntrain_6000.pt', 60),
+              ('random_100bb_100int/torch_models/model_ntrain_7000.pt', 70),
+              ('random_100bb_100int/torch_models/model_ntrain_8000.pt', 80),
+              ('random_100bb_100int/torch_models/model_ntrain_9000.pt', 90),
+              ('random_100bb_100int/torch_models/model_ntrain_10000.pt', 100)]
 
     with open('prism_gp_evals_square.pickle', 'rb') as handle:
     # with open('vertical_bb.pickle', 'rb') as handle:
@@ -458,7 +464,7 @@ def evaluate_k_busyboxes(k, args):
     # k=1
     # data = [data[4]]
     # data = data[4:]
-    for model in models:
+    for (model, mn) in models:
         avg_regrets, final_regrets = [], []
         for ix, result in enumerate(data[:k]):
             print('BusyBox', ix)
@@ -479,6 +485,7 @@ def evaluate_k_busyboxes(k, args):
                'avg': np.mean(avg_regrets),
                'final': np.mean(final_regrets)}
         results.append(res)
+        writer.add_scalar('Final_Regret/'+str(args.n_interactions), res['final'], mn)
         with open('regret_results_conv2_10.pickle', 'wb') as handle:
             pickle.dump(results, handle)
 
@@ -530,9 +537,6 @@ if __name__ == '__main__':
 
     # create_gpucb_dataset(L=10, M=200)
 
-    evaluate_k_busyboxes(10, args)
+    evaluate_k_busyboxes(2, args)
 
     # fit_random_dataset(data)
-
-
-
