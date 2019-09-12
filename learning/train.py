@@ -25,7 +25,7 @@ def view_points(img, points):
     cmap = plt.get_cmap('viridis')
 
     for ix in range(0, points.shape[0]):
-        axes.scatter((points[ix, 0]+1)/2.0*w, (points[ix, 1]+1)/2.0*h, 
+        axes.scatter((points[ix, 0]+1)/2.0*w, (points[ix, 1]+1)/2.0*h,
                      s=5, c=[cmap(ix/points.shape[0])])
 
     return fig
@@ -91,12 +91,13 @@ def train_eval(args, hdim, batch_size, pviz, fname, writer, n=0, data_fname=None
 
             train_losses.append(loss.item())
 
+            '''
             if bx == 0:
                 for kx in range(0, yhat.shape[0]//2):
                     fig = view_points(im[kx, :, :, :].cpu(),
                                       points[kx, :, :].cpu().detach().numpy())
                     writer.add_figure('features_%d' % kx, fig, global_step=ex)
-
+            '''
         train_loss_ex = np.mean(train_losses)
         writer.add_scalar('Train-loss/'+fname, train_loss_ex, ex)
         print('[Epoch {}] - Training Loss: {}'.format(ex, train_loss_ex))
