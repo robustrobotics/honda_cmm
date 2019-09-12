@@ -23,7 +23,7 @@ def vis_test_error(test_data, model_path, test_name, urdf_tag, hdim, plots_dir):
     plot_obj = plot_results.TestMechPoliciesPitchOnly()
     bbs = test_data[:7]
     net = util.load_model(model_path, hdim=hdim)
-    plot_obj._plot(None, model=net, bbps=bbs, n_samples=11, urdf_tag=urdf_tag)#, n_pitches=2)
+    plot_obj._plot(data=bbs, model=net, n_samples=11, urdf_tag=urdf_tag)#, n_pitches=2)
     save_path = plots_dir + test_name
     plt.savefig(save_path, bbox_inches='tight')
     #plt.show()

@@ -7,11 +7,28 @@ import learning.viz as viz
 from collections import namedtuple
 from util import util
 import os
+import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
 torch.backends.cudnn.enabled = True
 
 RunData = namedtuple('RunData', 'hdim batch_size run_num max_epoch best_epoch best_val_error')
 name_lookup = {'Prismatic': 0, 'Revolute': 1}
+
+
+def view_points(img, points):
+    c, h, w = img.shape
+    img = img / 2 + 0.5
+    npimg = img.numpy()
+
+    fig, axes = plt.subplots(1, 1)
+    axes.imshow(np.transpose(npimg, (1, 2, 0)))
+    cmap = plt.get_cmap('viridis')
+
+    for ix in range(0, points.shape[0]):
+        axes.scatter((points[ix, 0]+1)/2.0*w, (points[ix, 1]+1)/2.0*h, 
+                     s=5, c=[cmap(ix/points.shape[0])])
+
+    return fig
 
 
 def train_eval(args, hdim, batch_size, pviz, fname, writer, n=0, data_fname=None):
@@ -65,7 +82,7 @@ def train_eval(args, hdim, batch_size, pviz, fname, writer, n=0, data_fname=None
                 im = im.cuda()
                 y = y.cuda()
             optim.zero_grad()
-            yhat = net.forward(pol, x, q, im)
+            yhat, points = net.forward(pol, x, q, im)
 
             loss = loss_fn(yhat, y)
             loss.backward()
@@ -73,6 +90,13 @@ def train_eval(args, hdim, batch_size, pviz, fname, writer, n=0, data_fname=None
             optim.step()
 
             train_losses.append(loss.item())
+
+            if bx == 0:
+                for kx in range(0, yhat.shape[0]//2):
+                    fig = view_points(im[kx, :, :, :].cpu(),
+                                      points[kx, :, :].cpu().detach().numpy())
+                    writer.add_figure('features_%d' % kx, fig, global_step=ex)
+
         train_loss_ex = np.mean(train_losses)
         writer.add_scalar('Train-loss/'+fname, train_loss_ex, ex)
         print('[Epoch {}] - Training Loss: {}'.format(ex, train_loss_ex))
@@ -90,7 +114,7 @@ def train_eval(args, hdim, batch_size, pviz, fname, writer, n=0, data_fname=None
                     im = im.cuda()
                     y = y.cuda()
 
-                yhat = net.forward(pol, x, q, im)
+                yhat, _ = net.forward(pol, x, q, im)
 
                 loss = loss_fn(yhat, y)
                 val_losses.append(loss.item())

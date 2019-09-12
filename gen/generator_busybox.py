@@ -523,14 +523,24 @@ class BusyBox(object):
         return bb
 
     @staticmethod
+<<<<<<< HEAD
     def bb_from_result(result, urdf_tag=str(6)):
         width, height = 0.6, 0.6
         dummy_bb = BusyBox.get_busybox(width, height, [], urdf_tag=urdf_tag+'1')
+=======
+    def bb_from_result(result, urdf_num=6):
+        width, height = 0.6, 0.6
+        dummy_bb = BusyBox.get_busybox(width, height, [], urdf_tag=str(urdf_num)+'1')
+>>>>>>> master
         if result.mechanism_params.type == 'Slider':
             mech = Slider.mech_from_result(result, dummy_bb)
         elif result.mechanism_params.type == 'Door':
             mech = Door.mech_from_result(result, dummy_bb)
+<<<<<<< HEAD
         return BusyBox.get_busybox(width, height, [mech], urdf_tag=str(urdf_tag))
+=======
+        return BusyBox.get_busybox(width, height, [mech], urdf_tag=str(urdf_num))
+>>>>>>> master
 
 
 if __name__ == '__main__':
