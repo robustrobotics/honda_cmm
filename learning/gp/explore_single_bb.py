@@ -488,6 +488,7 @@ def evaluate_k_busyboxes(k, args):
         writer.add_scalar('Final_Regret/'+str(args.n_interactions), res['final'], mn)
         with open('regret_results_conv2_10.pickle', 'wb') as handle:
             pickle.dump(results, handle)
+    writer.close()
 
 
 def create_gpucb_dataset(L=50, M=200, fname=''):
