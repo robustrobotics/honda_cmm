@@ -21,10 +21,10 @@ class ImageEncoder(nn.Module):
                                out_channels=hdim,
                                kernel_size=kernel_size,
                                padding=0)
-        # self.conv2 = nn.Conv2d(in_channels=hdim,
-        #                        out_channels=hdim,
-        #                        kernel_size=7,
-        #                        padding=0)
+        self.conv2 = nn.Conv2d(in_channels=hdim,
+                               out_channels=hdim,
+                               kernel_size=7,
+                               padding=0)
 
         # I am currently just running the network to see what this size should be.
         #self.fc1 = nn.Linear(self.lin_input, hdim)
@@ -47,8 +47,8 @@ class ImageEncoder(nn.Module):
         pos_y = torch.reshape(pos_y, [h * w])
         img = self.pad(img)
         x = F.relu(self.conv1(img))
-        # x = self.pad(x)
-        # x = self.conv2(x)
+        x = self.pad(x)
+        x = self.conv2(x)
 
         # Do a spatial softmax.
         bs, c, h, w = x.shape
@@ -64,7 +64,7 @@ class ImageEncoder(nn.Module):
                                dim=1,
                                keepdim=True)
         expected_xy = torch.cat([expected_x, expected_y], dim=1)
-
+        points = expected_xy.view(bs, c, 2)
 
         # imshow(torchvision.utils.make_grid(img), expected_xy.detach().numpy(), pfeatures.detach().numpy())
         # input()
@@ -74,7 +74,7 @@ class ImageEncoder(nn.Module):
         x = expected_xy.view(-1, c*2)
 
         x = self.fc2(x)
-        return x
+        return x, points
 
 def imshow(img, points, maps):
     c, h, w = img.shape
