@@ -444,17 +444,17 @@ def fit_random_dataset(data):
 def evaluate_k_busyboxes(k, args):
     writer = SummaryWriter('regret_results')
     models = [('random_100bb_100int/torch_models/model_ntrain_500.pt', 5),
-              ('random_100bb_100int/torch_models/model_ntrain_1000.pt', 10),]
-              #('random_100bb_100int/torch_models/model_ntrain_1500.pt', 15),
-              #('random_100bb_100int/torch_models/model_ntrain_2000.pt', 20),
-              #('random_100bb_100int/torch_models/model_ntrain_3000.pt', 30),
-              #('random_100bb_100int/torch_models/model_ntrain_4000.pt', 40),
-              #('random_100bb_100int/torch_models/model_ntrain_5000.pt', 50),
-              #('random_100bb_100int/torch_models/model_ntrain_6000.pt', 60),
-              #('random_100bb_100int/torch_models/model_ntrain_7000.pt', 70),
-              #('random_100bb_100int/torch_models/model_ntrain_8000.pt', 80),
-              #('random_100bb_100int/torch_models/model_ntrain_9000.pt', 90),
-              #('random_100bb_100int/torch_models/model_ntrain_10000.pt', 100)]
+              ('random_100bb_100int/torch_models/model_ntrain_1000.pt', 10),
+              ('random_100bb_100int/torch_models/model_ntrain_1500.pt', 15),
+              ('random_100bb_100int/torch_models/model_ntrain_2000.pt', 20),
+              ('random_100bb_100int/torch_models/model_ntrain_3000.pt', 30),
+              ('random_100bb_100int/torch_models/model_ntrain_4000.pt', 40),
+              ('random_100bb_100int/torch_models/model_ntrain_5000.pt', 50),
+              ('random_100bb_100int/torch_models/model_ntrain_6000.pt', 60),
+              ('random_100bb_100int/torch_models/model_ntrain_7000.pt', 70),
+              ('random_100bb_100int/torch_models/model_ntrain_8000.pt', 80),
+              ('random_100bb_100int/torch_models/model_ntrain_9000.pt', 90),
+              ('random_100bb_100int/torch_models/model_ntrain_10000.pt', 100)]
 
     with open('prism_gp_evals_square.pickle', 'rb') as handle:
     # with open('vertical_bb.pickle', 'rb') as handle:
@@ -537,6 +537,6 @@ if __name__ == '__main__':
 
     # create_gpucb_dataset(L=10, M=200)
 
-    evaluate_k_busyboxes(2, args)
+    evaluate_k_busyboxes(20, args)
 
     # fit_random_dataset(data)
