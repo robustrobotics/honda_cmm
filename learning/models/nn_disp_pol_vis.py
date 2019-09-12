@@ -60,7 +60,7 @@ class DistanceRegressor(nn.Module):
         else:
             policy_type = 'Revolute'
         pol = self.policy_modules[policy_type].forward(theta, q)
-        im = self.image_module(im)
+        im, points = self.image_module(im)
 
         # x = pol*im
         # x_norm = torch.norm(x, p=2, dim=1, keepdim=True)
@@ -71,4 +71,4 @@ class DistanceRegressor(nn.Module):
         x = F.relu(self.fc1(x)) 
         x = F.relu(self.fc2(x))
         x = self.fc5(x)
-        return x
+        return x, points
