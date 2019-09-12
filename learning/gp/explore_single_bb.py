@@ -3,6 +3,7 @@ from sklearn.gaussian_process.kernels import RBF, WhiteKernel, Sum, ConstantKern
 import numpy as np
 import matplotlib.pyplot as plt
 import pickle
+import os
 import argparse
 from scipy.optimize import minimize
 from util import util
@@ -43,105 +44,127 @@ def process_data(data, n_train):
     return X, Y, X_pred
 
 
-def optim_result_to_torch(x, image_tensor, use_cuda=False):
-    policy_type_tensor = torch.Tensor([util.name_lookup['Prismatic']])
-    policy_tensor = torch.tensor([[x[0], 0.0]]).float()  # hard code yaw to be 0
-    config_tensor = torch.tensor([[x[-1]]]).float()
-    if use_cuda:
-        policy_type_tensor = policy_type_tensor.cuda()
-        policy_tensor = policy_tensor.cuda()
-        config_tensor = config_tensor.cuda()
-        image_tensor = image_tensor.cuda()
+class GPOptimizer(object):
 
-    return [policy_type_tensor, policy_tensor, config_tensor, image_tensor]
+    def __init__(self, result, nn=None, n_samples=500):
+        """
+        Initialize one of these for each BusyBox.
+        """
+        # TODO: Generate the sample points used to optimize the function.
+        self.sample_policies = []
+        self.nn_samples = []
 
+        bb = BusyBox.bb_from_result(result)
+        image_data = setup_env(bb, viz=False, debug=False)
+        mech = bb._mechanisms[0]
+        mech_tuple = mech.get_mechanism_tuple()
 
-def objective_func(x, gp, ucb, beta=100, nn=None, image_tensor=None, use_cuda=False):
-    x = x.squeeze()
+        # Generate random policies.
+        for _ in range(n_samples):
+            # Get the mechanism from the dataset.
+            random_policy = policies.generate_policy(bb, mech, True, 1.0)
+            policy_type = random_policy.type
+            q = random_policy.generate_config(mech, None)
+            policy_tuple = random_policy.get_policy_tuple()
+            results = [util.Result(policy_tuple, mech_tuple, 0.0, 0.0,
+                                   None, None, q, image_data, None, 1.0)]
+            self.sample_policies.append(results)
 
-    X = np.array([[x[0], 0.0, x[-1]]])
-    Y_pred, Y_std = gp.predict(X, return_std=True)
-    if not nn is None:
-        inputs = optim_result_to_torch(x, image_tensor, use_cuda)
-        val = nn.forward(*inputs)
+            if not nn is None:
+                nn_preds, self.dataset = get_nn_preds(results, nn, ret_dataset=True)
+                self.nn_samples.append(nn_preds)
+            else:
+                self.dataset = None
+                self.nn_samples.append(None)
+
+        p.disconnect()
+
+    def _optim_result_to_torch(self, x, image_tensor, use_cuda=False):
+        policy_type_tensor = torch.Tensor([util.name_lookup['Prismatic']])
+        policy_tensor = torch.tensor([[x[0], 0.0]]).float()  # hard code yaw to be 0
+        config_tensor = torch.tensor([[x[-1]]]).float()
         if use_cuda:
-            val = val.cpu()
-        val = val.detach().numpy()
-        Y_pred += val.squeeze()
+            policy_type_tensor = policy_type_tensor.cuda()
+            policy_tensor = policy_tensor.cuda()
+            config_tensor = config_tensor.cuda()
+            image_tensor = image_tensor.cuda()
 
-    if ucb:
-        obj = -Y_pred[0] - np.sqrt(beta)*Y_std[0]
-    else:
-        obj = -Y_pred[0]
+        return [policy_type_tensor, policy_tensor, config_tensor, image_tensor]
 
-    return obj
+    def _objective_func(self, x, gp, ucb, beta=100, nn=None, image_tensor=None, use_cuda=False):
+        x = x.squeeze()
 
+        X = np.array([[x[0], 0.0, x[-1]]])
+        Y_pred, Y_std = gp.predict(X, return_std=True)
+        if not nn is None:
+            inputs = self._optim_result_to_torch(x, image_tensor, use_cuda)
+            val, _ = nn.forward(*inputs)
+            if use_cuda:
+                val = val.cpu()
+            val = val.detach().numpy()
+            Y_pred += val.squeeze()
 
-def get_pred_motions(data, model, ucb, beta=100, nn=None):
-    X, Y, _ = process_data(data, len(data))
-    y_pred, y_std = model.predict(X, return_std=True)
-    dataset = None
-    if not nn is None:
-        nn_preds, dataset = get_nn_preds(data, nn, ret_dataset=True)
-        y_pred += np.array(nn_preds)
+        if ucb:
+            obj = -Y_pred[0] - np.sqrt(beta) * Y_std[0]
+        else:
+            obj = -Y_pred[0]
 
-    if ucb:
-        return y_pred + np.sqrt(beta)*y_std, dataset
-    else:
-        return y_pred, dataset
+        return obj
 
+    def _get_pred_motions(self, data, model, ucb, beta=100, nn_preds=None):
+        X, Y, _ = process_data(data, len(data))
+        y_pred, y_std = model.predict(X, return_std=True)
+        if not nn_preds is None:
+            y_pred += np.array(nn_preds)
 
-def optimize_gp(gp, result, ucb=False, beta=100, nn=None):
-    """
+        if ucb:
+            return y_pred + np.sqrt(beta) * y_std, self.dataset
+        else:
+            return y_pred, self.dataset
 
-    :param gp:
-    :param result:
-    :param ucb: If True, optimize the UCB objective instead of just the GP.
-    :return:
-    """
-    n_samples = 500 # 1000
-    samples = []
-    bb = BusyBox.bb_from_result(result)
-    image_data = setup_env(bb, viz=False, debug=False)
-    mech = bb._mechanisms[0]
-    mech_tuple = mech.get_mechanism_tuple()
-    # Generate random policies.
-    for _ in range(n_samples):
-        # Get the mechanism from the dataset.
-        random_policy = policies.generate_policy(bb, mech, True, 1.0)
-        policy_type = random_policy.type
-        q = random_policy.generate_config(mech, None)
-        policy_tuple = random_policy.get_policy_tuple()
-        results = [util.Result(policy_tuple, mech_tuple, 0.0, 0.0,
-                                None, None, q, image_data, None, 1.0)]
-        # Get predictions from the GP.
-        sample_disps, dataset = get_pred_motions(results, gp, ucb, beta, nn)
+    def optimize_gp(self, gp, result, ucb=False, beta=100, nn=None):
+        """
+        Find the input (policy) that maximizes the GP (+ NN) output.
+        :param gp: A GP representing the reward function to optimize.
+        :param result: util.Result tuple containing the BusyBox object.
+        :param ucb: If True, optimize the UCB objective instead of just the GP.
+        :param beta: beta paramater for the GP-UCB objective.
+        :param nn: If not None, optimize gp(.) + nn(.).
+        :return: x_final, the optimal policy according to the current model.
+        """
+        samples = []
+        bb = BusyBox.bb_from_result(result)
+        image_data = setup_env(bb, viz=False, debug=False)
+        mech = bb._mechanisms[0]
+        mech_tuple = mech.get_mechanism_tuple()
 
+        # Generate random policies.
+        for res, nn_preds in zip(self.sample_policies, self.nn_samples):
+            # Get predictions from the GP.
+            sample_disps, dataset = self._get_pred_motions(res, gp, ucb, beta, nn_preds)
 
-        samples.append(((policy_type,
-                        policy_tuple,
-                        q,
-                        policy_tuple.delta_values.delta_yaw,
-                        policy_tuple.delta_values.delta_pitch),
-                        sample_disps[0]))
+            samples.append((('Prismatic',
+                             res[0].policy_params,
+                             res[0].config_goal,
+                             res[0].policy_params.delta_values.delta_yaw,
+                             res[0].policy_params.delta_values.delta_pitch),
+                             sample_disps[0]))
+        p.disconnect()
 
-    # Find the sample that maximizes the distance.
-    (policy_type_max, params_max, q_max, delta_yaw_max, delta_pitch_max), max_disp = max(samples, key=operator.itemgetter(1))
+        # Find the sample that maximizes the distance.
+        (policy_type_max, params_max, q_max, delta_yaw_max, delta_pitch_max), max_disp = max(samples, key=operator.itemgetter(1))
 
-    # Start optimization from here.
-    x0 = np.concatenate([[params_max.params.pitch], [q_max]]) # only searching space of pitches!
-    if nn is None:
-        images = None
-    else:
-        images = dataset.images[0].unsqueeze(0)
-    res = minimize(fun=objective_func, x0=x0, args=(gp, ucb, beta, nn, images, False),
-                   method='L-BFGS-B', options={'eps': 10**-3}, bounds=[(-np.pi, 0), (-0.25, 0.25)])
-    x_final = res['x']
+        # Start optimization from here.
+        x0 = np.concatenate([[params_max.params.pitch], [q_max]]) # only searching space of pitches!
+        if nn is None:
+            images = None
+        else:
+            images = dataset.images[0].unsqueeze(0)
+        res = minimize(fun=self._objective_func, x0=x0, args=(gp, ucb, beta, nn, images, False),
+                       method='L-BFGS-B', options={'eps': 10**-3}, bounds=[(-np.pi, 0), (-0.25, 0.25)])
+        x_final = res['x']
 
-    pose_handle_base_world = mech.get_pose_handle_base_world()
-    policy_list = list(pose_handle_base_world.p)+list(pose_handle_base_world.q)+[x_final[0], 0.0]  # hard code yaw value
-
-    return x_final, dataset
+        return x_final, dataset
 
 
 def test_model(gp, result, nn=None):
@@ -151,9 +174,9 @@ def test_model(gp, result, nn=None):
     :param result: Result representing the current BusyBox.
     :return: Regret.
     """
-    # TODO: Use the NN if required.
     # Optimize the GP to get the best result.
-    x_final, _ = optimize_gp(gp, result, ucb=False, nn=nn)
+    optim_gp = GPOptimizer(result, nn=nn)
+    x_final, _ = optim_gp.optimize_gp(gp, result, ucb=False, nn=nn)
 
     # Execute the policy and observe the true motion.
     bb = BusyBox.bb_from_result(result)
@@ -184,7 +207,7 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1):
     # kernel = ConstantKernel(0.005, constant_value_bounds=(0.005, 0.005)) * RBF(length_scale=(0.247, 0.084, 0.0592), length_scale_bounds=(0.0592, 0.247)) + WhiteKernel(noise_level=1e-5, noise_level_bounds=(1e-5, 1e2))
     variance = 0.005
     noise = 1e-5
-    l_pitch, l_yaw, l_q = 0.247, 100, 0.07# #0.0592
+    l_pitch, l_yaw, l_q = 0.247, 100, 0.07
     l_q = 0.1
     l_pitch = 0.10
     kernel = ConstantKernel(variance, constant_value_bounds=(variance, variance)) * RBF(length_scale=(l_pitch, l_yaw, l_q), length_scale_bounds=((l_pitch, l_pitch), (l_yaw, l_yaw), (l_q, l_q))) + WhiteKernel(noise_level=noise, noise_level_bounds=(1e-5, 1e2))
@@ -197,28 +220,35 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1):
         nn = util.load_model(nn_fname, 16)
 
     interaction_data = []
+    image_data = None
     xs, ys, moves = [], [], []
+
+    optim = GPOptimizer(result, nn=nn)
+
     for ix in range(0, max_iterations):
         # (1) Choose a point to interact with.
         if len(xs) < 1 and (nn is None):
             # (a) Choose policy randomly.
             bb = BusyBox.bb_from_result(result)
-            image_data = setup_env(bb, viz=False, debug=False)
+            im = setup_env(bb, viz=False, debug=False)
             mech = bb._mechanisms[0]
             pose_handle_base_world = mech.get_pose_handle_base_world()
             policy = policies.generate_policy(bb, mech, True, 1.0)
             q = policy.generate_config(mech, None)
         else:
             # (b) Choose policy using UCB bound.
-            x_final, dataset = optimize_gp(gp, result, ucb=True, beta=10, nn=nn)
+            x_final, dataset = optim.optimize_gp(gp, result, ucb=True, beta=10, nn=nn)
 
             bb = BusyBox.bb_from_result(result)
-            image_data = setup_env(bb, viz=False, debug=False)
+            im = setup_env(bb, viz=False, debug=False)
             mech = bb._mechanisms[0]
             pose_handle_base_world = mech.get_pose_handle_base_world()
             policy_list = list(pose_handle_base_world.p) + [0., 0., 0., 1.] + [x_final[0], 0.0]
             policy = policies.get_policy_from_params('Prismatic', policy_list, mech)
             q = x_final[-1]
+
+        if image_data is None:
+            image_data = im
 
         # (2) Interact with BusyBox to get result.
         traj = policy.generate_trajectory(pose_handle_base_world, q, True)
@@ -243,8 +273,8 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1):
         if nn is None:
             ys.append([motion])
         else:
-            inputs = optim_result_to_torch(x_final, dataset.images[0].unsqueeze(0), False)
-            nn_pred = nn.forward(*inputs).detach().numpy().squeeze()
+            inputs = optim._optim_result_to_torch(x_final, optim.dataset.images[0].unsqueeze(0), False)
+            nn_pred = nn.forward(*inputs)[0].detach().numpy().squeeze()
             ys.append([motion-nn_pred])
         moves.append([motion])
         gp.fit(np.array(xs), np.array(ys))
@@ -438,8 +468,7 @@ def fit_random_dataset(data):
 
 
 def evaluate_k_busyboxes(k, args):
-    models = ['',
-              'conv2_models/model_ntrain_1000.pt',
+    models = ['conv2_models/model_ntrain_1000.pt',
               'conv2_models/model_ntrain_2000.pt',
               'conv2_models/model_ntrain_3000.pt',
               'conv2_models/model_ntrain_4000.pt',
@@ -451,13 +480,9 @@ def evaluate_k_busyboxes(k, args):
               'conv2_models/model_ntrain_10000.pt']
 
     with open('prism_gp_evals_square.pickle', 'rb') as handle:
-    # with open('vertical_bb.pickle', 'rb') as handle:
         data = pickle.load(handle)
-    print(len(data))
+    models = [models[-1]]
     results = []
-    # k=1
-    # data = [data[4]]
-    # data = data[4:]
     for model in models:
         avg_regrets, final_regrets = [], []
         for ix, result in enumerate(data[:k]):
@@ -479,34 +504,45 @@ def evaluate_k_busyboxes(k, args):
                'avg': np.mean(avg_regrets),
                'final': np.mean(final_regrets)}
         results.append(res)
-        with open('regret_results_conv2_10.pickle', 'wb') as handle:
+        with open('regret_results.pickle', 'wb') as handle:
             pickle.dump(results, handle)
 
 
-def create_gpucb_dataset(L=50, M=200, fname=''):
+def create_gpucb_dataset(L=50, M=200, bb_fname='', fname=''):
     """
     :param L: The number of BusyBoxes to include in the dataset.
     :param M: The number of interactions per BusyBox.
     :return:
     """
-    # TODO: Load in a file with predetermined BusyBoxes.
-
     # Create a dataset of L busyboxes.
-    Args = namedtuple('args', 'max_mech, urdf_num, debug, n_bbs, n_samples, viz, match_policies, randomness, goal_config')
-    args = Args(max_mech=1,
-                urdf_num=0,
-                debug=False,
-                n_bbs=L,
-                n_samples=1,
-                viz=False,
-                match_policies=True,
-                randomness=1.0,
-                goal_config=None)
-    busybox_data = generate_dataset(args, None)
-    print('BusyBoxes created.')
+    if bb_fname == '':
+        Args = namedtuple('args', 'max_mech, urdf_num, debug, n_bbs, n_samples, viz, match_policies, randomness, goal_config')
+        args = Args(max_mech=1,
+                    urdf_num=0,
+                    debug=False,
+                    n_bbs=L,
+                    n_samples=1,
+                    viz=False,
+                    match_policies=True,
+                    randomness=1.0,
+                    goal_config=None)
+        busybox_data = generate_dataset(args, None)
+        print('BusyBoxes created.')
+    else:
+        # Load in a file with predetermined BusyBoxes.
+        with open(bb_fname, 'rb') as handle:
+            busybox_data = pickle.load(handle)
 
-    # TODO: Do a GP-UCB interaction and return Result tuples.
-    dataset = []
+    # Do a GP-UCB interaction and return Result tuples.
+    if os.path.exists(fname):
+        with open(fname, 'rb') as handle:
+            dataset = pickle.load(handle)
+        n_collected = len(dataset)//M
+        busybox_data = busybox_data[n_collected:]
+        print('Already Collected: %d\tRemaining: %d' % (n_collected, len(busybox_data)))
+    else:
+        dataset = []
+
     for ix, result in enumerate(busybox_data):
         _, _, _, interaction_data = ucb_interaction(result,
                                                     max_iterations=M,
@@ -516,10 +552,10 @@ def create_gpucb_dataset(L=50, M=200, fname=''):
         dataset.extend(interaction_data)
         print('Interacted with BusyBox %d.' % ix)
 
-    # Save the dataset.
-    if fname != '':
-        with open(fname, 'wb') as handle:
-            pickle.dump(dataset, handle)
+        # Save the dataset.
+        if fname != '':
+            with open(fname, 'wb') as handle:
+                pickle.dump(dataset, handle)
 
 
 if __name__ == '__main__':
@@ -528,7 +564,10 @@ if __name__ == '__main__':
     parser.add_argument('--n-interactions', type=int)
     args = parser.parse_args()
 
-    # create_gpucb_dataset(L=10, M=200)
+    # create_gpucb_dataset(L=100,
+    #                      M=100,
+    #                      bb_fname='active_100bbs.pickle',
+    #                      fname='gpucb_100bb_100i.pickle')
 
     evaluate_k_busyboxes(10, args)
 

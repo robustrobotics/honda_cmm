@@ -88,10 +88,10 @@ def get_pred_motions(data, model, ret_dataset=False, use_cuda=False):
             policy_tensor = policy_tensor.cuda()
             config_tensor = config_tensor.cuda()
             image_tensor = image_tensor.cuda()
-        pred_motion = model.forward(policy_type_tensor,
-                                    policy_tensor,
-                                    config_tensor,
-                                    image_tensor)
+        pred_motion, _ = model.forward(policy_type_tensor,
+                                       policy_tensor,
+                                       config_tensor,
+                                       image_tensor)
         if use_cuda:
             pred_motion_float = pred_motion.cpu().detach().numpy()[0][0]
         else:
