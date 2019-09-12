@@ -99,7 +99,7 @@ def optimize_gp(gp, result, ucb=False, beta=100, nn=None):
     :param ucb: If True, optimize the UCB objective instead of just the GP.
     :return:
     """
-    n_samples = 1000
+    n_samples = 500 # 1000
     samples = []
     bb = BusyBox.bb_from_result(result)
     image_data = setup_env(bb, viz=False, debug=False)
@@ -231,9 +231,9 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1):
                              q, image_data, None, -1)
         interaction_data.append(result)
 
-        if ix == 0:
-            print('GP:', gp.kernel)
-            viz_gp_circles(gp, result, ix, bb, image_data, nn=nn, kx=kx, model_name=nn_fname)
+        # if ix == 0:
+        #     print('GP:', gp.kernel)
+        #     viz_gp_circles(gp, result, ix, bb, image_data, nn=nn, kx=kx, model_name=nn_fname)
 
         # (3) Update GP.
         policy_params = policy.get_policy_tuple()
@@ -250,7 +250,7 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1):
         gp.fit(np.array(xs), np.array(ys))
 
         # (4) Visualize GP.
-        if ix % 1 == 0 and plot:
+        if ix % 10 == 0 and plot:
             params = mech.get_mechanism_tuple().params
             print('Range:', params.range/2.0)
             print('Angle:', np.arctan2(params.axis[1], params.axis[0]))
@@ -438,19 +438,26 @@ def fit_random_dataset(data):
 
 
 def evaluate_k_busyboxes(k, args):
-    models = ['active_all/model_ntrain_6000.pt',
-              # 'torch_models/model_ntrain_2000.pt',
-              # 'torch_models/model_ntrain_4000.pt',
-              # 'torch_models/model_ntrain_6000.pt',
-              # 'torch_models/model_ntrain_8000.pt',
-              # 'torch_models/model_ntrain_10000.pt'
-    ]
+    models = ['',
+              'conv2_models/model_ntrain_1000.pt',
+              'conv2_models/model_ntrain_2000.pt',
+              'conv2_models/model_ntrain_3000.pt',
+              'conv2_models/model_ntrain_4000.pt',
+              'conv2_models/model_ntrain_5000.pt',
+              'conv2_models/model_ntrain_6000.pt',
+              'conv2_models/model_ntrain_7000.pt',
+              'conv2_models/model_ntrain_8000.pt',
+              'conv2_models/model_ntrain_9000.pt',
+              'conv2_models/model_ntrain_10000.pt']
 
     with open('prism_gp_evals_square.pickle', 'rb') as handle:
+    # with open('vertical_bb.pickle', 'rb') as handle:
         data = pickle.load(handle)
+    print(len(data))
     results = []
     # k=1
     # data = [data[4]]
+    # data = data[4:]
     for model in models:
         avg_regrets, final_regrets = [], []
         for ix, result in enumerate(data[:k]):
@@ -472,7 +479,7 @@ def evaluate_k_busyboxes(k, args):
                'avg': np.mean(avg_regrets),
                'final': np.mean(final_regrets)}
         results.append(res)
-        with open('regret_results_square_5_temp_beta10.pickle', 'wb') as handle:
+        with open('regret_results_conv2_10.pickle', 'wb') as handle:
             pickle.dump(results, handle)
 
 

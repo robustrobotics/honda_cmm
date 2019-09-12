@@ -27,40 +27,30 @@ if __name__ == '__main__':
     gp_final_10 = [0.2] * len(nn_regrets)
     gp_final_20 = [0.06] * len(nn_regrets)
 
-    with open('regret_results_square_10.pickle', 'rb') as handle:
+    with open('regret_results_conv2_2.pickle', 'rb') as handle:
         data = pickle.load(handle)
         xs_short = []
         ys_nn_avg = []
         ys_nn_final = []
         for ix, entry in enumerate(data):
             if ix == 0:
-                gp_final_10 = [entry['final']] * len(nn_regrets)
-                gp_avg_10 = [entry['avg']] * len(nn_regrets)
+                gp_final_10 = [entry['final']]
+                gp_avg_10 = [entry['avg']]
             else:
                 xs_short.append(10*(ix))
                 ys_nn_avg.append(entry['avg'])
                 ys_nn_final.append(entry['final'])
 
+    # gp_final_10 = [0.48] * len(xs_short)
 
-
+    gp_avg_10 = gp_avg_10 * len(xs_short)
+    gp_final_10 = gp_final_10 * len(xs_short)
 
     xs = np.arange(1, len(nn_regrets)+1)*10
-    print(nn_regrets)
-    # plt.plot(xs, nn_regrets, c='r', label='NN')
-    plt.plot(xs, gp_avg_5, c='b', label='GP-5')
-    plt.plot(xs, gp_avg_10, c='g', label='GP-10')
-    plt.plot(xs, gp_avg_20, c='y', label='GP-20')
-    plt.plot(xs_short, ys_nn_avg, c='k', label='NN-GP-10')
-    plt.ylim(0, 1)
-    plt.legend()
-    plt.title('Avg. Regret')
-    plt.xlabel('# BB')
-    plt.ylabel('Regret')
-    plt.show()
 
     # plt.plot(xs, nn_regrets, c='r', label='NN')
     # plt.plot(xs, gp_final_5, c='b', label='GP-5')
-    plt.plot(xs, gp_final_10, c='g', label='GP-2')
+    plt.plot(xs_short, gp_final_10, c='g', label='GP-2')
     # plt.plot(xs, gp_final_20, c='y', label='GP-20')
     plt.plot(xs_short, ys_nn_final, c='k', label='NN-GP-2')
     plt.ylim(0, 1)
