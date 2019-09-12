@@ -161,6 +161,7 @@ if __name__ == '__main__':
     parser.add_argument('--data-fname', type=str)
     parser.add_argument('--save-dir', required=True, type=str)
     # if 0 then use all samples in dataset, else use ntrain number of samples
+    parser.add_argument('--ntrain-min', type=int, default=0)
     parser.add_argument('--ntrain-max', type=int, default=0)
     parser.add_argument('--step', type=int, default=200)
     parser.add_argument('--image-encoder', type=str, default='spatial', choices=['spatial', 'cnn'])
@@ -187,7 +188,10 @@ if __name__ == '__main__':
             train_eval(args, args.hdim, args.batch_size, args.pviz, fname, writer)
 
     elif args.mode == 'ntrain':
-        ns = range(args.step, args.ntrain_max+1, args.step)
+        min = args.step
+        if args.ntrain_min:
+            min = args.ntrain_min
+        ns = range(min, args.ntrain_max+1, args.step)
         for n in ns:
             fname = model_dir+'model_ntrain_'+str(n)
             train_eval(args, args.hdim, args.batch_size, args.pviz, fname, writer, n)
