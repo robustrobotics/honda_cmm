@@ -25,7 +25,7 @@ def view_points(img, points):
     cmap = plt.get_cmap('viridis')
 
     for ix in range(0, points.shape[0]):
-        axes.scatter((points[ix, 0]+1)/2.0*w, (points[ix, 1]+1)/2.0*h, 
+        axes.scatter((points[ix, 0]+1)/2.0*w, (points[ix, 1]+1)/2.0*h,
                      s=5, c=[cmap(ix/points.shape[0])])
 
     return fig
@@ -145,6 +145,7 @@ def get_train_params(args):
             'n_epochs': args.n_epochs,
             'val_freq': args.val_freq,
             'data-fname': args.data_fname,
+            'ntrain-min': args.ntrain_min,
             'ntrain-max': args.ntrain_max,
             'step': args.step,
             'n_runs': args.n_runs}
