@@ -185,7 +185,8 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1):
     variance = 0.005
     noise = 1e-5
     l_pitch, l_yaw, l_q = 0.247, 100, 0.07# #0.0592
-
+    l_q = 0.1
+    l_pitch = 0.10
     kernel = ConstantKernel(variance, constant_value_bounds=(variance, variance)) * RBF(length_scale=(l_pitch, l_yaw, l_q), length_scale_bounds=((l_pitch, l_pitch), (l_yaw, l_yaw), (l_q, l_q))) + WhiteKernel(noise_level=noise, noise_level_bounds=(1e-5, 1e2))
     gp = GaussianProcessRegressor(kernel=kernel,
                                   n_restarts_optimizer=10)
@@ -209,7 +210,7 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1):
             q = policy.generate_config(mech, None)
         else:
             # (b) Choose policy using UCB bound.
-            x_final, dataset = optimize_gp(gp, result, ucb=True, beta=40, nn=nn)
+            x_final, dataset = optimize_gp(gp, result, ucb=True, beta=10, nn=nn)
 
             bb = BusyBox.bb_from_result(result)
             image_data = setup_env(bb, viz=False, debug=False)
@@ -232,7 +233,7 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1):
 
         if ix == 0:
             print('GP:', gp.kernel)
-            viz_gp_circles(gp, result, ix, bb, image_data, nn=nn, kx=kx)
+            viz_gp_circles(gp, result, ix, bb, image_data, nn=nn, kx=kx, model_name=nn_fname)
 
         # (3) Update GP.
         policy_params = policy.get_policy_tuple()
@@ -249,7 +250,7 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1):
         gp.fit(np.array(xs), np.array(ys))
 
         # (4) Visualize GP.
-        if ix % 10 == 0 and plot:
+        if ix % 1 == 0 and plot:
             params = mech.get_mechanism_tuple().params
             print('Range:', params.range/2.0)
             print('Angle:', np.arctan2(params.axis[1], params.axis[0]))
@@ -338,9 +339,9 @@ def viz_gp(gp, result, num, bb, nn=None):
     # plt.savefig('gp_estimates_tuned_%d.png' % num)
 
 
-def viz_gp_circles(gp, result, num, bb, image_data, nn=None, kx=-1, points=None):
-    n_pitch = 80
-    n_q = 40
+def viz_gp_circles(gp, result, num, bb, image_data, nn=None, kx=-1, points=None, model_name=''):
+    n_pitch = 40
+    n_q = 20
 
     radii = np.linspace(-0.25, 0.25, num=n_q)
     thetas = np.linspace(-np.pi, 0, num=n_pitch)
@@ -368,7 +369,7 @@ def viz_gp_circles(gp, result, num, bb, image_data, nn=None, kx=-1, points=None)
             mean_colors[ix, jx] = Y_pred[jx, 0]
             std_colors[ix, jx] = Y_std[jx]
 
-    plt.clf()
+    #plt.clf()
     plt.figure(figsize=(20, 5))
     ax0 = plt.subplot(131)
     w, h, im = image_data
@@ -384,8 +385,12 @@ def viz_gp_circles(gp, result, num, bb, image_data, nn=None, kx=-1, points=None)
     ax2 = plt.subplot(133, projection='polar')
     ax2.set_title('variance')
     polar_plots(ax2, std_colors, vmax=None, points=points)
-    # plt.show()
-    plt.savefig('gp_polar_bb_%d_%d.png' % (kx, num), bbox_inches='tight')
+    plt.show()
+
+    if '/' in model_name:
+        model_name = model_name.split('/')[-1].replace('.pt', '')
+    fname = 'gp_polar_bb_%d_%d_%s.png' % (kx, num, model_name)
+    #plt.savefig(fname, bbox_inches='tight')
 
 
 def polar_plots(ax, colors, vmax, points=None):
@@ -433,29 +438,15 @@ def fit_random_dataset(data):
 
 
 def evaluate_k_busyboxes(k, args):
-    models = ['',
-              # 'sagg_noprior_090919_1506/10bbs.pt',
-              # 'sagg_noprior_090919_1506/20bbs.pt',
-              # 'sagg_noprior_090919_1506/30bbs.pt',
-              # 'sagg_noprior_090919_1506/40bbs.pt',
-              # 'sagg_noprior_090919_1506/50bbs.pt',
-              '']
-    # models = ['sagg_learner100/sagg-learner10.pt',
-    #           'sagg_learner100/sagg-learner20.pt',
-    #           'sagg_learner100/sagg-learner30.pt',
-    #           'sagg_learner100/sagg-learner40.pt',
-    #           'sagg_learner100/sagg-learner50.pt',
-    #           'sagg_learner100/sagg-learner60.pt',
-    #           'sagg_learner100/sagg-learner70.pt',
-    #           'sagg_learner100/sagg-learner80.pt',
-    #           'sagg_learner100/sagg-learner90.pt',
-    #           'sagg_learner100/sagg-learner100.pt',
-    #           'data_active_ntrain_50000_epoch_20.pt'
-    #           '']#,
-              #'data/models/prism_gp_nrun_0_epoch_170.pt',
-              #'data/models/prism_gp_25bb_0_epoch_220.pt',
-              #'data/models/prism_gp_75bb_nrun_0_epoch_180.pt']
-    with open('prism_gp_evals.pickle', 'rb') as handle:
+    models = ['active_all/model_ntrain_6000.pt',
+              # 'torch_models/model_ntrain_2000.pt',
+              # 'torch_models/model_ntrain_4000.pt',
+              # 'torch_models/model_ntrain_6000.pt',
+              # 'torch_models/model_ntrain_8000.pt',
+              # 'torch_models/model_ntrain_10000.pt'
+    ]
+
+    with open('prism_gp_evals_square.pickle', 'rb') as handle:
         data = pickle.load(handle)
     results = []
     # k=1
@@ -466,7 +457,7 @@ def evaluate_k_busyboxes(k, args):
             print('BusyBox', ix)
             gp, nn, avg_regret, _ = ucb_interaction(result,
                                                     max_iterations=args.n_interactions,
-                                                    plot=True,
+                                                    plot=False,
                                                     nn_fname=model,
                                                     kx=ix)
             regret = test_model(gp, result, nn)
@@ -481,8 +472,8 @@ def evaluate_k_busyboxes(k, args):
                'avg': np.mean(avg_regrets),
                'final': np.mean(final_regrets)}
         results.append(res)
-        # with open('regret_results_10-50_1.pickle', 'wb') as handle:
-        #     pickle.dump(results, handle)
+        with open('regret_results_square_5_temp_beta10.pickle', 'wb') as handle:
+            pickle.dump(results, handle)
 
 
 def create_gpucb_dataset(L=50, M=200, fname=''):
@@ -530,9 +521,9 @@ if __name__ == '__main__':
     parser.add_argument('--n-interactions', type=int)
     args = parser.parse_args()
 
-    create_gpucb_dataset(L=10, M=200)
+    # create_gpucb_dataset(L=10, M=200)
 
-    # evaluate_k_busyboxes(10, args)
+    evaluate_k_busyboxes(10, args)
 
     # fit_random_dataset(data)
 
