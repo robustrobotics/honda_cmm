@@ -513,6 +513,8 @@ class BusyBox(object):
     @staticmethod
     def get_busybox(width, height, mechs, bb_thickness=0.05, urdf_tag=''):
         bb_file = 'models/busybox' + urdf_tag + '.urdf'
+        if urdf_tag == '0':
+            import pdb; pdb.set_trace()
         bb = BusyBox(width, height, mechs, bb_thickness, bb_file)
         for mech in mechs:
             if BusyBox._check_collision(width, height, mechs, mech):
@@ -523,14 +525,15 @@ class BusyBox(object):
         return bb
 
     @staticmethod
-    def bb_from_result(result, urdf_tag=str(6)):
+    def bb_from_result(result, urdf_num=0):
         width, height = 0.6, 0.6
-        dummy_bb = BusyBox.get_busybox(width, height, [], urdf_tag=urdf_tag+'1')
+        # so dummy doesn't conflict with final bb
+        dummy_bb = BusyBox.get_busybox(width, height, [], urdf_tag=str(urdf_num)+'_dummy')
         if result.mechanism_params.type == 'Slider':
             mech = Slider.mech_from_result(result, dummy_bb)
         elif result.mechanism_params.type == 'Door':
             mech = Door.mech_from_result(result, dummy_bb)
-        return BusyBox.get_busybox(width, height, [mech], urdf_tag=str(urdf_tag))
+        return BusyBox.get_busybox(width, height, [mech], urdf_tag=str(urdf_num))
 
 
 if __name__ == '__main__':
