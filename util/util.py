@@ -158,6 +158,9 @@ def load_model(model_fname, hdim=32, model_type='polvis', use_cuda=False, image_
         device = torch.device('cpu')
     model.load_state_dict(torch.load(model_fname, map_location=device))
     model.eval()
+    if use_cuda:
+        model = model.cuda()
+
     return model
 
 ### Writing and Reading to File Helper Functions ###
