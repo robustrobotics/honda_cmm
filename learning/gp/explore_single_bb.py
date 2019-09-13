@@ -521,6 +521,9 @@ def evaluate_k_busyboxes(k, args):
 
     results = []
     for model in args.models:
+        util.load_model(model, 16)
+    print('works!')
+    for model in args.models:
         avg_regrets, final_regrets = [], []
         for ix, result in enumerate(data[:k]):
             print('BusyBox', ix)
