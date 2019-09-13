@@ -469,6 +469,7 @@ def fit_random_dataset(data):
 
 def evaluate_k_busyboxes(k, args):
 
+    '''
     # Active-NN Models
     if args.eval == 'active_nn':
         models = ['conv2_models/model_ntrain_1000.pt',
@@ -513,12 +514,13 @@ def evaluate_k_busyboxes(k, args):
     # GP-UCB Models
     else:
         models = ['']
+    '''
 
     with open('prism_gp_evals_square_50.pickle', 'rb') as handle:
         data = pickle.load(handle)
 
     results = []
-    for model in models:
+    for model in args.models:
         avg_regrets, final_regrets = [], []
         for ix, result in enumerate(data[:k]):
             print('BusyBox', ix)
@@ -601,6 +603,7 @@ if __name__ == '__main__':
     parser.add_argument('--n-interactions', type=int)
     parser.add_argument('--eval', type=str)
     parser.add_argument('--urdf-num', default=0)
+    parser.add_argument('--models', nargs='*')
     args = parser.parse_args()
 
     # create_gpucb_dataset(L=100,
