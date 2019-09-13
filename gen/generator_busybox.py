@@ -513,8 +513,6 @@ class BusyBox(object):
     @staticmethod
     def get_busybox(width, height, mechs, bb_thickness=0.05, urdf_tag=''):
         bb_file = 'models/busybox' + urdf_tag + '.urdf'
-        if urdf_tag == '0':
-            import pdb; pdb.set_trace()
         bb = BusyBox(width, height, mechs, bb_thickness, bb_file)
         for mech in mechs:
             if BusyBox._check_collision(width, height, mechs, mech):
