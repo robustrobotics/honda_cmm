@@ -15,8 +15,10 @@ def execute_systematic(args):
 
     if args.bb_file:
         bb_data = util.read_from_file(args.bb_file)
-    max_regrets = []
+    avg_regrets = []
+    min_regrets = []
     for n in range(args.N):
+
         # generate busybox and setup pybullet env
         if args.bb_file:
             bb = BusyBox.bb_from_result(bb_data[n])
@@ -28,14 +30,14 @@ def execute_systematic(args):
         gripper = Gripper(bb.bb_id)
 
         # generate list of goals
-        delta_pitches = np.linspace(-np.pi/2, np.pi/2, args.T)
+        pitches = np.linspace(-np.pi, 0.0, args.T)
         config_goal = 0.25
 
         # try each goal
         regrets = []
-        for dp in delta_pitches:
+        for pitch in pitches:
             # generate policy and execute
-            policy = Prismatic._gen(bb, mech, randomness=0, delta_pitch=dp)
+            policy = Prismatic._gen(bb, mech, 0, pitch=pitch)
             pose_handle_base_world = mech.get_pose_handle_base_world()
             traj = policy.generate_trajectory(pose_handle_base_world, config_goal, args.debug)
             _, motion, _ = gripper.execute_trajectory(traj, mech, policy.type, args.debug)
@@ -46,11 +48,13 @@ def execute_systematic(args):
             # reset mechanism and gripper
             p.resetJointState(bb.bb_id, mech.handle_id, 0.0)
             gripper._set_pose_tip_world(gripper.pose_tip_world_reset)
-        max_regrets += [min(regrets)]
-        print('Busybox', n, 'Max Regret :', max(regrets))
-    final_regret = np.mean(max_regrets)
-    print('Final Regret: ', final_regret)
-
+        avg_regrets += [np.mean(regrets)]
+        min_regrets += [min(regrets)]
+        #print('Busybox', n, 'Min Regret :', min(regrets))
+    final_regret = np.mean(min_regrets)
+    results = {'T': args.T, 'final': final_regret, 'avg_regrets': avg_regrets, 'min_regrets': min_regrets}
+    print('Final Regret:', final_regret)
+    util.write_to_file('systematic_n'+str(args.N)+'_t'+str(args.T)+'.pickle', results)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
