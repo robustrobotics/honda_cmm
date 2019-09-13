@@ -146,7 +146,7 @@ class Prismatic(Policy):
             p.addUserDebugLine(np.add(traj[i].p, [0., .025, 0.]), np.add(traj[i+1].p, [0., .025, 0.]), [0, 0, 1])
 
     @staticmethod
-    def _gen(bb, mech, randomness):
+    def _gen(bb, mech, randomness, pitch=None):
         """ This function generates a Prismatic policy. The ranges are
         based on the data.generator range prismatic joints
         """
@@ -157,19 +157,23 @@ class Prismatic(Policy):
             true_yaw = 0.0
         else:
             raise NotImplementedError('Still need to implement random Prismatic for Door')
-        delta_pitch = randomness*np.random.uniform(-np.pi/2, np.pi/2)
-        delta_yaw = 0.0#randomness*np.random.uniform(-np.pi/2, np.pi/2)
+        if pitch is not None:
+            return Prismatic(rigid_position, rigid_orientation, pitch, 0.0, None, None)
+        else:
+            delta_pitch = randomness*np.random.uniform(-np.pi/2, np.pi/2)
+            delta_yaw = 0.0#randomness*np.random.uniform(-np.pi/2, np.pi/2)
 
-        pitch = true_pitch + delta_pitch
-        yaw = true_yaw + delta_yaw
+            pitch = true_pitch + delta_pitch
+            yaw = true_yaw + delta_yaw
 
-        if pitch < -np.pi:
-            pitch += np.pi
-        elif pitch > 0:
-            pitch -= np.pi
-        # TODO: same for yaw if have mech with yaw != 0
-        return Prismatic(rigid_position, rigid_orientation, pitch, yaw, \
-                delta_pitch, delta_yaw)
+            if pitch < -np.pi:
+                pitch += np.pi
+            elif pitch > 0:
+                pitch -= np.pi
+            # TODO: same for yaw if have mech with yaw != 0
+            return Prismatic(rigid_position, rigid_orientation, pitch, yaw, \
+                    delta_pitch, delta_yaw)
+
 
     def get_goal_from_policy(self, goal_config):#, bb, mech, handle_pose, goal_pos):
         goal_pose = self._forward_kinematics(goal_config)

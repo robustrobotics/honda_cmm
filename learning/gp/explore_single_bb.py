@@ -46,7 +46,7 @@ def process_data(data, n_train):
 
 class GPOptimizer(object):
 
-    def __init__(self, result, nn=None, n_samples=500, use_cuda=False):
+    def __init__(self, result, nn=None, n_samples=500, urdf_num=0, use_cuda=False):
         """
         Initialize one of these for each BusyBox.
         """
@@ -55,7 +55,7 @@ class GPOptimizer(object):
         self.nn_samples = []
         self.use_cuda = use_cuda
 
-        bb = BusyBox.bb_from_result(result)
+        bb = BusyBox.bb_from_result(result, urdf_num=urdf_num)
         image_data = setup_env(bb, viz=False, debug=False)
         mech = bb._mechanisms[0]
         mech_tuple = mech.get_mechanism_tuple()
@@ -123,7 +123,7 @@ class GPOptimizer(object):
         else:
             return y_pred, self.dataset
 
-    def optimize_gp(self, gp, result, ucb=False, beta=100, nn=None):
+    def optimize_gp(self, gp, result, ucb=False, beta=100, nn=None, urdf_num=0):
         """
         Find the input (policy) that maximizes the GP (+ NN) output.
         :param gp: A GP representing the reward function to optimize.
@@ -134,7 +134,7 @@ class GPOptimizer(object):
         :return: x_final, the optimal policy according to the current model.
         """
         samples = []
-        bb = BusyBox.bb_from_result(result)
+        bb = BusyBox.bb_from_result(result, urdf_num=urdf_num)
         image_data = setup_env(bb, viz=False, debug=False)
         mech = bb._mechanisms[0]
         mech_tuple = mech.get_mechanism_tuple()
@@ -168,7 +168,7 @@ class GPOptimizer(object):
         return x_final, dataset
 
 
-def test_model(gp, result, nn=None, use_cuda=False):
+def test_model(gp, result, nn=None, use_cuda=False, urdf_num=0):
     """
     Maximize the GP mean function to get the best policy.
     :param gp: A GP fit to the current BusyBox.
@@ -176,11 +176,11 @@ def test_model(gp, result, nn=None, use_cuda=False):
     :return: Regret.
     """
     # Optimize the GP to get the best result.
-    optim_gp = GPOptimizer(result, nn=nn, use_cuda=use_cuda)
-    x_final, _ = optim_gp.optimize_gp(gp, result, ucb=False, nn=nn)
+    optim_gp = GPOptimizer(result, nn=nn, use_cuda=use_cuda, urdf_num=urdf_num)
+    x_final, _ = optim_gp.optimize_gp(gp, result, ucb=False, nn=nn, urdf_num=urdf_num)
 
     # Execute the policy and observe the true motion.
-    bb = BusyBox.bb_from_result(result)
+    bb = BusyBox.bb_from_result(result, urdf_num=urdf_num)
     setup_env(bb, viz=False, debug=False)
     mech = bb._mechanisms[0]
     ps = mech.get_mechanism_tuple().params
@@ -203,7 +203,7 @@ def test_model(gp, result, nn=None, use_cuda=False):
     return regret
 
 
-def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1, use_cuda=False):
+def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1, use_cuda=False, urdf_num=0):
     # Pretrained Kernel
     # kernel = ConstantKernel(0.005, constant_value_bounds=(0.005, 0.005)) * RBF(length_scale=(0.247, 0.084, 0.0592), length_scale_bounds=(0.0592, 0.247)) + WhiteKernel(noise_level=1e-5, noise_level_bounds=(1e-5, 1e2))
     variance = 0.005
@@ -224,13 +224,13 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1, u
     image_data = None
     xs, ys, moves = [], [], []
 
-    optim = GPOptimizer(result, nn=nn, use_cuda=use_cuda)
+    optim = GPOptimizer(result, nn=nn, use_cuda=use_cuda, urdf_num=urdf_num)
 
     for ix in range(0, max_iterations):
         # (1) Choose a point to interact with.
         if len(xs) < 1 and (nn is None):
             # (a) Choose policy randomly.
-            bb = BusyBox.bb_from_result(result)
+            bb = BusyBox.bb_from_result(result, urdf_num=urdf_num)
             im = setup_env(bb, viz=False, debug=False)
             mech = bb._mechanisms[0]
             pose_handle_base_world = mech.get_pose_handle_base_world()
@@ -238,9 +238,9 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1, u
             q = policy.generate_config(mech, None)
         else:
             # (b) Choose policy using UCB bound.
-            x_final, dataset = optim.optimize_gp(gp, result, ucb=True, beta=10, nn=nn)
+            x_final, dataset = optim.optimize_gp(gp, result, ucb=True, beta=10, nn=nn, urdf_num=urdf_num)
 
-            bb = BusyBox.bb_from_result(result)
+            bb = BusyBox.bb_from_result(result, urdf_num)
             im = setup_env(bb, viz=False, debug=False)
             mech = bb._mechanisms[0]
             pose_handle_base_world = mech.get_pose_handle_base_world()
@@ -480,7 +480,7 @@ def fit_random_dataset(data):
     print(gp.kernel_)
     viz_gp(gp, data[0], 1)
 
-    max_x = optimize_gp(gp, data[0])
+    max_x = optimize_gp(gp, data[0], urdf_num=urdf_num)
 
     Y_pred, Y_std = gp.predict(X_pred, return_std=True)
 
@@ -521,6 +521,21 @@ def evaluate_k_busyboxes(k, args, use_cuda=False):
                   'gpucb_data/model_ntrain_9000.pt',
                   'gpucb_data/model_ntrain_10000.pt']
 
+    # Random-NN Models
+    elif args.eval == 'random_nn':
+        models = ['random_100bb_100int/torch_models/model_ntrain_500.pt',
+                    'random_100bb_100int/torch_models/model_ntrain_1000.pt',
+                    'random_100bb_100int/torch_models/model_ntrain_1500.pt',
+                    'random_100bb_100int/torch_models/model_ntrain_2000.pt',
+                    'random_100bb_100int/torch_models/model_ntrain_3000.pt',
+                    'random_100bb_100int/torch_models/model_ntrain_4000.pt',
+                    'random_100bb_100int/torch_models/model_ntrain_5000.pt',
+                    'random_100bb_100int/torch_models/model_ntrain_6000.pt',
+                    'random_100bb_100int/torch_models/model_ntrain_7000.pt',
+                    'random_100bb_100int/torch_models/model_ntrain_8000.pt',
+                    'random_100bb_100int/torch_models/model_ntrain_9000.pt',
+                    'random_100bb_100int/torch_models/model_ntrain_1000.pt']
+
     # GP-UCB Models
     else:
         models = ['']
@@ -538,8 +553,9 @@ def evaluate_k_busyboxes(k, args, use_cuda=False):
                                                     plot=False,
                                                     nn_fname=model,
                                                     kx=ix,
-                                                    use_cuda=use_cuda)
-            regret = test_model(gp, result, nn, use_cuda=use_cuda)
+                                                    use_cuda=use_cuda,
+                                                    urdf_num=args.urdf_num)
+            regret = test_model(gp, result, nn, use_cuda=use_cuda, urdf_num=args.urdf_num)
             avg_regrets.append(avg_regret)
             print('AVG:', avg_regret)
             final_regrets.append(regret)
@@ -612,6 +628,7 @@ if __name__ == '__main__':
     parser.add_argument('--n-train', type=int)
     parser.add_argument('--n-interactions', type=int)
     parser.add_argument('--eval', type=str)
+    parser.add_argument('--urdf-num', default=0)
     args = parser.parse_args()
 
     # create_gpucb_dataset(L=100,
@@ -622,6 +639,3 @@ if __name__ == '__main__':
     evaluate_k_busyboxes(50, args, use_cuda=True)
 
     # fit_random_dataset(data)
-
-
-
