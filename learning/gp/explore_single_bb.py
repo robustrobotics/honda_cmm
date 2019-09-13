@@ -521,10 +521,6 @@ def evaluate_k_busyboxes(k, args):
 
     results = []
     for model in args.models:
-        util.load_model(model, 16)
-    print('works!')
-    print('regret_results_%s_t%d_n%d.pickle' % (args.eval, args.n_interactions, k))
-    for model in args.models:
         avg_regrets, final_regrets = [], []
         for ix, result in enumerate(data[:k]):
             print('BusyBox', ix)
@@ -615,6 +611,6 @@ if __name__ == '__main__':
     #                      bb_fname='active_100bbs.pickle',
     #                      fname='gpucb_100bb_100i.pickle')
 
-    evaluate_k_busyboxes(20, args)
+    evaluate_k_busyboxes(50, args)
 
     # fit_random_dataset(data)
