@@ -5,59 +5,98 @@ import pickle
 
 if __name__ == '__main__':
 
-    nn_regrets = [0.5696455953137332,
-                  0.46496730194840374,
-                  0.29263590867999206,
-                  0.37526911291086296,
-                  0.29902841288323817]
-    # csv_fname = 'run-.-tag-Test_Regret_Average_Regret.csv'
-    # with open(csv_fname, 'r') as handle:
-    #     reader = csv.reader(handle)
-    #     for row in reader:
-    #         if len(row) > 1:
-    #             nn_regrets.append(row[-1])
-    #     nn_regrets = nn_regrets[1:]
-    nn_regrets = [float(x) for x in nn_regrets]
+    c_lookup = {
+        'GP-UCB': 'g',
+        'Active-NN GP-UCB': 'k',
+        'GP-UCB-NN GP-UCB': 'r',
+        'Systematic': 'b',
+        'Random-NN GP-UCB': 'y'
+    }
 
-    gp_avg_5 = [0.56] * len(nn_regrets)
-    gp_avg_10 = [0.50] * len(nn_regrets)
-    gp_avg_20 = [0.57] * len(nn_regrets)
+    gpucb_fnames = {
+        0: 'regret_results_gpucb_t0_n20.pickle',
+        2: 'regret_results_gpucb_t2_n20.pickle',
+        5: 'regret_results_gpucb_t5_n20.pickle',
+        10: 'regret_results_gpucb_t10_n20.pickle',
+    }
 
-    gp_final_5 = [0.24] * len(nn_regrets)
-    gp_final_10 = [0.2] * len(nn_regrets)
-    gp_final_20 = [0.06] * len(nn_regrets)
+    active_fnames = {
+        0: 'regret_results_active_nn_t0_n20.pickle',
+        2: 'regret_results_active_nn_t2_n20.pickle',
+        5: 'regret_results_active_nn_t5_n20.pickle',
+    }
 
-    with open('regret_results_conv2_2.pickle', 'rb') as handle:
-        data = pickle.load(handle)
-        xs_short = []
-        ys_nn_avg = []
-        ys_nn_final = []
-        for ix, entry in enumerate(data):
-            if ix == 0:
-                gp_final_10 = [entry['final']]
-                gp_avg_10 = [entry['avg']]
+    gpucb_nn_fnames = {
+        0: 'regret_results_gpucb_nn_t0_n20.pickle',
+        2: 'regret_results_gpucb_nn_t2_n20.pickle',
+        5: 'regret_results_gpucb_nn_t5_n20.pickle',
+    }
+
+    random_nn_fnames = {
+        2: 'regret_results_random_nn_t2_n20.pickle',
+    }
+
+    systematic_fnames = {
+        2: 'systematic_n20_t2.pickle',
+        5: 'systematic_n20_t5.pickle',
+        10: 'systematic_n20_t10.pickle'
+    }
+
+
+
+    for n_interactions in [0, 2, 5, 10]:
+
+        for name, result_lookup in zip(['GP-UCB', 'Active-NN GP-UCB', 'GP-UCB-NN GP-UCB', 'Systematic', 'Random-NN GP-UCB'],
+                                       [gpucb_fnames, active_fnames, gpucb_nn_fnames, systematic_fnames, random_nn_fnames]):
+            if n_interactions not in result_lookup:
+                continue
+
+            xs = range(10, 101, 10)
+            with open(result_lookup[n_interactions], 'rb') as handle:
+                results = pickle.load(handle)
+
+            if name == 'GP-UCB':
+                rs = [results[0]['final']] * 10
+                s = [np.std(results[0]['regrets'])] * 10
+                med = [np.median(results[0]['regrets'])] * 10
+                q25 = [np.quantile(results[0]['regrets'], 0.25)] * 10
+                q75 = [np.quantile(results[0]['regrets'], 0.75)] * 10
+            elif name == 'Systematic':
+                rs = [results['final']] * 10
+                s = [np.std(results['min_regrets'])] * 10
+                med = [np.median(results['min_regrets'])] * 10
+                q25 = [np.quantile(results['min_regrets'], 0.25)] * 10
+                q75 = [np.quantile(results['min_regrets'], 0.75)] * 10
+            elif name == 'Random-NN GP-UCB':
+                # Temporarily remove 500 and 1500
+                del results[2]
+                del results[0]
+                rs = [res['final'] for res in results]
+                med = [np.median(res['regrets']) for res in results]
+                s = [np.std(res['regrets']) for res in results]
+                q25 = [np.quantile(res['regrets'], 0.25) for res in results]
+                q75 = [np.quantile(res['regrets'], 0.75) for res in results]
             else:
-                xs_short.append(10*(ix))
-                ys_nn_avg.append(entry['avg'])
-                ys_nn_final.append(entry['final'])
+                rs = [res['final'] for res in results]
+                med = [np.median(res['regrets']) for res in results]
+                s = [np.std(res['regrets']) for res in results]
+                q25 = [np.quantile(res['regrets'], 0.25) for res in results]
+                q75 = [np.quantile(res['regrets'], 0.75) for res in results]
 
-    # gp_final_10 = [0.48] * len(xs_short)
+            print(q25, q75)
+            rs, s = np.array(rs), np.array(s)
 
-    gp_avg_10 = gp_avg_10 * len(xs_short)
-    gp_final_10 = gp_final_10 * len(xs_short)
+            bot, mid, top = q25, med, q75  # Quantiles
+            # bot, mid, top = rs - s, rs, rs + s  # Standard Deviation
 
-    xs = np.arange(1, len(nn_regrets)+1)*10
+            plt.plot(xs, mid, c=c_lookup[name], label=name)
 
-    # plt.plot(xs, nn_regrets, c='r', label='NN')
-    # plt.plot(xs, gp_final_5, c='b', label='GP-5')
-    plt.plot(xs_short, gp_final_10, c='g', label='GP-2')
-    # plt.plot(xs, gp_final_20, c='y', label='GP-20')
-    plt.plot(xs_short, ys_nn_final, c='k', label='NN-GP-2')
-    plt.ylim(0, 1)
-    plt.legend()
-    plt.title('Final Regret')
-    plt.xlabel('# BB')
-    plt.ylabel('Regret')
-    plt.show()
+            plt.fill_between(xs, bot, top, facecolor=c_lookup[name], alpha=0.2)
+
+        plt.ylim(0, 1)
+        plt.legend()
+        plt.xlabel('# BB')
+        plt.ylabel('Regret')
+        plt.show()
 
 

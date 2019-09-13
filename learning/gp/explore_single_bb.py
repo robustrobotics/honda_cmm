@@ -470,40 +470,34 @@ def fit_random_dataset(data):
 def evaluate_k_busyboxes(k, args):
 
     # Active-NN Models
-    models = ['conv2_models/model_ntrain_1000.pt',
-              'conv2_models/model_ntrain_2000.pt',
-              'conv2_models/model_ntrain_3000.pt',
-              'conv2_models/model_ntrain_4000.pt',
-              'conv2_models/model_ntrain_5000.pt',
-              'conv2_models/model_ntrain_6000.pt',
-              'conv2_models/model_ntrain_7000.pt',
-              'conv2_models/model_ntrain_8000.pt',
-              'conv2_models/model_ntrain_9000.pt',
-              'conv2_models/model_ntrain_10000.pt']
+    if args.eval == 'active_nn':
+        models = ['conv2_models/model_ntrain_1000.pt',
+                  'conv2_models/model_ntrain_2000.pt',
+                  'conv2_models/model_ntrain_3000.pt',
+                  'conv2_models/model_ntrain_4000.pt',
+                  'conv2_models/model_ntrain_5000.pt',
+                  'conv2_models/model_ntrain_6000.pt',
+                  'conv2_models/model_ntrain_7000.pt',
+                  'conv2_models/model_ntrain_8000.pt',
+                  'conv2_models/model_ntrain_9000.pt',
+                  'conv2_models/model_ntrain_10000.pt']
 
     # GP-UCB-NN Models
-    # models = ['',
-    #           'gpucb_data/model_ntrain_1000.pt',
-    #           'gpucb_data/model_ntrain_2000.pt',
-    #           'gpucb_data/model_ntrain_3000.pt',
-    #           'gpucb_data/model_ntrain_4000.pt']
-
-    # Random-NN Models
-    # models = ['random_100bb_100int/torch_models/model_ntrain_500.pt',
-    #           'random_100bb_100int/torch_models/model_ntrain_1000.pt',
-    #           'random_100bb_100int/torch_models/model_ntrain_1500.pt',
-    #           'random_100bb_100int/torch_models/model_ntrain_2000.pt',
-    #           'random_100bb_100int/torch_models/model_ntrain_3000.pt',
-    #           'random_100bb_100int/torch_models/model_ntrain_4000.pt',
-    #           'random_100bb_100int/torch_models/model_ntrain_5000.pt',
-    #           'random_100bb_100int/torch_models/model_ntrain_6000.pt',
-    #           'random_100bb_100int/torch_models/model_ntrain_7000.pt',
-    #           'random_100bb_100int/torch_models/model_ntrain_8000.pt',
-    #           'random_100bb_100int/torch_models/model_ntrain_9000.pt',
-    #           'random_100bb_100int/torch_models/model_ntrain_10000.pt']
+    elif args.eval == 'gpucb_nn':
+        models = ['gpucb_data/model_ntrain_1000.pt',
+                  'gpucb_data/model_ntrain_2000.pt',
+                  'gpucb_data/model_ntrain_3000.pt',
+                  'gpucb_data/model_ntrain_4000.pt',
+                  'gpucb_data/model_ntrain_5000.pt',
+                  'gpucb_data/model_ntrain_6000.pt',
+                  'gpucb_data/model_ntrain_7000.pt',
+                  'gpucb_data/model_ntrain_8000.pt',
+                  'gpucb_data/model_ntrain_9000.pt',
+                  'gpucb_data/model_ntrain_10000.pt']
 
     # GP-UCB Models
-    # models = ['']
+    else:
+        models = ['']
 
     with open('prism_gp_evals_square_50.pickle', 'rb') as handle:
         data = pickle.load(handle)
@@ -531,7 +525,7 @@ def evaluate_k_busyboxes(k, args):
                'final': np.mean(final_regrets),
                'regrets': final_regrets}
         results.append(res)
-        with open('regret_results_active_nn_t%d_n%d.pickle' % (args.n_interactions, k), 'wb') as handle:
+        with open('regret_results_%s_t%d_n%d.pickle' % (args.eval, args.n_interactions, k), 'wb') as handle:
             pickle.dump(results, handle)
 
 
@@ -589,6 +583,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--n-train', type=int)
     parser.add_argument('--n-interactions', type=int)
+    parser.add_arugment('--eval', type=str)
     args = parser.parse_args()
 
     # create_gpucb_dataset(L=100,
