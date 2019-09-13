@@ -523,6 +523,7 @@ def evaluate_k_busyboxes(k, args):
     for model in args.models:
         util.load_model(model, 16)
     print('works!')
+    print('regret_results_%s_t%d_n%d.pickle' % (args.eval, args.n_interactions, k))
     for model in args.models:
         avg_regrets, final_regrets = [], []
         for ix, result in enumerate(data[:k]):
