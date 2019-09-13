@@ -495,6 +495,21 @@ def evaluate_k_busyboxes(k, args):
                   'gpucb_data/model_ntrain_9000.pt',
                   'gpucb_data/model_ntrain_10000.pt']
 
+    # Random-NN Models
+    elif args.eval == 'random_nn':
+        models = ['random_100bb_100int/torch_models/model_ntrain_500.pt',
+                    'random_100bb_100int/torch_models/model_ntrain_1000.pt',
+                    'random_100bb_100int/torch_models/model_ntrain_1500.pt',
+                    'random_100bb_100int/torch_models/model_ntrain_2000.pt',
+                    'random_100bb_100int/torch_models/model_ntrain_3000.pt',
+                    'random_100bb_100int/torch_models/model_ntrain_4000.pt',
+                    'random_100bb_100int/torch_models/model_ntrain_5000.pt',
+                    'random_100bb_100int/torch_models/model_ntrain_6000.pt',
+                    'random_100bb_100int/torch_models/model_ntrain_7000.pt',
+                    'random_100bb_100int/torch_models/model_ntrain_8000.pt',
+                    'random_100bb_100int/torch_models/model_ntrain_9000.pt',
+                    'random_100bb_100int/torch_models/model_ntrain_1000.pt']
+
     # GP-UCB Models
     else:
         models = ['']
