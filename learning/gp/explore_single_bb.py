@@ -274,7 +274,7 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1, u
         if nn is None:
             ys.append([motion])
         else:
-            inputs = optim._optim_result_to_torch(x_final, optim.dataset.images[0].unsqueeze(0), False, use_cuda=use_cuda)
+            inputs = optim._optim_result_to_torch(x_final, optim.dataset.images[0].unsqueeze(0), use_cuda=use_cuda)
             nn_pred = nn.forward(*inputs)[0]
             if use_cuda:
                 nn_pred = nn_pred.cpu()
@@ -510,16 +510,16 @@ def evaluate_k_busyboxes(k, args, use_cuda=False):
 
     # GP-UCB-NN Models
     elif args.eval == 'gpucb_nn':
-        models = ['gpucb_data/model_ntrain_1000.pt',
-                  'gpucb_data/model_ntrain_2000.pt',
-                  'gpucb_data/model_ntrain_3000.pt',
-                  'gpucb_data/model_ntrain_4000.pt',
-                  'gpucb_data/model_ntrain_5000.pt',
-                  'gpucb_data/model_ntrain_6000.pt',
-                  'gpucb_data/model_ntrain_7000.pt',
-                  'gpucb_data/model_ntrain_8000.pt',
-                  'gpucb_data/model_ntrain_9000.pt',
-                  'gpucb_data/model_ntrain_10000.pt']
+        models = ['gpucb_data_2/torch_models/model_ntrain_1000.pt',
+                  'gpucb_data_2/torch_models/model_ntrain_2000.pt',
+                  'gpucb_data_2/torch_models/model_ntrain_3000.pt',
+                  'gpucb_data_2/torch_models/model_ntrain_4000.pt',
+                  'gpucb_data_2/torch_models/model_ntrain_5000.pt',
+                  'gpucb_data_2/torch_models/model_ntrain_6000.pt',
+                  'gpucb_data_2/torch_models/model_ntrain_7000.pt',
+                  'gpucb_data_2/torch_models/model_ntrain_8000.pt',
+                  'gpucb_data_2/torch_models/model_ntrain_9000.pt',
+                  'gpucb_data_2/torch_models/model_ntrain_10000.pt']
 
     # Random-NN Models
     elif args.eval == 'random_nn':
@@ -568,8 +568,8 @@ def evaluate_k_busyboxes(k, args, use_cuda=False):
                'final': np.mean(final_regrets),
                'regrets': final_regrets}
         results.append(res)
-        print('regret_results_%s_t%d_n%d.pickle' % (args.eval, args.n_interactions, k))
-        with open('regret_results_%s_t%d_n%d.pickle' % (args.eval, args.n_interactions, k), 'wb') as handle:
+        print('regret_results_%s_t%d_n%d_2.pickle' % (args.eval, args.n_interactions, k))
+        with open('regret_results_%s_t%d_n%d_2.pickle' % (args.eval, args.n_interactions, k), 'wb') as handle:
             pickle.dump(results, handle)
 
 
