@@ -42,16 +42,24 @@ if __name__ == '__main__':
         5: ['regrets/regret_results_gpucb_nn_t5_n20.pickle',
             'regrets/regret_results_gpucb_nn_t5_n50_2.pickle',
             'regrets/regret_results_gpucb_nn_t5_n50_3.pickle'],
-        10: ['regrets/regret_results_gpucb_nn_t10_n20.pickle'],
+        10: ['regrets/regret_results_gpucb_nn_t10_n50_2.pickle',
+                'regrets/regret_results_gpucb_nn_t10_n50_3.pickle'],
 
     }
 
     random_nn_fnames = {
-        0: ['regrets/regret_results_random_nn_t0_n20_run1.pickle',
-            'regrets/regret_results_random_nn_t0_n50_run2.pickle'],
-        2: ['regrets/regret_results_random_nn_t2_n20.pickle'],
-        5: ['regrets/regret_results_random_nn_t2_n20.pickle'],
-        10: ['regrets/regret_results_random_nn_t2_n20.pickle'],
+        0: ['regrets/regret_results_random_nn_t0_n50_run1.pickle',
+            'regrets/regret_results_random_nn_t0_n50_run2.pickle',
+            'regrets/regret_results_random_nn_t0_n50_run3.pickle'],
+        2: ['regrets/regret_results_random_nn_t2_n50_run1.pickle',
+            'regrets/regret_results_random_nn_t2_n50_run2.pickle',
+            'regrets/regret_results_random_nn_t2_n50_run3.pickle'],
+        5: ['regrets/regret_results_random_nn_t5_n50_run1.pickle',
+            'regrets/regret_results_random_nn_t5_n50_run2.pickle',
+            'regrets/regret_results_random_nn_t5_n50_run3.pickle'],
+        10: ['regrets/regret_results_random_nn_t10_n50_run1.pickle',
+            'regrets/regret_results_random_nn_t0_n50_run2.pickle',
+            'regrets/regret_results_random_nn_t0_n50_run3.pickle'],
     }
 
     systematic_fnames = {
@@ -68,7 +76,7 @@ if __name__ == '__main__':
             if n_interactions not in result_lookup:
                 continue
 
-            if (name == 'GP-UCB' or name == 'Systematic') and args.type == 'train_eval':
+            if (name == 'GP-UCB' or name == 'Systematic' or name == 'Active-NN GP-UCB') and args.type == 'train_eval':
                 continue
             elif (name == 'Active-NN GP-UCB' or name == 'Random-NN GP-UCB') and args.type == 'test_eval':
                 continue
@@ -127,5 +135,3 @@ if __name__ == '__main__':
         plt.xlabel('# BB')
         plt.ylabel('Regret')
         plt.show()
-
-
