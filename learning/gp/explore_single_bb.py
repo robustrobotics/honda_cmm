@@ -632,7 +632,11 @@ if __name__ == '__main__':
     parser.add_argument('--eval', type=str)
     parser.add_argument('--urdf-num', default=0)
     parser.add_argument('--models', nargs='*')
+    parser.add_argument('--debug', action='store_true')
     args = parser.parse_args()
+
+    if args.debug:
+        import pdb; pdb.set_trace()
 
     # create_gpucb_dataset(L=100,
     #                      M=100,
