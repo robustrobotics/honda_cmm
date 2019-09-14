@@ -274,7 +274,7 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1, u
         if nn is None:
             ys.append([motion])
         else:
-            inputs = optim._optim_result_to_torch(x_final, optim.dataset.images[0].unsqueeze(0), False, use_cuda=use_cuda)
+            inputs = optim._optim_result_to_torch(x_final, optim.dataset.images[0].unsqueeze(0), use_cuda=use_cuda)
             nn_pred = nn.forward(*inputs)[0]
             if use_cuda:
                 nn_pred = nn_pred.cpu()
