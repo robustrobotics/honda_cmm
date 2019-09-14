@@ -68,8 +68,12 @@ if __name__ == '__main__':
         10: ['regrets/systematic_n20_t10.pickle']
     }
 
-
+    plt.ion()
+    regret_fig, regret_ax = plt.subplots()
+    success_fig, success_ax = plt.subplots()
+    import pdb; pdb.set_trace()
     for n_interactions in [0, 2, 5, 10]:
+        print('T=', n_interactions)
 
         for name, result_lookup in zip(['GP-UCB', 'Active-NN GP-UCB', 'GP-UCB-NN GP-UCB', 'Systematic', 'Random-NN GP-UCB'],
                                        [gpucb_fnames, active_fnames, gpucb_nn_fnames, systematic_fnames, random_nn_fnames]):
@@ -105,33 +109,51 @@ if __name__ == '__main__':
                 med = [np.median(results['min_regrets'])] * 10
                 q25 = [np.quantile(results['min_regrets'], 0.25)] * 10
                 q75 = [np.quantile(results['min_regrets'], 0.75)] * 10
-            elif name == 'Random-NN GP-UCB':
-                # Temporarily remove 500 and 1500
-                del results[2]
-                del results[0]
-                rs = [np.mean(res['regrets']) for res in results]
-                med = [np.median(res['regrets']) for res in results]
-                s = [np.std(res['regrets']) for res in results]
-                q25 = [np.quantile(res['regrets'], 0.25) for res in results]
-                q75 = [np.quantile(res['regrets'], 0.75) for res in results]
             else:
-                rs = [np.mean(res['final']) for res in results]
-                med = [np.median(res['regrets']) for res in results]
-                s = [np.std(res['regrets']) for res in results]
-                q25 = [np.quantile(res['regrets'], 0.25) for res in results]
-                q75 = [np.quantile(res['regrets'], 0.75) for res in results]
+                # calculate the success percentage
+                if name == 'Random-NN GP-UCB':
+                    del results[2]
+                    del results[0]
+                regret_success = 0.1
+                success_percentages = [len(np.array(res['regrets'])[np.array(res['regrets'])<regret_success])/
+                                        len(res['regrets'])
+                                        for res in results]
+                if name == 'Random-NN GP-UCB':
+                    # Temporarily remove 500 and 1500
+                    #del results[2]
+                    #del results[0]
+                    rs = [np.mean(res['regrets']) for res in results]
+                    rs = np.array(rs)
+                    med = [np.median(res['regrets']) for res in results]
+                    s = [np.std(res['regrets']) for res in results]
+                    q25 = [np.quantile(res['regrets'], 0.25) for res in results]
+                    q75 = [np.quantile(res['regrets'], 0.75) for res in results]
+                else:
+                    rs = [np.mean(res['final']) for res in results]
+                    med = [np.median(res['regrets']) for res in results]
+                    s = [np.std(res['regrets']) for res in results]
+                    q25 = [np.quantile(res['regrets'], 0.25) for res in results]
+                    q75 = [np.quantile(res['regrets'], 0.75) for res in results]
 
             rs, s = np.array(rs), np.array(s)
 
             bot, mid, top = q25, med, q75  # Quantiles
             # bot, mid, top = rs - s, rs, rs + s  # Standard Deviation
 
-            plt.plot(xs, mid, c=c_lookup[name], label=name)
+            regret_ax.plot(xs, mid, c=c_lookup[name], label=name)
+            regret_ax.fill_between(xs, bot, top, facecolor=c_lookup[name], alpha=0.2)
 
-            plt.fill_between(xs, bot, top, facecolor=c_lookup[name], alpha=0.2)
+            if success_percentages:
+                success_ax.plot(xs, success_percentages, c=c_lookup[name], label=name)
 
-        plt.ylim(0, 1)
-        plt.legend()
-        plt.xlabel('# BB')
-        plt.ylabel('Regret')
+        regret_ax.set_ylim(0, 1)
+        regret_ax.legend()
+        regret_ax.set_xlabel('L')
+        regret_ax.set_ylabel('Regret')
+        regret_ax.set_title('T='+str(n_interactions))
+        success_ax.set_title('T='+str(n_interactions))
         plt.show()
+        input('enter')
+        #plt.close()
+        regret_ax.clear()
+        success_ax.clear()
