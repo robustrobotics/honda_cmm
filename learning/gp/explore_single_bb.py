@@ -46,13 +46,14 @@ def process_data(data, n_train):
 
 class GPOptimizer(object):
 
-    def __init__(self, result, nn=None, n_samples=500, urdf_num=0):
+    def __init__(self, result, nn=None, n_samples=500, urdf_num=0, use_cuda=False):
         """
         Initialize one of these for each BusyBox.
         """
         # TODO: Generate the sample points used to optimize the function.
         self.sample_policies = []
         self.nn_samples = []
+        self.use_cuda = use_cuda
 
         bb = BusyBox.bb_from_result(result, urdf_num=urdf_num)
         image_data = setup_env(bb, viz=False, debug=False)
@@ -71,7 +72,7 @@ class GPOptimizer(object):
             self.sample_policies.append(results)
 
             if not nn is None:
-                nn_preds, self.dataset = get_nn_preds(results, nn, ret_dataset=True)
+                nn_preds, self.dataset = get_nn_preds(results, nn, ret_dataset=True, use_cuda=use_cuda)
                 self.nn_samples.append(nn_preds)
             else:
                 self.dataset = None
@@ -91,15 +92,15 @@ class GPOptimizer(object):
 
         return [policy_type_tensor, policy_tensor, config_tensor, image_tensor]
 
-    def _objective_func(self, x, gp, ucb, beta=100, nn=None, image_tensor=None, use_cuda=False):
+    def _objective_func(self, x, gp, ucb, beta=100, nn=None, image_tensor=None):
         x = x.squeeze()
 
         X = np.array([[x[0], 0.0, x[-1]]])
         Y_pred, Y_std = gp.predict(X, return_std=True)
         if not nn is None:
-            inputs = self._optim_result_to_torch(x, image_tensor, use_cuda)
+            inputs = self._optim_result_to_torch(x, image_tensor, self.use_cuda)
             val, _ = nn.forward(*inputs)
-            if use_cuda:
+            if self.use_cuda:
                 val = val.cpu()
             val = val.detach().numpy()
             Y_pred += val.squeeze()
@@ -160,14 +161,14 @@ class GPOptimizer(object):
             images = None
         else:
             images = dataset.images[0].unsqueeze(0)
-        res = minimize(fun=self._objective_func, x0=x0, args=(gp, ucb, beta, nn, images, False),
+        res = minimize(fun=self._objective_func, x0=x0, args=(gp, ucb, beta, nn, images),
                        method='L-BFGS-B', options={'eps': 10**-3}, bounds=[(-np.pi, 0), (-0.25, 0.25)])
         x_final = res['x']
 
         return x_final, dataset
 
 
-def test_model(gp, result, nn=None, urdf_num=0):
+def test_model(gp, result, nn=None, use_cuda=False, urdf_num=0):
     """
     Maximize the GP mean function to get the best policy.
     :param gp: A GP fit to the current BusyBox.
@@ -175,7 +176,7 @@ def test_model(gp, result, nn=None, urdf_num=0):
     :return: Regret.
     """
     # Optimize the GP to get the best result.
-    optim_gp = GPOptimizer(result, nn=nn, urdf_num=urdf_num)
+    optim_gp = GPOptimizer(result, nn=nn, use_cuda=use_cuda, urdf_num=urdf_num)
     x_final, _ = optim_gp.optimize_gp(gp, result, ucb=False, nn=nn, urdf_num=urdf_num)
 
     # Execute the policy and observe the true motion.
@@ -202,7 +203,7 @@ def test_model(gp, result, nn=None, urdf_num=0):
     return regret
 
 
-def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1, urdf_num=0):
+def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1, use_cuda=False, urdf_num=0):
     # Pretrained Kernel
     # kernel = ConstantKernel(0.005, constant_value_bounds=(0.005, 0.005)) * RBF(length_scale=(0.247, 0.084, 0.0592), length_scale_bounds=(0.0592, 0.247)) + WhiteKernel(noise_level=1e-5, noise_level_bounds=(1e-5, 1e2))
     variance = 0.005
@@ -217,13 +218,13 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1, u
     # Load the NN if required.
     nn = None
     if nn_fname != '':
-        nn = util.load_model(nn_fname, 16)
+        nn = util.load_model(nn_fname, 16, use_cuda=use_cuda)
 
     interaction_data = []
     image_data = None
     xs, ys, moves = [], [], []
 
-    optim = GPOptimizer(result, nn=nn, urdf_num=urdf_num)
+    optim = GPOptimizer(result, nn=nn, use_cuda=use_cuda, urdf_num=urdf_num)
 
     for ix in range(0, max_iterations):
         # (1) Choose a point to interact with.
@@ -273,8 +274,11 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1, u
         if nn is None:
             ys.append([motion])
         else:
-            inputs = optim._optim_result_to_torch(x_final, optim.dataset.images[0].unsqueeze(0), False)
-            nn_pred = nn.forward(*inputs)[0].detach().numpy().squeeze()
+            inputs = optim._optim_result_to_torch(x_final, optim.dataset.images[0].unsqueeze(0), False, use_cuda=use_cuda)
+            nn_pred = nn.forward(*inputs)[0]
+            if use_cuda:
+                nn_pred = nn_pred.cpu()
+            nn_pred = nn_pred.detach().numpy().squeeze()
             ys.append([motion-nn_pred])
         moves.append([motion])
         gp.fit(np.array(xs), np.array(ys))
@@ -399,7 +403,7 @@ def viz_gp_circles(gp, result, num, bb, image_data, nn=None, kx=-1, points=None,
             mean_colors[ix, jx] = Y_pred[jx, 0]
             std_colors[ix, jx] = Y_std[jx]
 
-    #plt.clf()
+    plt.clf()
     plt.figure(figsize=(20, 5))
     ax0 = plt.subplot(131)
     w, h, im = image_data
@@ -419,8 +423,30 @@ def viz_gp_circles(gp, result, num, bb, image_data, nn=None, kx=-1, points=None,
 
     if '/' in model_name:
         model_name = model_name.split('/')[-1].replace('.pt', '')
-    fname = 'gp_polar_bb_%d_%d_%s.png' % (kx, num, model_name)
-    #plt.savefig(fname, bbox_inches='tight')
+    fname = 'prior_plots/gp_polar_bb_%d_%d_%s.png' % (kx, num, model_name)
+    plt.savefig(fname, bbox_inches='tight')
+
+    # -------------------------
+    # plt.clf()
+    # plt.figure(figsize=(5, 5))
+    # # ax0 = plt.subplot(111)
+    # # w, h, im = image_data
+    # # np_im = np.array(im, dtype=np.uint8).reshape(h, w, 3)
+    # # ax0.imshow(np_im)
+    #
+    # ax1 = plt.subplot(111, projection='polar')
+    # max_d = bb._mechanisms[0].get_mechanism_tuple().params.range / 2.0
+    # polar_plots(ax1, mean_colors, vmax=max_d)
+    # #
+    # # ax2 = plt.subplot(111, projection='polar')
+    # # polar_plots(ax2, std_colors, vmax=None, points=points)
+    #
+    # if '/' in model_name:
+    #     model_name = model_name.split('/')[-1].replace('.pt', '')
+    # fname = 'prior_plots/gp_polar_bb_%d_%d_%s_mean.png' % (kx, num, model_name)
+    # plt.savefig(fname, bbox_inches='tight')
+    # ----------------------------------
+
 
 
 def polar_plots(ax, colors, vmax, points=None):
@@ -467,7 +493,7 @@ def fit_random_dataset(data):
     plt.show()
 
 
-def evaluate_k_busyboxes(k, args):
+def evaluate_k_busyboxes(k, args, use_cuda=False):
 
     '''
     # Active-NN Models
@@ -529,8 +555,9 @@ def evaluate_k_busyboxes(k, args):
                                                     plot=False,
                                                     nn_fname=model,
                                                     kx=ix,
+                                                    use_cuda=use_cuda,
                                                     urdf_num=args.urdf_num)
-            regret = test_model(gp, result, nn, args.urdf_num)
+            regret = test_model(gp, result, nn, use_cuda=use_cuda, urdf_num=args.urdf_num)
             avg_regrets.append(avg_regret)
             print('AVG:', avg_regret)
             final_regrets.append(regret)
@@ -543,6 +570,7 @@ def evaluate_k_busyboxes(k, args):
                'final': np.mean(final_regrets),
                'regrets': final_regrets}
         results.append(res)
+        print('regret_results_%s_t%d_n%d.pickle' % (args.eval, args.n_interactions, k))
         with open('regret_results_%s_t%d_n%d.pickle' % (args.eval, args.n_interactions, k), 'wb') as handle:
             pickle.dump(results, handle)
 
@@ -611,6 +639,6 @@ if __name__ == '__main__':
     #                      bb_fname='active_100bbs.pickle',
     #                      fname='gpucb_100bb_100i.pickle')
 
-    evaluate_k_busyboxes(50, args)
+    evaluate_k_busyboxes(50, args, use_cuda=True)
 
     # fit_random_dataset(data)
