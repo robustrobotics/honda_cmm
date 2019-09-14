@@ -2,8 +2,12 @@ import matplotlib.pyplot as plt
 import csv
 import numpy as np
 import pickle
+import argparse
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--type', type=str, choices=['train_eval', 'test_eval'])
+    args = parser.parse_args()
 
     c_lookup = {
         'GP-UCB': 'g',
@@ -14,39 +18,46 @@ if __name__ == '__main__':
     }
 
     gpucb_fnames = {
-        0: ['regrets/n50/gpucb/regret_results_gpucb_t0_n50.pickle'],
-        2: ['regrets/n50/gpucb/regret_results_gpucb_t2_n50.pickle'],
-        5: ['regrets/n50/gpucb/regret_results_gpucb_t5_n50.pickle'],
-        10: ['regrets/n50/gpucb/regret_results_gpucb_t10_n50.pickle'],
+        0: ['regrets/regret_results_gpucb_t0_n50.pickle'],
+        2: ['regrets/regret_results_gpucb_t2_n50.pickle'],
+        5: ['regrets/regret_results_gpucb_t5_n50.pickle'],
+        10: ['regrets/regret_results_gpucb_t10_n50.pickle'],
     }
 
     active_fnames = {
-        0: ['regrets/n50/active_nn/regret_results_active_nn_t0_n50.pickle',
-            'regrets/n50/active_nn/regret_results_active_nn_t0_n50_2.pickle'],
-        2: ['regrets/n20/active_nn/regret_results_active_nn_t2_n20.pickle'],
-        5: ['regrets/n20/active_nn/regret_results_active_nn_t5_n20.pickle'],
-        10: ['regrets/n20/active_nn/regret_results_active_nn_t10_n20.pickle'],
+        0: ['regrets/regret_results_active_nn_t0_n50.pickle',
+            'regrets/regret_results_active_nn_t0_n50_2.pickle'],
+        2: ['regrets/regret_results_active_nn_t2_n20.pickle'],
+        5: ['regrets/regret_results_active_nn_t5_n20.pickle'],
+        10: ['regrets/regret_results_active_nn_t10_n20.pickle'],
     }
 
     gpucb_nn_fnames = {
-        0: ['regrets/n50/gpucb_nn/regret_results_gpucb_nn_t0_n50.pickle'],
-        2: ['regrets/n50/gpucb_nn/regret_results_gpucb_nn_t2_n50.pickle'],
-        5: ['regrets/n20/gpucb_nn/regret_results_gpucb_nn_t5_n20.pickle'],
-        10: ['regrets/n20/gpucb_nn/regret_results_gpucb_nn_t10_n20.pickle'],
+        0: ['regrets/regret_results_gpucb_nn_t0_n50.pickle',
+            'regrets/regret_results_gpucb_nn_t0_n50_2.pickle',
+            'regrets/regret_results_gpucb_nn_t0_n50_3.pickle'],
+        2: ['regrets/regret_results_gpucb_nn_t2_n50.pickle',
+            'regrets/regret_results_gpucb_nn_t2_n50_2.pickle',
+            'regrets/regret_results_gpucb_nn_t2_n50_3.pickle'],
+        5: ['regrets/regret_results_gpucb_nn_t5_n20.pickle',
+            'regrets/regret_results_gpucb_nn_t5_n50_2.pickle',
+            'regrets/regret_results_gpucb_nn_t5_n50_3.pickle'],
+        10: ['regrets/regret_results_gpucb_nn_t10_n20.pickle'],
 
     }
 
     random_nn_fnames = {
-        0: ['regrets/n20/random_nn/regret_results_random_nn_t0_n20.pickle'],
-        2: ['regrets/n20/random_nn/regret_results_random_nn_t2_n20.pickle'],
-        5: ['regrets/n20/random_nn/regret_results_random_nn_t2_n20.pickle'],
-        10: ['regrets/n20/random_nn/regret_results_random_nn_t2_n20.pickle'],
+        0: ['regrets/regret_results_random_nn_t0_n20_run1.pickle',
+            'regrets/regret_results_random_nn_t0_n50_run2.pickle'],
+        2: ['regrets/regret_results_random_nn_t2_n20.pickle'],
+        5: ['regrets/regret_results_random_nn_t2_n20.pickle'],
+        10: ['regrets/regret_results_random_nn_t2_n20.pickle'],
     }
 
     systematic_fnames = {
-        2: ['regrets/n20/systematic/systematic_n20_t2.pickle'],
-        5: ['regrets/n20/systematic/systematic_n20_t5.pickle'],
-        10: ['regrets/n20/systematic/systematic_n20_t10.pickle']
+        2: ['regrets/systematic_n20_t2.pickle'],
+        5: ['regrets/systematic_n20_t5.pickle'],
+        10: ['regrets/systematic_n20_t10.pickle']
     }
 
 
@@ -57,7 +68,9 @@ if __name__ == '__main__':
             if n_interactions not in result_lookup:
                 continue
 
-            if name == 'GP-UCB' or name == 'Systematic':
+            if (name == 'GP-UCB' or name == 'Systematic') and args.type == 'train_eval':
+                continue
+            elif (name == 'Active-NN GP-UCB' or name == 'Random-NN GP-UCB') and args.type == 'test_eval':
                 continue
 
             xs = range(10, 101, 10)
@@ -79,7 +92,7 @@ if __name__ == '__main__':
                 q25 = [np.quantile(results[0]['regrets'], 0.25)] * 10
                 q75 = [np.quantile(results[0]['regrets'], 0.75)] * 10
             elif name == 'Systematic':
-                rs = [np.mean(results[0]['regrets'])] * 10
+                rs = [np.mean(results['min_regrets'])] * 10
                 s = [np.std(results['min_regrets'])] * 10
                 med = [np.median(results['min_regrets'])] * 10
                 q25 = [np.quantile(results['min_regrets'], 0.25)] * 10
@@ -100,7 +113,6 @@ if __name__ == '__main__':
                 q25 = [np.quantile(res['regrets'], 0.25) for res in results]
                 q75 = [np.quantile(res['regrets'], 0.75) for res in results]
 
-            print(q25, q75)
             rs, s = np.array(rs), np.array(s)
 
             bot, mid, top = q25, med, q75  # Quantiles
