@@ -9,7 +9,15 @@ import pybullet as p
 
 # ONLY FOR PRISMATIC
 
-def calc_systematic_policies(pos, orn, T):
+def calc_systematic_yaw_policies(pos, orn, T):
+    # generate list of goals
+    yaws = np.linspace(-np.pi, 0.0, T)
+    policies = []
+    for yaw in yaws:
+        policies += [Prismatic(pos, orn, 0.0, yaw)]
+    return policies
+
+def calc_systematic_pitch_policies(pos, orn, T):
     # generate list of goals
     pitches = np.linspace(-np.pi, 0.0, T)
     policies = []
@@ -38,7 +46,7 @@ def execute_systematic(args):
         pos = mech.get_pose_handle_base_world().p
         orn = [0., 0., 0., 1.]
         gripper = Gripper(bb.bb_id)
-        policies = calc_systematic_policies(pos, orn, args.T)
+        policies = calc_systematic_pitch_policies(pos, orn, args.T)
 
         # try each goal
         regrets = []
