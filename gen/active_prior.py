@@ -1,10 +1,10 @@
 import sys
 import argparse
-from util import util
+from utils import util
 import numpy as np
 import argparse
 import pybullet as p
-from util.setup_pybullet import setup_env, custom_bb_door, custom_bb_slider
+from utils.setup_pybullet import setup_env, custom_bb_door, custom_bb_slider
 from actions import policies
 from actions.gripper import Gripper
 from gen.generator_busybox import Slider, Door, BusyBox

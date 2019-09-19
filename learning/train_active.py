@@ -6,7 +6,7 @@ from learning.dataloaders import setup_data_loaders, parse_pickle_file
 import learning.viz as viz
 from learning.test_model import test_env
 from collections import namedtuple
-from util import util
+from utils import util
 from torch.utils.tensorboard import SummaryWriter
 from gen import active_prior
 from gen.generator_busybox import BusyBox, Slider

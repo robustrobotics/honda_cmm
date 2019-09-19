@@ -2,7 +2,7 @@ import torch
 import argparse
 import matplotlib.pyplot as plt
 import numpy as np
-from util import util
+from utils import util
 import sys
 from learning.test_model import get_pred_motions
 from actions.policies import PrismaticParams, RevoluteParams

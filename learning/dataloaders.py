@@ -9,7 +9,7 @@ from torch.utils.data import Sampler
 import torchvision.transforms as transforms
 import torchvision
 import matplotlib.pyplot as plt
-from util import util
+from utils import util
 
 class CustomSampler(Sampler):
     def __init__(self, items, batch_size):
@@ -113,7 +113,7 @@ def parse_pickle_file(fname=None, data=None):
     Can pass in either a file name or a data dictionary to be parsed.
     Extract relevant information into vector format.
     :param fname: str, name of the pickle file to load.
-    :param data: list of util.util.Results to load.
+    :param data: list of utils.util.Results to load.
     :return:
     """
     if data is None:

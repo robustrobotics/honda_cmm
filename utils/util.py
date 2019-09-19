@@ -1,16 +1,16 @@
 import pybullet as p
 import numpy as np
 import pickle
-import util.transformations as trans
-from util import setup_pybullet
+import utils.transformations as trans
+#from utils import setup_pybullet
 import math
 from collections import namedtuple
 import os
-import torch
-from learning.models.nn_disp_pol import DistanceRegressor as NNPol
-from learning.models.nn_disp_pol_vis import DistanceRegressor as NNPolVis
-from learning.models.nn_disp_pol_mech import DistanceRegressor as NNPolMech
-from actions import policies
+#import torch
+#from learning.models.nn_disp_pol import DistanceRegressor as NNPol
+#from learning.models.nn_disp_pol_vis import DistanceRegressor as NNPolVis
+#from learning.models.nn_disp_pol_mech import DistanceRegressor as NNPolMech
+#from actions import policies
 import matplotlib.pyplot as plt
 import matplotlib.pyplot as plt
 
@@ -41,7 +41,7 @@ Result contains the performance information after the gripper tries to move a me
 :param randomness: float in [0,1] representing how far from the true policy the random samples came from
 """
 ## Visualization Helper Functions
-
+'''
 def viz_train_test_data(train_data, test_data):
     import matplotlib.pyplot as plt
     from gen.generator_busybox import BusyBox
@@ -64,7 +64,7 @@ def viz_train_test_data(train_data, test_data):
             mech = bb._mechanisms[0]
             true_policy = policies.generate_policy(bb, mech, True, 0.0)
             pos = (true_policy.rigid_position[0], true_policy.rigid_position[2])
-            pos_ax.plot(*pos, 'm.')
+            pos_ax.plot(pos[0], pos[1], 'm.')
             pos_ax.annotate(i, pos)
             if i == len(test_data):
                 angle_ax.plot(true_policy.pitch, 2.0, 'k.', label = 'test data')
@@ -85,7 +85,7 @@ def viz_train_test_data(train_data, test_data):
         true_policy = policies.generate_policy(bb, mech, True, 0.0)
         pitches += [true_policy.pitch]
         pos = (true_policy.rigid_position[0], true_policy.rigid_position[2])
-        pos_ax.plot(*pos, 'c.')
+        pos_ax.plot(pos[0], pos[1], 'c.')
 
         if n in dataset_sizes:
             angle_ax.clear()
@@ -98,7 +98,7 @@ def viz_train_test_data(train_data, test_data):
             #angle_fig.savefig('dataset_imgs/pitches_n_bbs'+str(n))
             plt.show()
             input('enter to close')
-
+'''
 ImageData = namedtuple('ImageData', 'width height rgbPixels')
 """
 ImageData contains a subset of the image data returned by pybullet
@@ -193,6 +193,7 @@ def merge_files(in_file_names, out_file_name):
     return results
 
 ### PyBullet Helper Functions ###
+'''
 def replay_result(result):
     from actions.gripper import Gripper
     from gen.generator_busybox import BusyBox
@@ -208,7 +209,7 @@ def replay_result(result):
     traj = policy.generate_trajectory(pose_handle_base_world, config_goal, True)
     _, net_motion, _ = gripper.execute_trajectory(traj, mech, policy.type, True)
     p.disconnect()
-
+'''
 def vis_frame(pos, quat, length=0.2, lifeTime=0.4):
     """ This function visualizes a coordinate frame for the supplied frame where the
     red,green,blue lines correpsond to the x,y,z axes.

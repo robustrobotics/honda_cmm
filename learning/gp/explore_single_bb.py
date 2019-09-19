@@ -6,8 +6,8 @@ import pickle
 import os
 import argparse
 from scipy.optimize import minimize
-from util import util
-from util.setup_pybullet import setup_env
+from utils import util
+from utils.setup_pybullet import setup_env
 from gen.generator_busybox import BusyBox
 from actions import policies
 import operator

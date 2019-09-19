@@ -4,11 +4,11 @@ import operator
 from actions import policies
 from actions.gripper import Gripper
 from gen.generator_busybox import BusyBox, Slider, Door
-from util.setup_pybullet import setup_env
+from utils.setup_pybullet import setup_env
 from scipy.optimize import minimize
 from learning.dataloaders import parse_pickle_file, PolicyDataset
 import torch
-from util import util
+from utils import util
 import numpy as np
 import sys
 import matplotlib.pyplot as plt
@@ -18,7 +18,7 @@ import os
 import shutil
 
 def vis_test_error(test_data, model_path, test_name, urdf_tag, hdim, plots_dir):
-    from util import plot_results
+    from utils import plot_results
     plt.ion()
     plot_obj = plot_results.TestMechPoliciesPitchOnly()
     bbs = test_data[:7]

@@ -1,6 +1,6 @@
 from collections import namedtuple
 import numpy as np
-from util import util
+from utils import util
 import itertools
 import pybullet as p
 

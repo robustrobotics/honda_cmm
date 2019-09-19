@@ -53,7 +53,7 @@ Requirements
 ------------
 * `CPython 2.7 or 3.5+ <https://www.python.org>`_
 * `Numpy 1.14 <https://www.numpy.org>`_
-* A Python distutils compatible C compiler  (build)
+* A Python distutil compatible C compiler  (build)
 
 Revisions
 ---------
@@ -71,7 +71,7 @@ for 3D transformations and quaternions:
 * `Transforms3d <https://github.com/matthew-brett/transforms3d>`_
   (includes most code of this module)
 * `Numpy-quaternion <https://github.com/moble/quaternion>`_
-* `Blender.mathutils <https://docs.blender.org/api/master/mathutils.html>`_
+* `Blender.mathutil <https://docs.blender.org/api/master/mathutil.html>`_
 
 The API is not stable yet and is expected to change between revisions.
 

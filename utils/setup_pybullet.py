@@ -1,7 +1,7 @@
 import pybullet as p
 import pybullet_data
 import numpy as np
-from util import util
+from utils import util
 import numpy as np
 import matplotlib.pyplot as plt
 

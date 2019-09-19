@@ -6,7 +6,7 @@ import pybullet_data
 import aabbtree as aabb
 import cv2
 from actions.gripper import Gripper
-from util import util
+from utils import util
 from collections import namedtuple
 
 MechanismParams = namedtuple('MechanismParams', 'type params')
