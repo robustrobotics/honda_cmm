@@ -9,6 +9,7 @@ from actions import policies
 from actions.gripper import Gripper
 from gen.generator_busybox import Slider, Door, BusyBox
 
+
 results = []
 def generate_dataset(args, git_hash):
     if args.bb_file is not None:
@@ -20,7 +21,7 @@ def generate_dataset(args, git_hash):
             bb = BusyBox.generate_random_busybox(max_mech=args.max_mech, mech_types=[Slider], urdf_tag=args.urdf_num, debug=args.debug)
 
         image_data = setup_env(bb, args.viz, args.debug)
-
+        input()
         for j in range(args.n_samples):
             sys.stdout.write("\rProcessing sample %i/%i for busybox %i/%i" % (j+1, args.n_samples, i+1, args.n_bbs))
             # setup env and get image before load gripper
@@ -29,17 +30,19 @@ def generate_dataset(args, git_hash):
 
             for mech in bb._mechanisms:
                 # generate either a random or model-based policy and goal configuration
-                policy = policies.generate_policy(bb, mech, args.match_policies, args.randomness)
+                pose_handle_base_world = mech.get_pose_handle_base_world()
+                #policy = policies.generate_policy(bb, mech, args.match_policies, args.randomness, init_pose=pose_handle_base_world)
+                policy = policies.Prismatic._gen(bb, mech, args.randomness, pitch=-.15)
                 config_goal = policy.generate_config(mech, args.goal_config)
                 pose_handle_world_init = util.Pose(*p.getLinkState(bb.bb_id, mech.handle_id)[:2])
 
                 # calculate trajectory
-                pose_handle_base_world = mech.get_pose_handle_base_world()
-                traj = policy.generate_trajectory(pose_handle_base_world, config_goal, args.debug)
+
+                traj, traj_lines = policy.generate_trajectory(pose_handle_base_world, config_goal, args.debug, color=[0,0,1])
 
                 # execute trajectory
                 cumu_motion, net_motion, pose_handle_world_final = \
-                        gripper.execute_trajectory(traj, mech, policy.type, args.debug)
+                        gripper.execute_trajectory(traj, mech, policy.type, args.debug, traj_lines, bb)
 
                 # save result data
                 policy_params = policy.get_policy_tuple()
@@ -48,7 +51,7 @@ def generate_dataset(args, git_hash):
                             cumu_motion, pose_handle_world_init, pose_handle_world_final, \
                             config_goal, image_data, git_hash, args.randomness))
 
-            p.disconnect()
+        p.disconnect()
     print()
     return results
 

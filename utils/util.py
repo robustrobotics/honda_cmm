@@ -107,6 +107,19 @@ ImageData contains a subset of the image data returned by pybullet
 :param rgbPixels: list of [char RED,char GREEN,char BLUE, char ALPHA] [0..width*height],
                     list of pixel colors in R,G,B,A format, in range [0..255] for each color
 """
+
+def draw_thick_line(endpoints, color, lifeTime=0):
+    # add to y and z dimensions
+    n = 10
+    w = .0005
+    delta_ys = np.linspace(-w, w, n)
+    delta_zs = np.linspace(-w, w, n)
+    lines = []
+    for delta_y in delta_ys:
+        for delta_z in delta_zs:
+            lines += [p.addUserDebugLine(np.add(endpoints[0], [0, delta_y, delta_z]), np.add(endpoints[1], [0, delta_y, delta_z]), color, lifeTime=lifeTime)]
+    return lines
+
 def imshow(image_data, show=True):
     img = np.reshape(image_data.rgbPixels, [image_data.height, image_data.width, 3])
     if show:
