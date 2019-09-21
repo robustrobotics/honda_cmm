@@ -3,22 +3,30 @@ import numpy as np
 from actions.policies import Prismatic
 from gen.generator_busybox import BusyBox, Slider
 from util import util
-import matplotlib.pyplot as plt
 from util.setup_pybullet import setup_env
 from actions.gripper import Gripper
 import pybullet as p
 
 # ONLY FOR PRISMATIC
 
-def execute_systematic(args):
-    fig, ax = plt.subplots()
+def calc_systematic_policies(pos, orn, T):
+    # generate list of goals
+    pitches = np.linspace(-np.pi, 0.0, T)
+    policies = []
+    for pitch in pitches:
+        policies += [Prismatic(pos, orn, pitch, 0.0)]
+    return policies
 
+def execute_systematic(args):
     if args.bb_file:
         bb_data = util.read_from_file(args.bb_file)
+
     avg_regrets = []
     min_regrets = []
-    for n in range(args.N):
 
+    config_goal = 0.25
+
+    for n in range(args.N):
         # generate busybox and setup pybullet env
         if args.bb_file:
             bb = BusyBox.bb_from_result(bb_data[n])
@@ -27,17 +35,15 @@ def execute_systematic(args):
         mech = bb._mechanisms[0]
         mech_range = mech.range/2
         setup_env(bb, args.viz, args.debug)
+        pos = mech.get_pose_handle_base_world().p
+        orn = [0., 0., 0., 1.]
         gripper = Gripper(bb.bb_id)
-
-        # generate list of goals
-        pitches = np.linspace(-np.pi, 0.0, args.T)
-        config_goal = 0.25
+        policies = calc_systematic_policies(pos, orn, args.T)
 
         # try each goal
         regrets = []
-        for pitch in pitches:
+        for policy in policies:
             # generate policy and execute
-            policy = Prismatic._gen(bb, mech, 0, pitch=pitch)
             pose_handle_base_world = mech.get_pose_handle_base_world()
             traj = policy.generate_trajectory(pose_handle_base_world, config_goal, args.debug)
             _, motion, _ = gripper.execute_trajectory(traj, mech, policy.type, args.debug)

@@ -69,8 +69,7 @@ if __name__ == '__main__':
             'regrets/regret_results_gpucb_nn_t5_n50_3.pickle'],
         10: ['regrets/regret_results_gpucb_nn_t10_n50.pickle', # Need this one at 50
              'regrets/regret_results_gpucb_nn_t10_n50_2.pickle',
-             'regrets/regret_results_gpucb_nn_t10_n50_3.pickle'],
-
+             'regrets/regret_results_gpucb_nn_t10_n50_3.pickle']
     }
 
     random_nn_fnames = {
@@ -95,6 +94,7 @@ if __name__ == '__main__':
     }
 
     for n_interactions in [0, 2, 5, 10]:
+        print('T=', n_interactions)
 
         for name, result_lookup in zip(['Eval-GP-UCB', 'Eval-Systematic', 'Train-Random', 'Train-GP-UCB'],
                                        [gpucb_fnames, systematic_fnames, random_nn_fnames, gpucb_nn_fnames]):
@@ -134,7 +134,6 @@ if __name__ == '__main__':
                 med = [np.median(results['min_regrets'])] * 10
                 q25 = [np.quantile(results['min_regrets'], 0.25)] * 10
                 q75 = [np.quantile(results['min_regrets'], 0.75)] * 10
-
                 p = [get_success(results['min_regrets'])] * 10
                 p_std = [get_success(results['min_regrets'], std=True)] * 10
 
@@ -150,13 +149,31 @@ if __name__ == '__main__':
 
                 p = [get_success(res['regrets']) for res in results]
                 p_std = [get_success(res['regrets'], std=True) for res in results]
-
             else:
-                rs = [np.mean(res['final']) for res in results]
-                med = [np.median(res['regrets']) for res in results]
-                s = [np.std(res['regrets']) for res in results]
-                q25 = [np.quantile(res['regrets'], 0.25) for res in results]
-                q75 = [np.quantile(res['regrets'], 0.75) for res in results]
+                # calculate the success percentage
+                if name == 'Random-NN GP-UCB':
+                    del results[2]
+                    del results[0]
+                regret_success = 0.1
+                success_percentages = [len(np.array(res['regrets'])[np.array(res['regrets'])<regret_success])/
+                                        len(res['regrets'])
+                                        for res in results]
+                if name == 'Random-NN GP-UCB':
+                    # Temporarily remove 500 and 1500
+                    #del results[2]
+                    #del results[0]
+                    rs = [np.mean(res['regrets']) for res in results]
+                    rs = np.array(rs)
+                    med = [np.median(res['regrets']) for res in results]
+                    s = [np.std(res['regrets']) for res in results]
+                    q25 = [np.quantile(res['regrets'], 0.25) for res in results]
+                    q75 = [np.quantile(res['regrets'], 0.75) for res in results]
+                else:
+                    rs = [np.mean(res['final']) for res in results]
+                    med = [np.median(res['regrets']) for res in results]
+                    s = [np.std(res['regrets']) for res in results]
+                    q25 = [np.quantile(res['regrets'], 0.25) for res in results]
+                    q75 = [np.quantile(res['regrets'], 0.75) for res in results]
 
                 p = [get_success(res['regrets']) for res in results]
                 p_std = [get_success(res['regrets'], std=True) for res in results]
@@ -173,13 +190,12 @@ if __name__ == '__main__':
 
 
             plt.plot(xs, mid, c=c_lookup[name], label=label_name)
-
             plt.fill_between(xs, bot, top, facecolor=c_lookup[name], alpha=0.2)
+
 
         plt.ylim(0, 1)
         plt.legend()
         plt.xlabel('L')
         plt.ylabel('Regret')
+
         plt.show()
-
-

@@ -106,6 +106,9 @@ class Prismatic(Policy):
 
         # derived
         self._M_origin_world = util.pose_to_matrix(self.rigid_position, self.rigid_orientation)
+        self.a = Pose(self.rigid_position, self.rigid_orientation)
+        q_prismatic_dir = util.quaternion_from_euler(0.0, self.pitch, self.yaw)
+        self.e = util.transformation([1., 0., 0.], [0., 0., 0.], q_prismatic_dir)
         super(Prismatic, self).__init__('Prismatic')
 
     def _forward_kinematics(self, config):
