@@ -4,6 +4,7 @@ from util import util
 from collections import namedtuple
 import itertools
 import sys
+import time
 
 """
 Naming convention
@@ -221,7 +222,7 @@ class Gripper:
             self.k = [3000.0,20.0]
             self.d = [250.0,0.45]
 
-    def execute_trajectory(self, traj, mech, policy_type, debug):
+    def execute_trajectory(self, traj, mech, policy_type, debug, sleep_time=-1):
         self.set_control_params(policy_type)
 
         # initial grasp pose
@@ -237,6 +238,8 @@ class Gripper:
             last_traj_p = (i == len(traj)-1)
             handle_base_ps, finished = self._move_PD(traj[i], q_offset, mech, last_traj_p, debug)
             cumu_motion = np.add(cumu_motion, np.linalg.norm(np.subtract(handle_base_ps[-1],handle_base_ps[0])))
+            if sleep_time > 0:
+                time.sleep(sleep_time)
             if finished:
                 break
         pose_handle_world_final = None

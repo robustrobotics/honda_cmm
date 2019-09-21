@@ -8,7 +8,7 @@ import argparse
 from scipy.optimize import minimize
 from util import util
 from util.setup_pybullet import setup_env
-from gen.generator_busybox import BusyBox
+from gen.generator_busybox import BusyBox, create_simulated_baxter_slider
 from actions import policies
 import operator
 import pybullet as p
@@ -18,6 +18,23 @@ import torch
 from learning.dataloaders import PolicyDataset, parse_pickle_file
 from gen.generate_policy_data import generate_dataset
 from collections import namedtuple
+import time
+
+
+def get_real_bb():
+    bb = create_simulated_baxter_slider()
+    image_data = setup_env(bb, viz=False, debug=False)
+    mech = bb._mechanisms[0]
+    mech_tuple = mech.get_mechanism_tuple()
+
+    # Get the mechanism from the dataset.
+    random_policy = policies.generate_policy(bb, mech, True, 1.0)
+    q = random_policy.generate_config(mech, None)
+    policy_tuple = random_policy.get_policy_tuple()
+    results = [util.Result(policy_tuple, mech_tuple, 0.0, 0.0,
+                           None, None, q, image_data, None, 1.0)]
+    p.disconnect()
+    return results
 
 def process_data(data, n_train):
     """
@@ -227,6 +244,7 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1, u
     optim = GPOptimizer(result, nn=nn, use_cuda=use_cuda, urdf_num=urdf_num)
 
     for ix in range(0, max_iterations):
+
         # (1) Choose a point to interact with.
         if len(xs) < 1 and (nn is None):
             # (a) Choose policy randomly.
@@ -262,9 +280,9 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1, u
                              q, image_data, None, -1)
         interaction_data.append(result)
 
-        # if ix == 0:
-        #     print('GP:', gp.kernel)
-        #     viz_gp_circles(gp, result, ix, bb, image_data, nn=nn, kx=kx, model_name=nn_fname)
+        if ix == 0:
+            print('GP:', gp.kernel)
+            viz_gp_circles(gp, result, -1, bb, image_data, nn=nn, kx=kx, model_name=nn_fname)
 
         # (3) Update GP.
         policy_params = policy.get_policy_tuple()
@@ -284,7 +302,7 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1, u
         gp.fit(np.array(xs), np.array(ys))
 
         # (4) Visualize GP.
-        if ix % 10 == 0 and plot:
+        if ix % 1 == 0 and plot:
             params = mech.get_mechanism_tuple().params
             print('Range:', params.range/2.0)
             print('Angle:', np.arctan2(params.axis[1], params.axis[0]))
@@ -308,6 +326,35 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1, u
         regrets.append((max_d - y[0])/max_d)
         print(y, max_d)
     return gp, nn, np.mean(regrets), interaction_data
+
+
+def create_video(results):
+    bb = BusyBox.bb_from_result(results[0])
+    image_data = setup_env(bb, viz=True, debug=False)
+    mech = bb._mechanisms[0]
+    gripper = Gripper(bb.bb_id)
+
+    lx = p.startStateLogging(loggingType=p.STATE_LOGGING_VIDEO_MP4,
+                             fileName='videos/GPUCB.mp4')
+    for ix, result in enumerate(results):
+        time.sleep(0.5)
+        p.removeAllUserDebugItems()
+        p.resetJointState(bb.bb_id, mech.handle_id, 0.0)
+        gripper._set_pose_tip_world(gripper.pose_tip_world_reset)
+
+        pose_handle_base_world = mech.get_pose_handle_base_world()
+        pitch = result.policy_params.params.pitch
+        policy_list = list(pose_handle_base_world.p) + [0., 0., 0., 1.] + [pitch, 0.0]
+        policy = policies.get_policy_from_params('Prismatic', policy_list, mech)
+        q = result.config_goal
+
+        # (2) Interact with BusyBox to get result.
+        traj = policy.generate_trajectory(pose_handle_base_world, q, True)
+        gripper.execute_trajectory(traj, mech, policy.type, False, sleep_time=0.02)
+
+    p.stopStateLogging(lx)
+    p.disconnect()
+
 
 
 def format_batch(X_pred, bb):
@@ -403,48 +450,50 @@ def viz_gp_circles(gp, result, num, bb, image_data, nn=None, kx=-1, points=None,
             mean_colors[ix, jx] = Y_pred[jx, 0]
             std_colors[ix, jx] = Y_std[jx]
 
-    plt.clf()
-    plt.figure(figsize=(20, 5))
-    ax0 = plt.subplot(131)
-    w, h, im = image_data
-    np_im = np.array(im, dtype=np.uint8).reshape(h, w, 3)
-    ax0.imshow(np_im)
-    mps = bb._mechanisms[0].get_mechanism_tuple().params
-    print('Angle:', np.rad2deg(np.arctan2(mps.axis[1], mps.axis[0])))
-    ax1 = plt.subplot(132, projection='polar')
-    ax1.set_title('mean')
-    max_d = bb._mechanisms[0].get_mechanism_tuple().params.range / 2.0
-    polar_plots(ax1, mean_colors, vmax=max_d)
-
-    ax2 = plt.subplot(133, projection='polar')
-    ax2.set_title('variance')
-    polar_plots(ax2, std_colors, vmax=None, points=points)
-    plt.show()
-
-    if '/' in model_name:
-        model_name = model_name.split('/')[-1].replace('.pt', '')
-    fname = 'prior_plots/gp_polar_bb_%d_%d_%s.png' % (kx, num, model_name)
-    plt.savefig(fname, bbox_inches='tight')
-
-    # -------------------------
     # plt.clf()
-    # plt.figure(figsize=(5, 5))
-    # # ax0 = plt.subplot(111)
-    # # w, h, im = image_data
-    # # np_im = np.array(im, dtype=np.uint8).reshape(h, w, 3)
-    # # ax0.imshow(np_im)
-    #
-    # ax1 = plt.subplot(111, projection='polar')
+    # f = plt.figure(figsize=(20, 5))
+    # f.set_facecolor((0, 0, 0))
+    # ax0 = plt.subplot(131)
+    # w, h, im = image_data
+    # np_im = np.array(im, dtype=np.uint8).reshape(h, w, 3)
+    # ax0.imshow(np_im)
+    # mps = bb._mechanisms[0].get_mechanism_tuple().params
+    # print('Angle:', np.rad2deg(np.arctan2(mps.axis[1], mps.axis[0])))
+    # ax1 = plt.subplot(132, projection='polar')
+    # ax1.set_title('mean')
     # max_d = bb._mechanisms[0].get_mechanism_tuple().params.range / 2.0
     # polar_plots(ax1, mean_colors, vmax=max_d)
-    # #
-    # # ax2 = plt.subplot(111, projection='polar')
-    # # polar_plots(ax2, std_colors, vmax=None, points=points)
+    #
+    # ax2 = plt.subplot(133, projection='polar')
+    # ax2.set_title('variance')
+    # polar_plots(ax2, std_colors, vmax=None, points=points)
+    # plt.show()
     #
     # if '/' in model_name:
     #     model_name = model_name.split('/')[-1].replace('.pt', '')
-    # fname = 'prior_plots/gp_polar_bb_%d_%d_%s_mean.png' % (kx, num, model_name)
+    # fname = 'prior_plots/gp_polar_bb_%d_%d_%s.png' % (kx, num, model_name)
     # plt.savefig(fname, bbox_inches='tight')
+
+    # -------------------------
+    plt.clf()
+    plt.figure(figsize=(5, 5))
+    # ax0 = plt.subplot(111)
+    # w, h, im = image_data
+    # np_im = np.array(im, dtype=np.uint8).reshape(h, w, 3)
+    # ax0.imshow(np_im)
+
+    ax1 = plt.subplot(111, projection='polar')
+    max_d = bb._mechanisms[0].get_mechanism_tuple().params.range / 2.0
+    polar_plots(ax1, mean_colors, vmax=max_d)
+    ax1.set_title('Reward (T=%d)' % (num+1), color='w', y=1.15)
+    #
+    # ax2 = plt.subplot(111, projection='polar')
+    # polar_plots(ax2, std_colors, vmax=None, points=points)
+
+    if '/' in model_name:
+        model_name = model_name.split('/')[-1].replace('.pt', '')
+    fname = 'videos/gp_polar_bb_%d_%d_%s_mean.png' % (kx, num, model_name)
+    plt.savefig(fname, bbox_inches='tight', facecolor='k')
     # ----------------------------------
 
 
@@ -454,11 +503,12 @@ def polar_plots(ax, colors, vmax, points=None):
     thp, rp = np.linspace(0, 2*np.pi, n_pitch*2), np.linspace(0, 0.25, n_q//2)
     rp, thp = np.meshgrid(rp, thp)
     cp = np.zeros(rp.shape)
+    thp += np.pi
 
     cp[0:n_pitch, :] = colors[:, 0:n_q//2][:, ::-1]
     cp[n_pitch:, :] = np.copy(colors[:, n_q//2:])
 
-    ax.pcolormesh(thp, rp, cp, vmax=vmax)
+    cbar = ax.pcolormesh(thp, rp, cp, vmax=vmax)
     if not points is None:
         for x in points:
             print([np.rad2deg(x[0]), x[2]])
@@ -466,6 +516,11 @@ def polar_plots(ax, colors, vmax, points=None):
                 ax.scatter(x[0] - np.pi, -1*x[2], c='r', s=10)
             else:
                 ax.scatter(x[0], x[2], c='r', s=10)
+
+    # TODO: Added these for video.
+    ax.tick_params(axis='x', colors='white')
+    ax.set_yticklabels([])
+    plt.colorbar(cbar, ax=ax, pad=0.2)
 
 
 def fit_random_dataset(data):
@@ -510,16 +565,16 @@ def evaluate_k_busyboxes(k, args, use_cuda=False):
 
     # GP-UCB-NN Models
     elif args.eval == 'gpucb_nn':
-        models = ['gpucb_data_2/torch_models/model_ntrain_1000.pt',
-                  'gpucb_data_2/torch_models/model_ntrain_2000.pt',
-                  'gpucb_data_2/torch_models/model_ntrain_3000.pt',
-                  'gpucb_data_2/torch_models/model_ntrain_4000.pt',
-                  'gpucb_data_2/torch_models/model_ntrain_5000.pt',
-                  'gpucb_data_2/torch_models/model_ntrain_6000.pt',
-                  'gpucb_data_2/torch_models/model_ntrain_7000.pt',
-                  'gpucb_data_2/torch_models/model_ntrain_8000.pt',
-                  'gpucb_data_2/torch_models/model_ntrain_9000.pt',
-                  'gpucb_data_2/torch_models/model_ntrain_10000.pt']
+        models = ['gpucb_data/model_ntrain_1000.pt',
+                  'gpucb_data/model_ntrain_2000.pt',
+                  'gpucb_data/model_ntrain_3000.pt',
+                  'gpucb_data/model_ntrain_4000.pt',
+                  'gpucb_data/model_ntrain_5000.pt',
+                  'gpucb_data/model_ntrain_6000.pt',
+                  'gpucb_data/model_ntrain_7000.pt',
+                  'gpucb_data/model_ntrain_8000.pt',
+                  'gpucb_data/model_ntrain_9000.pt',
+                  'gpucb_data/model_ntrain_10000.pt']
 
     # Random-NN Models
     elif args.eval == 'random_nn':
@@ -537,24 +592,35 @@ def evaluate_k_busyboxes(k, args, use_cuda=False):
                     'random_100bb_100int/torch_models/model_ntrain_1000.pt']
 
     # GP-UCB Models
+    elif args.eval == 'test_good':
+        models = ['gpucb_data/model_ntrain_10000.pt']
+    elif args.eval == 'test_bad':
+        models = ['gpucb_data/model_ntrain_1000.pt']
     else:
         models = ['']
 
     with open('prism_gp_evals_square_50.pickle', 'rb') as handle:
         data = pickle.load(handle)
 
+    # TODO: Remove after making video.
+    data = [data[1]]
+
+    data = get_real_bb()
+
     results = []
     for model in models:
         avg_regrets, final_regrets = [], []
         for ix, result in enumerate(data[:k]):
             print('BusyBox', ix)
-            gp, nn, avg_regret, _ = ucb_interaction(result,
+            gp, nn, avg_regret, interactions = ucb_interaction(result,
                                                     max_iterations=args.n_interactions,
-                                                    plot=False,
+                                                    plot=True,
                                                     nn_fname=model,
                                                     kx=ix,
                                                     use_cuda=use_cuda,
                                                     urdf_num=args.urdf_num)
+            create_video(interactions)
+
             regret = test_model(gp, result, nn, use_cuda=use_cuda, urdf_num=args.urdf_num)
             avg_regrets.append(avg_regret)
             print('AVG:', avg_regret)
@@ -568,9 +634,9 @@ def evaluate_k_busyboxes(k, args, use_cuda=False):
                'final': np.mean(final_regrets),
                'regrets': final_regrets}
         results.append(res)
-        print('regret_results_%s_t%d_n%d_2.pickle' % (args.eval, args.n_interactions, k))
-        with open('regret_results_%s_t%d_n%d_2.pickle' % (args.eval, args.n_interactions, k), 'wb') as handle:
-            pickle.dump(results, handle)
+        print('regret_results_%s_t%d_n%d.pickle' % (args.eval, args.n_interactions, k))
+        # with open('regret_results_%s_t%d_n%d.pickle' % (args.eval, args.n_interactions, k), 'wb') as handle:
+        #     pickle.dump(results, handle)
 
 
 def create_gpucb_dataset(L=50, M=200, bb_fname='', fname=''):
@@ -636,6 +702,6 @@ if __name__ == '__main__':
     #                      bb_fname='active_100bbs.pickle',
     #                      fname='gpucb_100bb_100i.pickle')
 
-    evaluate_k_busyboxes(50, args, use_cuda=True)
+    evaluate_k_busyboxes(50, args, use_cuda=False)
 
     # fit_random_dataset(data)
