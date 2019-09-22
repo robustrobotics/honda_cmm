@@ -23,9 +23,9 @@ def setup_env(bb, viz, debug, show_im=False):
 
     p.resetDebugVisualizerCamera(
         cameraDistance=.15,
-        cameraYaw=170,
-        cameraPitch=-40,
-        cameraTargetPosition=(0.1, 0., bb.height/2+.3))
+        cameraYaw=180,
+        cameraPitch=0,
+        cameraTargetPosition=(0., 0., bb.height/2))
 
     plane_id = p.loadURDF("plane.urdf")
     model = p.loadURDF(bb.file_name, [0., -.3, 0.])
