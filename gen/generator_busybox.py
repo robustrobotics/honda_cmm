@@ -533,6 +533,24 @@ class BusyBox(object):
             mech = Door.mech_from_result(result, dummy_bb)
         return BusyBox.get_busybox(width, height, [mech], urdf_tag=str(urdf_num))
 
+def create_simulated_baxter_slider():
+    # Create the slider.
+    slider = Slider(x_offset=-0.0525,
+                    z_offset=-0.19,
+                    range=0.33,
+                    axis=(1.0, 0),
+                    color=(1, 0, 0),
+                    bb_thickness=0.05)
+
+    # Create the busybox.
+    bb = BusyBox(width=0.6,
+                 height=0.6,
+                 mechanisms=[slider],
+                 bb_thickness=0.05,
+                 file_name='/home/mnosew/honda_cmm/models/busybox_real.urdf')
+    with open('/home/mnosew/honda_cmm/models/busybox_real.urdf', 'w') as handle:
+        handle.write(bb.get_urdf())
+    return bb
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
