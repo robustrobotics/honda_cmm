@@ -450,12 +450,12 @@ def viz_gp_circles(gp, num, max_d, points=[]):
     #ax0.imshow(np_im)
     #mps = bb._mechanisms[0].get_mechanism_tuple().params
     #print('Angle:', np.rad2deg(np.arctan2(mps.axis[1], mps.axis[0])))
-    ax1 = plt.subplot(121, projection='polar')
+    ax1 = plt.subplot(111, projection='polar')
     ax1.set_title('Reward (T=%d)' % (num+1), color='w', y=1.15)
     polar_plots(ax1, mean_colors, vmax=max_d)
 
-    ax2 = plt.subplot(122, projection='polar')
-    ax2.set_title('variance')
+    #ax2 = plt.subplot(122, projection='polar')
+    #ax2.set_title('variance')
     #polar_plots(ax2, std_colors, vmax=None, points=points)
     #plt.show()
 
