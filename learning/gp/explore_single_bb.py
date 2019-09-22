@@ -14,7 +14,7 @@ import operator
 import pybullet as p
 from actions.gripper import Gripper
 from actions.policies import Prismatic
-from learning.test_model import get_pred_motions as get_nn_preds
+#from learning.test_model import get_pred_motions as get_nn_preds
 import torch
 from learning.dataloaders import PolicyDataset, parse_pickle_file
 from gen.generate_policy_data import generate_dataset
@@ -48,7 +48,7 @@ def process_data(data, n_train, true_range):
 def calc_random_policy(pos, orn):
     pitch = np.random.uniform(-np.pi, 0)
     policy = Prismatic(pos, orn, pitch, 0.0)
-    config = np.random.uniform(-.1, .1)
+    config = np.random.uniform(-.14, .14)
     return policy, config
 
 class GPOptimizer(object):
@@ -248,7 +248,7 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1, u
         gp.fit(np.array(xs), np.array(ys))
 
         # (4) Visualize GP.
-        if ix % 50 == 0 and plot:
+        if ix % 10 == 0 and plot:
             params = mech.get_mechanism_tuple().params
             print('Range:', params.range/2.0)
             print('Angle:', np.arctan2(params.axis[1], params.axis[0]))
@@ -313,7 +313,7 @@ class UCB_Interaction_Baxter(object):
         else:
             # (b) Choose policy using UCB bound.
             x_final, dataset = self.optim.optimize_gp(self.gp, ucb=True, beta=10)
-            policy_list = self.pos + [0., 0., 0., 1.] + [x_final[0], 0.0]
+            policy_list = self.pos + self.orn + [x_final[0], 0.0]
             policy = policies.get_policy_from_params('Prismatic', policy_list)
             q = x_final[-1]
         self.ix += 1
@@ -330,7 +330,7 @@ class UCB_Interaction_Baxter(object):
         self.gp.fit(np.array(self.xs), np.array(self.ys))
 
         # (4) Visualize GP.
-        if self.ix % 10 == 0 and self.plot:
+        if self.ix % 1 == 0 and self.plot:
             #params = mech.get_mechanism_tuple().params
             #print('Range:', params.range/2.0)
             #print('Angle:', np.arctan2(params.axis[1], params.axis[0]))
@@ -352,7 +352,7 @@ class UCB_Interaction_Baxter(object):
         regrets = []
         for y in self.moves:
             regrets.append((self.true_range - y[0])/self.true_range)
-            print(y, true_range)
+            #print(y, true_range)
         return np.mean(regrets)
 
 def format_batch(X_pred, bb):
@@ -451,16 +451,16 @@ def viz_gp_circles(gp, num, max_d, points=[]):
     #mps = bb._mechanisms[0].get_mechanism_tuple().params
     #print('Angle:', np.rad2deg(np.arctan2(mps.axis[1], mps.axis[0])))
     ax1 = plt.subplot(121, projection='polar')
-    ax1.set_title('mean')
+    ax1.set_title('Reward (T=%d)' % (num+1), color='w', y=1.15)
     polar_plots(ax1, mean_colors, vmax=max_d)
 
     ax2 = plt.subplot(122, projection='polar')
     ax2.set_title('variance')
-    polar_plots(ax2, std_colors, vmax=None, points=points)
-    plt.show()
+    #polar_plots(ax2, std_colors, vmax=None, points=points)
+    #plt.show()
 
-    fname = 'gp_polar_%d.png' % (num)
-    plt.savefig(fname, bbox_inches='tight')
+    fname = '/home/mnosew/gp_polar_%d.png' % (num)
+    plt.savefig(fname, bbox_inches='tight', facecolor='k')
 
     # -------------------------
     # plt.clf()
@@ -490,14 +490,18 @@ def polar_plots(ax, colors, vmax, points=None):
     thp, rp = np.linspace(0, 2*np.pi, n_pitch*2), np.linspace(0, 0.25, n_q//2)
     rp, thp = np.meshgrid(rp, thp)
     cp = np.zeros(rp.shape)
+    thp += np.pi
 
     cp[0:n_pitch, :] = colors[:, 0:n_q//2][:, ::-1]
     cp[n_pitch:, :] = np.copy(colors[:, n_q//2:])
 
-    ax.pcolormesh(thp, rp, cp, vmax=vmax)
+    cbar = ax.pcolormesh(thp, rp, cp, vmax=vmax, cmap='viridis')
+    ax.tick_params(axis='x', colors='white')
+    ax.set_yticklabels([])
+    plt.colorbar(cbar, ax=ax, pad=0.2)
     if not points is None:
         for x in points:
-            print([np.rad2deg(x[0]), x[2]])
+            #print([np.rad2deg(x[0]), x[2]])
             if x[2] < 0:
                 ax.scatter(x[0] - np.pi, -1*x[2], c='r', s=10)
             else:
