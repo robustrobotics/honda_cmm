@@ -1,6 +1,7 @@
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF, WhiteKernel, Sum, ConstantKernel, ExpSineSquared
 import numpy as np
+from gen.generator_busybox import create_simulated_baxter_slider
 import matplotlib.pyplot as plt
 import pickle
 import os
@@ -14,7 +15,7 @@ import operator
 import pybullet as p
 from actions.gripper import Gripper
 from actions.policies import Prismatic
-#from learning.test_model import get_pred_motions as get_nn_preds
+from learning.test_model import get_pred_motions as get_nn_preds
 import torch
 from learning.dataloaders import PolicyDataset, parse_pickle_file
 from gen.generate_policy_data import generate_dataset
@@ -53,31 +54,64 @@ def calc_random_policy(pos, orn):
 
 class GPOptimizer(object):
 
-    def __init__(self, pos, orn, true_range, n_samples=500):
+    def __init__(self, pos, orn, true_range, nn=None, n_samples=500):
         """
         Initialize one of these for each BusyBox.
         """
         # TODO: Generate the sample points used to optimize the function.
         self.sample_policies = []
+        self.nn_samples = []
         self.true_range = true_range
+        self.nn = nn
+        self.bb = create_simulated_baxter_slider()
+        image_data = setup_env(self.bb, viz=False, debug=False)
+        mech_tuple = self.bb._mechanisms[0].get_mechanism_tuple()
+        p.disconnect()
+
         # Generate random policies.
         for _ in range(n_samples):
             # Get the mechanism from the dataset.
             random_policy, q = calc_random_policy(pos, orn)
             policy_type = random_policy.type
             policy_tuple = random_policy.get_policy_tuple()
-            results = [util.Result(policy_tuple, None, 0.0, 0.0,
-                                   None, None, q, None, None, 1.0)]
+
+            results = [util.Result(policy_tuple, mech_tuple, 0.0, 0.0,
+                                   None, None, q, image_data, None, 1.0)]
             self.sample_policies.append(results)
 
-            self.dataset = None
+            if not self.nn is None:
+                nn_preds, self.dataset = get_nn_preds(results, nn, ret_dataset=True, use_cuda=False)
+                self.nn_samples.append(nn_preds)
+            else:
+                self.dataset = None
+                self.nn_samples.append(None)
 
+    def _optim_result_to_torch(self, x, image_tensor, use_cuda=False):
+        policy_type_tensor = torch.Tensor([util.name_lookup['Prismatic']])
+        policy_tensor = torch.tensor([[x[0], 0.0]]).float()  # hard code yaw to be 0
+        config_tensor = torch.tensor([[x[-1]]]).float()
+        if use_cuda:
+            policy_type_tensor = policy_type_tensor.cuda()
+            policy_tensor = policy_tensor.cuda()
+            config_tensor = config_tensor.cuda()
+            image_tensor = image_tensor.cuda()
 
-    def _objective_func(self, x, gp, ucb, beta=100):
+        return [policy_type_tensor, policy_tensor, config_tensor, image_tensor]
+
+    def _objective_func(self, x, gp, ucb, beta=100, image_tensor=None):
         x = x.squeeze()
 
         X = np.array([[x[0], 0.0, x[-1]]])
         Y_pred, Y_std = gp.predict(X, return_std=True)
+
+        if not self.nn is None:
+            inputs = self._optim_result_to_torch(x, image_tensor, False)
+            val, _ = self.nn.forward(*inputs)
+            if self.use_cuda:
+                val = val.cpu()
+            val = val.detach().numpy()
+            Y_pred += val.squeeze()
+
         if ucb:
             obj = -Y_pred[0] - np.sqrt(beta) * Y_std[0]
         else:
@@ -85,9 +119,12 @@ class GPOptimizer(object):
 
         return obj
 
-    def _get_pred_motions(self, data, model, ucb, beta=100):
+    def _get_pred_motions(self, data, model, ucb, beta=100, nn_preds=None):
         X, Y, _ = process_data(data, len(data), self.true_range)
         y_pred, y_std = model.predict(X, return_std=True)
+
+        if not nn_preds is None:
+            y_pred += np.array(nn_preds)
 
         if ucb:
             return y_pred + np.sqrt(beta) * y_std, self.dataset
@@ -107,9 +144,9 @@ class GPOptimizer(object):
         samples = []
 
         # Generate random policies.
-        for res in self.sample_policies:
+        for res, nn_preds in zip(self.sample_policies, self.nn_samples):
             # Get predictions from the GP.
-            sample_disps, dataset = self._get_pred_motions(res, gp, ucb, beta)
+            sample_disps, dataset = self._get_pred_motions(res, gp, ucb, beta, nn_preds=nn_preds)
 
             samples.append((('Prismatic',
                              res[0].policy_params,
@@ -123,9 +160,13 @@ class GPOptimizer(object):
         (policy_type_max, params_max, q_max, delta_yaw_max, delta_pitch_max), max_disp = max(samples, key=operator.itemgetter(1))
 
         # Start optimization from here.
+        if self.nn is None:
+            images = None
+        else:
+            images = dataset.images[0].unsqueeze(0)
         x0 = np.concatenate([[params_max.params.pitch], [q_max]]) # only searching space of pitches!
 
-        res = minimize(fun=self._objective_func, x0=x0, args=(gp, ucb, beta),
+        res = minimize(fun=self._objective_func, x0=x0, args=(gp, ucb, beta, images),
                        method='L-BFGS-B', options={'eps': 10**-3}, bounds=[(-np.pi, 0), (-0.25, 0.25)])
         x_final = res['x']
 
@@ -275,7 +316,7 @@ def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1, u
 
 class UCB_Interaction_Baxter(object):
 
-    def __init__(self, pos, orn, true_range, plot):
+    def __init__(self, pos, orn, true_range, plot, nn_fname=''):
         # Pretrained Kernel
         # kernel = ConstantKernel(0.005, constant_value_bounds=(0.005, 0.005)) * RBF(length_scale=(0.247, 0.084, 0.0592), length_scale_bounds=(0.0592, 0.247)) + WhiteKernel(noise_level=1e-5, noise_level_bounds=(1e-5, 1e2))
         self.variance = 0.005
@@ -295,8 +336,6 @@ class UCB_Interaction_Baxter(object):
         self.interaction_data = []
         self.xs, self.ys, self.moves = [], [], []
 
-        self.optim = GPOptimizer(pos, orn, true_range)
-
         self.ix = 0
 
         self.pos = pos
@@ -304,6 +343,12 @@ class UCB_Interaction_Baxter(object):
         self.true_range = true_range
 
         self.plot = plot
+
+        self.nn = None
+        if nn_fname != '':
+            self.nn = util.load_model(nn_fname, 16, use_cuda=False)
+
+        self.optim = GPOptimizer(pos, orn, true_range, self.nn)
 
     def sample(self):
         # (1) Choose a point to interact with.
@@ -320,12 +365,20 @@ class UCB_Interaction_Baxter(object):
         return policy, q
 
     def update(self, policy, q, motion):
+        # TODO: Update without the NN.
         # (3) Update GP.
         policy_params = policy.get_policy_tuple()
         self.xs.append([policy_params.params.pitch,
                    policy_params.params.yaw,
                    q])
-        self.ys.append([motion])
+        if self.nn is None:
+            self.ys.append([motion])
+        else:
+            inputs = self.optim._optim_result_to_torch(self.xs[-1], self.optim.dataset.images[0].unsqueeze(0), use_cuda=False)
+            nn_pred = self.nn.forward(*inputs)[0]
+            nn_pred = nn_pred.detach().numpy().squeeze()
+            self.ys.append([motion - nn_pred])
+
         self.moves.append([motion])
         self.gp.fit(np.array(self.xs), np.array(self.ys))
 
@@ -346,7 +399,7 @@ class UCB_Interaction_Baxter(object):
             # #plt.savefig('gp_samples_%d.png' % ix)
             # plt.show()
             # viz_gp(gp, result, ix, bb, nn=nn)
-            viz_gp_circles(self.gp, self.ix, self.true_range, points=self.xs)
+            viz_gp_circles(self.gp, self.ix, self.true_range, points=self.xs, nn=self.nn)
 
     def calc_regrets(self):
         regrets = []
@@ -364,7 +417,7 @@ def format_batch(X_pred, bb):
     for ix in range(X_pred.shape[0]):
         pose_handle_base_world = mech.get_pose_handle_base_world()
         policy_list = list(pose_handle_base_world.p) + [0., 0., 0., 1.] + [X_pred[ix, 0], 0.0]
-        policy = policies.get_policy_from_params('Prismatic', policy_list, mech)
+        policy = policies.get_policy_from_params('Prismatic', policy_list)
 
         result = util.Result(policy.get_policy_tuple(), mech_tuple, 0.0, 0.0,
                              None, None, X_pred[ix, -1], image_data, None, 1.0)
@@ -418,9 +471,10 @@ def viz_gp(gp, result, num, bb, nn=None):
     # plt.savefig('gp_estimates_tuned_%d.png' % num)
 
 
-def viz_gp_circles(gp, num, max_d, points=[]):
+def viz_gp_circles(gp, num, max_d, points=[], nn=None):
     n_pitch = 40
     n_q = 20
+    bb = create_simulated_baxter_slider()
 
     radii = np.linspace(-0.25, 0.25, num=n_q)
     thetas = np.linspace(-np.pi, 0, num=n_pitch)
@@ -437,6 +491,12 @@ def viz_gp_circles(gp, num, max_d, points=[]):
         Y_pred, Y_std = gp.predict(X_pred, return_std=True)
         if len(Y_pred.shape) == 1:
             Y_pred = Y_pred.reshape(-1, 1)
+        if not nn is None:
+            loader = format_batch(X_pred, bb)
+            k, x, q, im, _, _ = next(iter(loader))
+            pol = torch.Tensor([util.name_lookup[k[0]]])
+            nn_preds = nn(pol, x, q, im)[0].detach().numpy()
+            Y_pred += nn_preds
 
         for jx in range(0, n_q):
             mean_colors[ix, jx] = Y_pred[jx, 0]
@@ -459,7 +519,7 @@ def viz_gp_circles(gp, num, max_d, points=[]):
     #polar_plots(ax2, std_colors, vmax=None, points=points)
     #plt.show()
 
-    fname = '/home/mnosew/gp_polar_%d.png' % (num)
+    fname = '/home/michael/Pictures/gp_polar_%d.png' % (num)
     plt.savefig(fname, bbox_inches='tight', facecolor='k')
 
     # -------------------------
@@ -676,6 +736,14 @@ if __name__ == '__main__':
     #                      bb_fname='active_100bbs.pickle',
     #                      fname='gpucb_100bb_100i.pickle')
 
-    evaluate_k_busyboxes(50, args, use_cuda=True)
+    # evaluate_k_busyboxes(50, args, use_cuda=True)
 
     # fit_random_dataset(data)
+
+    sampler = UCB_Interaction_Baxter(pos=(0.,0.,0.),
+                                     orn=(0.,0.,0.,1.),
+                                     true_range=0.3,
+                                     plot=True,
+                                     nn_fname='gpucb_data/model_ntrain_10000.pt')
+    policy, q = sampler.sample()
+    sampler.update(policy, q, 0.2)
