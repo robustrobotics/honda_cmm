@@ -30,7 +30,7 @@ class Policy(object):
         """
         self.type = type
 
-    def generate_trajectory(self, pose_handle_base_world, config_goal, debug=False, p_delta= 0.01, color=[0,0,0]):
+    def generate_trajectory(self, pose_handle_base_world, config_goal, debug=False, p_delta= 0.01, color=[0,0,0], old_lines=None):
         """ This method generates a trajectory of waypoints that the gripper tip should
         move through
         :param pose_handle_base_world: util.Pose, initial pose of the base of the handle
@@ -56,8 +56,12 @@ class Policy(object):
             else:
                 break
         if debug:
+            if old_lines:
+                for old_line in old_lines:
+                    p.removeUserDebugItem(old_line)
             # draws the planned handle base trajectory
             traj_lines = self._draw_traj(poses, color)
+            p.stepSimulation()
         return poses, traj_lines
 
     @staticmethod
