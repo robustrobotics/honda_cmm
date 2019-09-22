@@ -337,7 +337,7 @@ def create_video(results):
     lx = p.startStateLogging(loggingType=p.STATE_LOGGING_VIDEO_MP4,
                              fileName='videos/GPUCB.mp4')
     for ix, result in enumerate(results):
-        time.sleep(0.5)
+        time.sleep(2.0)
         p.removeAllUserDebugItems()
         p.resetJointState(bb.bb_id, mech.handle_id, 0.0)
         gripper._set_pose_tip_world(gripper.pose_tip_world_reset)
@@ -350,7 +350,7 @@ def create_video(results):
 
         # (2) Interact with BusyBox to get result.
         traj = policy.generate_trajectory(pose_handle_base_world, q, True)
-        gripper.execute_trajectory(traj, mech, policy.type, False, sleep_time=0.02)
+        gripper.execute_trajectory(traj, mech, policy.type, False, sleep_time=0.05)
 
     p.stopStateLogging(lx)
     p.disconnect()
@@ -484,12 +484,27 @@ def viz_gp_circles(gp, result, num, bb, image_data, nn=None, kx=-1, points=None,
 
     ax1 = plt.subplot(111, projection='polar')
     max_d = bb._mechanisms[0].get_mechanism_tuple().params.range / 2.0
-    polar_plots(ax1, mean_colors, vmax=max_d)
+    polar_plots(ax1, mean_colors, vmax=max_d, points=points)
+    ax1.set_title('Reward (T=%d)' % (num + 1), color='w', y=1.15)
+    #
+    # ax2 = plt.subplot(111, projection='polar')
+    # polar_plots(ax2, std_colors, vmax=None, points=points)
+    # plt.show()
+    if '/' in model_name:
+        model_name = model_name.split('/')[-1].replace('.pt', '')
+    fname = 'videos/gp_polar_bb_%d_%d_%s_mean_arrow.png' % (kx, num, model_name)
+    plt.savefig(fname, bbox_inches='tight', facecolor='k')
+
+    plt.clf()
+    plt.figure(figsize=(5, 5))
+    ax1 = plt.subplot(111, projection='polar')
+    max_d = bb._mechanisms[0].get_mechanism_tuple().params.range / 2.0
+    polar_plots(ax1, mean_colors, vmax=max_d, points=None)
     ax1.set_title('Reward (T=%d)' % (num+1), color='w', y=1.15)
     #
     # ax2 = plt.subplot(111, projection='polar')
     # polar_plots(ax2, std_colors, vmax=None, points=points)
-
+    #plt.show()
     if '/' in model_name:
         model_name = model_name.split('/')[-1].replace('.pt', '')
     fname = 'videos/gp_polar_bb_%d_%d_%s_mean.png' % (kx, num, model_name)
@@ -509,13 +524,21 @@ def polar_plots(ax, colors, vmax, points=None):
     cp[n_pitch:, :] = np.copy(colors[:, n_q//2:])
 
     cbar = ax.pcolormesh(thp, rp, cp, vmax=vmax)
+    # if not points is None:
+    #     for x in points:
+    #         print([np.rad2deg(x[0]), x[2]])
+    #         if x[2] < 0:
+    #             ax.scatter(x[0] - np.pi, -1*x[2], c='r', s=10)
+    #         else:
+    #             ax.scatter(x[0], x[2], c='r', s=10)
     if not points is None:
-        for x in points:
-            print([np.rad2deg(x[0]), x[2]])
-            if x[2] < 0:
-                ax.scatter(x[0] - np.pi, -1*x[2], c='r', s=10)
-            else:
-                ax.scatter(x[0], x[2], c='r', s=10)
+        x = points[-1]
+        if x[2] < 0:
+            ax.arrow(x[0], 0, 0, -1*x[2], width=0.05, color='b', zorder=5, head_width=0.3, head_length=0.02, length_includes_head=True, shape='full', ec='w')
+            # ax.scatter(x[0] - np.pi, -1*x[2], c='r', s=10)
+        else:
+            ax.arrow(x[0] + np.pi, 0, 0, x[2], width=0.05, color='b', zorder=5, head_width=0.3, head_length=0.02, length_includes_head=True, shape='full', ec='w')
+            # ax.scatter(x[0], x[2], c='r', s=10)
 
     # TODO: Added these for video.
     ax.tick_params(axis='x', colors='white')
@@ -605,7 +628,7 @@ def evaluate_k_busyboxes(k, args, use_cuda=False):
     # TODO: Remove after making video.
     data = [data[1]]
 
-    data = get_real_bb()
+    # data = get_real_bb()
 
     results = []
     for model in models:
