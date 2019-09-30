@@ -64,9 +64,11 @@ class GPOptimizer(object):
         self.true_range = true_range
         self.nn = nn
         self.bb = create_simulated_baxter_slider()
+
         image_data = setup_env(self.bb, viz=False, debug=False)
         mech_tuple = self.bb._mechanisms[0].get_mechanism_tuple()
         p.disconnect()
+        self.image_data = image_data
 
         # Generate random policies.
         for _ in range(n_samples):
@@ -107,8 +109,6 @@ class GPOptimizer(object):
         if not self.nn is None:
             inputs = self._optim_result_to_torch(x, image_tensor, False)
             val, _ = self.nn.forward(*inputs)
-            if self.use_cuda:
-                val = val.cpu()
             val = val.detach().numpy()
             Y_pred += val.squeeze()
 
@@ -352,7 +352,7 @@ class UCB_Interaction_Baxter(object):
 
     def sample(self):
         # (1) Choose a point to interact with.
-        if len(self.xs) < 1:
+        if len(self.xs) < 1 and self.nn is None:
             # (a) Choose policy randomly.
             policy, q = calc_random_policy(self.pos, self.orn)
         else:
@@ -399,7 +399,7 @@ class UCB_Interaction_Baxter(object):
             # #plt.savefig('gp_samples_%d.png' % ix)
             # plt.show()
             # viz_gp(gp, result, ix, bb, nn=nn)
-            viz_gp_circles(self.gp, self.ix, self.true_range, points=self.xs, nn=self.nn)
+            viz_gp_circles(self.gp, self.ix, self.true_range, points=self.xs, nn=self.nn, image_data=self.optim.image_data)
 
     def calc_regrets(self):
         regrets = []
@@ -408,18 +408,16 @@ class UCB_Interaction_Baxter(object):
             #print(y, true_range)
         return np.mean(regrets)
 
-def format_batch(X_pred, bb):
+def format_batch(X_pred, image_data):
     data = []
-    image_data = setup_env(bb, viz=False, debug=False)
-    mech = bb._mechanisms[0]
-    mech_tuple = mech.get_mechanism_tuple()
 
     for ix in range(X_pred.shape[0]):
-        pose_handle_base_world = mech.get_pose_handle_base_world()
-        policy_list = list(pose_handle_base_world.p) + [0., 0., 0., 1.] + [X_pred[ix, 0], 0.0]
+        # pose_handle_base_world = mech.get_pose_handle_base_world()
+
+        policy_list = [0., 0., 0.] + [0., 0., 0., 1.] + [X_pred[ix, 0], 0.0]
         policy = policies.get_policy_from_params('Prismatic', policy_list)
 
-        result = util.Result(policy.get_policy_tuple(), mech_tuple, 0.0, 0.0,
+        result = util.Result(policy.get_policy_tuple(), None, 0.0, 0.0,
                              None, None, X_pred[ix, -1], image_data, None, 1.0)
         data.append(result)
 
@@ -471,7 +469,7 @@ def viz_gp(gp, result, num, bb, nn=None):
     # plt.savefig('gp_estimates_tuned_%d.png' % num)
 
 
-def viz_gp_circles(gp, num, max_d, points=[], nn=None):
+def viz_gp_circles(gp, num, max_d, points=[], nn=None, image_data=None):
     n_pitch = 40
     n_q = 20
     bb = create_simulated_baxter_slider()
@@ -492,7 +490,7 @@ def viz_gp_circles(gp, num, max_d, points=[], nn=None):
         if len(Y_pred.shape) == 1:
             Y_pred = Y_pred.reshape(-1, 1)
         if not nn is None:
-            loader = format_batch(X_pred, bb)
+            loader = format_batch(X_pred, image_data)
             k, x, q, im, _, _ = next(iter(loader))
             pol = torch.Tensor([util.name_lookup[k[0]]])
             nn_preds = nn(pol, x, q, im)[0].detach().numpy()
@@ -519,7 +517,7 @@ def viz_gp_circles(gp, num, max_d, points=[], nn=None):
     #polar_plots(ax2, std_colors, vmax=None, points=points)
     #plt.show()
 
-    fname = '/home/michael/Pictures/gp_polar_%d.png' % (num)
+    fname = '/home/mnosew/gp_nn_polar_%d.png' % (num)
     plt.savefig(fname, bbox_inches='tight', facecolor='k')
 
     # -------------------------

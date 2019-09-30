@@ -128,7 +128,7 @@ def parse_pickle_file(fname=None, data=None):
             pitch = [entry.policy_params.params.pitch]
             yaw = [entry.policy_params.params.yaw]
             policy_params = pitch + yaw
-            mech_params = [entry.mechanism_params.params.range]
+            # mech_params = [entry.mechanism_params.params.range]
         elif policy_type == 'Revolute':
             center = list(entry.policy_params.params.rot_center)
             roll = [entry.policy_params.params.rot_roll]
@@ -145,7 +145,7 @@ def parse_pickle_file(fname=None, data=None):
             'config': entry.config_goal,
             'image': entry.image_data,
             'y': motion,
-            'mech': mech_params,
+            # 'mech': mech_params,
             'delta_vals': entry.policy_params.delta_values
         })
 
