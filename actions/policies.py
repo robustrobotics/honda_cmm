@@ -29,6 +29,7 @@ class Policy(object):
         :param type: string, name of the child Policy class
         """
         self.type = type
+        self.traj_lines = []
 
     def generate_trajectory(self, pose_handle_base_world, config_goal, debug=False, p_delta= 0.01, color=[0,0,0], old_lines=None):
         """ This method generates a trajectory of waypoints that the gripper tip should
@@ -56,13 +57,10 @@ class Policy(object):
             else:
                 break
         if debug:
-            if old_lines:
-                for old_line in old_lines:
-                    p.removeUserDebugItem(old_line)
             # draws the planned handle base trajectory
-            traj_lines = self._draw_traj(poses, color)
+            self._draw_traj(poses, color)
             p.stepSimulation()
-        return poses, traj_lines
+        return poses
 
     @staticmethod
     def generate_config(mech, goal_config):
@@ -86,6 +84,12 @@ class Policy(object):
     @staticmethod
     def _gen(bb, mech, randomness):
         raise NotImplementedError('_gen not implemented for policy type '+self.type)
+
+    def _draw_traj(self, poses, color):
+        if len(self.traj_lines) > 0:
+            for line in self.traj_lines:
+                p.removeUserDebugItem(line)
+        self._draw(poses, color)
 
 class Prismatic(Policy):
     def __init__(self, pos, orn, pitch, yaw, delta_pitch=None, delta_yaw=None):
@@ -147,9 +151,9 @@ class Prismatic(Policy):
         delta_values = PrismaticDelta(self.delta_pitch, self.delta_yaw)
         return PolicyParams(self.type, prism_params, delta_values)
 
-    def _draw_traj(self, traj, color):
+    def _draw(self, traj, color):
         lines = util.draw_thick_line([np.add(traj[0].p, [0., .025, 0.]), np.add(traj[-1].p, [0., .025, 0.])], color)
-        return lines
+        self.traj_lines = lines
 
     @staticmethod
     def _gen(bb, mech, randomness, pitch=None, init_pose=None):
@@ -163,7 +167,6 @@ class Prismatic(Policy):
         rigid_orientation = np.array([0., 0., 0., 1.])
         if mech.mechanism_type == 'Slider':
             true_pitch = -np.arctan2(mech.axis[1], mech.axis[0])
-            #print(true_pitch)
             true_yaw = 0.0
         else:
             raise NotImplementedError('Still need to implement random Prismatic for Door')
@@ -286,11 +289,11 @@ class Revolute(Policy):
                         self.delta_radius_z)
         return PolicyParams(self.type, rev_params, delta_values)
 
-    def _draw_traj(self, traj):
+    def _draw(self, traj, color):
         lines = []
         for i in range(len(traj)-1):
-            lines += util.draw_thick_line([traj[i].p, traj[i+1].p], [0,0,1])
-        return lines
+            lines += util.draw_thick_line([traj[i].p, traj[i+1].p], color)
+        self.traj_lines = lines
 
     @staticmethod
     def _gen(bb, mech, randomness):
@@ -351,14 +354,16 @@ def get_matched_policy_type(mech):
     elif mech.mechanism_type == 'Slider':
         return 'Prismatic'
 
-def get_policy_from_params(type, params):
+def get_policy_from_params(type, params, mech=None):
     if type == 'Revolute':
         return Revolute(params[:3], params[3], params[4], params[5:9], params[9:12])
     if type == 'Prismatic':
         pitch = params[7]
         yaw = params[8]
-        #delta_pitch = pitch + np.arccos(mech.axis[0])
-        #delta_yaw = yaw
+        if mech:
+            delta_pitch = pitch + np.arccos(mech.axis[0])
+            delta_yaw = 0.0
+            return Prismatic(params[:3], params[3:7], pitch, yaw, delta_pitch, delta_yaw)
         return Prismatic(params[:3], params[3:7], pitch, yaw)
 
 def get_policy_from_tuple(policy_params):
