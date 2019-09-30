@@ -547,8 +547,8 @@ def create_simulated_baxter_slider():
                  height=0.6,
                  mechanisms=[slider],
                  bb_thickness=0.05,
-                 file_name='/home/mnosew/honda_cmm/models/busybox_real.urdf')
-    with open('/home/mnosew/honda_cmm/models/busybox_real.urdf', 'w') as handle:
+                 file_name='models/busybox_real.urdf')
+    with open('models/busybox_real.urdf', 'w') as handle:
         handle.write(bb.get_urdf())
     return bb
 

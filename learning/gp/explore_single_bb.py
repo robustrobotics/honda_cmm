@@ -38,13 +38,14 @@ def process_data(data, n_train, true_range):
     X = np.array(xs)
     Y = np.array(ys).reshape(-1, 1)
 
-    x_preds = []
-    for theta in np.linspace(-np.pi, 0, num=100):
-        x_preds.append([theta, 0, true_range])
-    X_pred = np.array(x_preds)
-
-    return X, Y, X_pred
-
+    if true_range:
+        x_preds = []
+        for theta in np.linspace(-np.pi, 0, num=100):
+            x_preds.append([theta, 0, true_range])
+        X_pred = np.array(x_preds)
+        return X, Y, X_pred
+    else:
+        return X, Y, []
 
 def calc_random_policy(pos, orn):
     pitch = np.random.uniform(-np.pi, 0)
@@ -54,16 +55,18 @@ def calc_random_policy(pos, orn):
 
 class GPOptimizer(object):
 
-    def __init__(self, pos, orn, true_range, nn=None, n_samples=500):
+    def __init__(self, urdf_num, pos, orn, true_range, result=None, nn=None, n_samples=500):
         """
         Initialize one of these for each BusyBox.
         """
-        # TODO: Generate the sample points used to optimize the function.
         self.sample_policies = []
         self.nn_samples = []
         self.true_range = true_range
         self.nn = nn
-        self.bb = create_simulated_baxter_slider()
+        if result:
+            self.bb = BusyBox.bb_from_result(result, urdf_num)
+        else:
+            self.bb = create_simulated_baxter_slider()
 
         image_data = setup_env(self.bb, viz=False, debug=False)
         mech_tuple = self.bb._mechanisms[0].get_mechanism_tuple()
@@ -181,7 +184,7 @@ def test_model(gp, result, nn=None, use_cuda=False, urdf_num=0):
     :return: Regret.
     """
     # Optimize the GP to get the best result.
-    optim_gp = GPOptimizer(result, nn=nn, use_cuda=use_cuda, urdf_num=urdf_num)
+    optim_gp = GPOptimizer(urdf_num, result, nn=nn, use_cuda=use_cuda, urdf_num=urdf_num)
     x_final, _ = optim_gp.optimize_gp(gp, result, ucb=False, nn=nn, urdf_num=urdf_num)
 
     # Execute the policy and observe the true motion.
@@ -208,115 +211,9 @@ def test_model(gp, result, nn=None, use_cuda=False, urdf_num=0):
     return regret
 
 
-def ucb_interaction(result, max_iterations=50, plot=False, nn_fname='', kx=-1, use_cuda=False, urdf_num=0):
-    # Pretrained Kernel
-    # kernel = ConstantKernel(0.005, constant_value_bounds=(0.005, 0.005)) * RBF(length_scale=(0.247, 0.084, 0.0592), length_scale_bounds=(0.0592, 0.247)) + WhiteKernel(noise_level=1e-5, noise_level_bounds=(1e-5, 1e2))
-    variance = 0.005
-    noise = 1e-5
-    l_pitch, l_yaw, l_q = 0.247, 100, 0.07
-    l_q = 0.1
-    l_pitch = 0.10
-    kernel = ConstantKernel(variance, constant_value_bounds=(variance, variance)) * RBF(length_scale=(l_pitch, l_yaw, l_q), length_scale_bounds=((l_pitch, l_pitch), (l_yaw, l_yaw), (l_q, l_q))) + WhiteKernel(noise_level=noise, noise_level_bounds=(1e-5, 1e2))
-    gp = GaussianProcessRegressor(kernel=kernel,
-                                  n_restarts_optimizer=10)
+class UCB_Interaction(object):
 
-    # Load the NN if required.
-    nn = None
-    if nn_fname != '':
-        nn = util.load_model(nn_fname, 16, use_cuda=use_cuda)
-
-    interaction_data = []
-    image_data = None
-    xs, ys, moves = [], [], []
-
-    optim = GPOptimizer(result, nn=nn, use_cuda=use_cuda, urdf_num=urdf_num)
-
-    for ix in range(0, max_iterations):
-        # (1) Choose a point to interact with.
-        if len(xs) < 1 and (nn is None):
-            # (a) Choose policy randomly.
-            bb = BusyBox.bb_from_result(result, urdf_num=urdf_num)
-            im = setup_env(bb, viz=False, debug=False)
-            mech = bb._mechanisms[0]
-            pose_handle_base_world = mech.get_pose_handle_base_world()
-            policy = policies.generate_policy(bb, mech, True, 1.0)
-            q = policy.generate_config(mech, None)
-        else:
-            # (b) Choose policy using UCB bound.
-            x_final, dataset = optim.optimize_gp(gp, result, ucb=True, beta=10, nn=nn, urdf_num=urdf_num)
-
-            bb = BusyBox.bb_from_result(result, urdf_num)
-            im = setup_env(bb, viz=False, debug=False)
-            mech = bb._mechanisms[0]
-            pose_handle_base_world = mech.get_pose_handle_base_world()
-            policy_list = list(pose_handle_base_world.p) + [0., 0., 0., 1.] + [x_final[0], 0.0]
-            policy = policies.get_policy_from_params('Prismatic', policy_list, mech)
-            q = x_final[-1]
-
-        if image_data is None:
-            image_data = im
-
-        # (2) Interact with BusyBox to get result.
-        traj = policy.generate_trajectory(pose_handle_base_world, q, True)
-        gripper = Gripper(bb.bb_id)
-        c_motion, motion, handle_pose_final = gripper.execute_trajectory(traj, mech, policy.type, False)
-        p.disconnect()
-
-        result = util.Result(policy.get_policy_tuple(), mech.get_mechanism_tuple(), \
-                             motion, c_motion, handle_pose_final, handle_pose_final, \
-                             q, image_data, None, -1)
-        interaction_data.append(result)
-
-        # if ix == 0:
-        #     print('GP:', gp.kernel)
-        #     viz_gp_circles(gp, result, ix, bb, image_data, nn=nn, kx=kx, model_name=nn_fname)
-
-        # (3) Update GP.
-        policy_params = policy.get_policy_tuple()
-        xs.append([policy_params.params.pitch,
-                   policy_params.params.yaw,
-                   q])
-        if nn is None:
-            ys.append([motion])
-        else:
-            inputs = optim._optim_result_to_torch(x_final, optim.dataset.images[0].unsqueeze(0), use_cuda=use_cuda)
-            nn_pred = nn.forward(*inputs)[0]
-            if use_cuda:
-                nn_pred = nn_pred.cpu()
-            nn_pred = nn_pred.detach().numpy().squeeze()
-            ys.append([motion-nn_pred])
-        moves.append([motion])
-        gp.fit(np.array(xs), np.array(ys))
-
-        # (4) Visualize GP.
-        if ix % 10 == 0 and plot:
-            params = mech.get_mechanism_tuple().params
-            print('Range:', params.range/2.0)
-            print('Angle:', np.arctan2(params.axis[1], params.axis[0]))
-            print('GP:', gp.kernel_)
-
-            # #plt.clf()
-            # plt.figure(figsize=(15, 15))
-            # for x, y in zip(xs, ys):
-            #     plt.scatter(x[0], x[2], s=200)
-            # plt.title('policy samples')
-            # plt.xlabel('pitch')
-            # plt.ylabel('q')
-            # #plt.savefig('gp_samples_%d.png' % ix)
-            # plt.show()
-            # viz_gp(gp, result, ix, bb, nn=nn)
-            viz_gp_circles(gp, result, ix, bb, image_data, nn=nn, kx=kx, points=xs)
-
-    regrets = []
-    for y in moves:
-        max_d = mech.get_mechanism_tuple().params.range/2.0
-        regrets.append((max_d - y[0])/max_d)
-        print(y, max_d)
-    return gp, nn, np.mean(regrets), interaction_data
-
-class UCB_Interaction_Baxter(object):
-
-    def __init__(self, pos, orn, true_range, plot, nn_fname=''):
+    def __init__(self, urdf_num, result=None, plot=False, true_range=None, pos=None, orn=None, nn_fname=''):
         # Pretrained Kernel
         # kernel = ConstantKernel(0.005, constant_value_bounds=(0.005, 0.005)) * RBF(length_scale=(0.247, 0.084, 0.0592), length_scale_bounds=(0.0592, 0.247)) + WhiteKernel(noise_level=1e-5, noise_level_bounds=(1e-5, 1e2))
         self.variance = 0.005
@@ -337,18 +234,22 @@ class UCB_Interaction_Baxter(object):
         self.xs, self.ys, self.moves = [], [], []
 
         self.ix = 0
-
-        self.pos = pos
-        self.orn = orn
-        self.true_range = true_range
-
         self.plot = plot
-
         self.nn = None
         if nn_fname != '':
             self.nn = util.load_model(nn_fname, 16, use_cuda=False)
 
-        self.optim = GPOptimizer(pos, orn, true_range, self.nn)
+        if result:
+            bb = BusyBox.bb_from_result(result)
+            setup_env(bb, viz=False, debug=False)
+            self.pos = list(bb._mechanisms[0].get_pose_handle_base_world().p)
+            self.orn = [0., 0., 0., 1.] # if from result then all policies in this frame
+            self.true_range = bb._mechanisms[0].range/2
+        else:
+            self.pos = list(pos)
+            self.orn = list(orn)
+            self.true_range = true_range
+        self.optim = GPOptimizer(urdf_num, self.pos, self.orn, self.true_range, nn=self.nn, result=result)
 
     def sample(self):
         # (1) Choose a point to interact with.
@@ -517,7 +418,7 @@ def viz_gp_circles(gp, num, max_d, points=[], nn=None, image_data=None):
     #polar_plots(ax2, std_colors, vmax=None, points=points)
     #plt.show()
 
-    fname = '/home/mnosew/gp_nn_polar_%d.png' % (num)
+    fname = 'gp_nn_polar_%d.png' % (num)
     plt.savefig(fname, bbox_inches='tight', facecolor='k')
 
     # -------------------------
@@ -567,7 +468,7 @@ def polar_plots(ax, colors, vmax, points=None):
 
 
 def fit_random_dataset(data):
-    X, Y, X_pred = process_data(data, n_train=args.n_train)
+    X, Y, X_pred = process_data(data, args.n_train, None)
 
     # kernel = ConstantKernel(1.0) * RBF(length_scale=(1.0, 1.0, 1.0), length_scale_bounds=(1e-5, 1)) + WhiteKernel(noise_level=0.01)
     # kernel = ConstantKernel(1.0) * ExpSineSquared(1.0, 5.0, periodicity_bounds=(1e-3, 1e2)) + WhiteKernel(noise_level=0.01)
@@ -727,7 +628,11 @@ if __name__ == '__main__':
     parser.add_argument('--n-interactions', type=int)
     parser.add_argument('--eval', type=str)
     parser.add_argument('--urdf-num', default=0)
+    parser.add_argument('--debug', action='store_true')
     args = parser.parse_args()
+
+    if args.debug:
+        import pdb; pdb.set_trace()
 
     # create_gpucb_dataset(L=100,
     #                      M=100,
@@ -737,11 +642,12 @@ if __name__ == '__main__':
     # evaluate_k_busyboxes(50, args, use_cuda=True)
 
     # fit_random_dataset(data)
-
-    sampler = UCB_Interaction_Baxter(pos=(0.,0.,0.),
-                                     orn=(0.,0.,0.,1.),
-                                     true_range=0.3,
+    results = util.read_from_file('test')
+    result=results[0]
+    sampler = UCB_Interaction(args.urdf_num, result=result,#pos=(0.,0.,0.),
+                                     #orn=(0.,0.,0.,1.),
+                                     #true_range=0.3,
                                      plot=True,
-                                     nn_fname='gpucb_data/model_ntrain_10000.pt')
+                                     nn_fname='../overflow/random_100bb_100int_90/torch_models/model_ntrain_9000.pt')
     policy, q = sampler.sample()
     sampler.update(policy, q, 0.2)
