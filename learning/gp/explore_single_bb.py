@@ -20,6 +20,7 @@ import torch
 from learning.dataloaders import PolicyDataset, parse_pickle_file
 from gen.generate_policy_data import generate_dataset
 from collections import namedtuple
+import time
 
 def process_data(data, n_train, true_range):
     """
@@ -251,7 +252,12 @@ class UCB_Interaction(object):
             self.true_range = true_range
         self.optim = GPOptimizer(urdf_num, self.pos, self.orn, self.true_range, nn=self.nn, result=result)
 
+<<<<<<< HEAD
     def sample(self):
+=======
+    for ix in range(0, max_iterations):
+
+>>>>>>> master
         # (1) Choose a point to interact with.
         if len(self.xs) < 1 and self.nn is None:
             # (a) Choose policy randomly.
@@ -265,8 +271,29 @@ class UCB_Interaction(object):
         self.ix += 1
         return policy, q
 
+<<<<<<< HEAD
     def update(self, policy, q, motion):
         # TODO: Update without the NN.
+=======
+        if image_data is None:
+            image_data = im
+
+        # (2) Interact with BusyBox to get result.
+        traj = policy.generate_trajectory(pose_handle_base_world, q, True)
+        gripper = Gripper(bb.bb_id)
+        c_motion, motion, handle_pose_final = gripper.execute_trajectory(traj, mech, policy.type, False)
+        p.disconnect()
+
+        result = util.Result(policy.get_policy_tuple(), mech.get_mechanism_tuple(), \
+                             motion, c_motion, handle_pose_final, handle_pose_final, \
+                             q, image_data, None, -1)
+        interaction_data.append(result)
+
+        if ix == 0:
+            print('GP:', gp.kernel)
+            viz_gp_circles(gp, result, -1, bb, image_data, nn=nn, kx=kx, model_name=nn_fname)
+
+>>>>>>> master
         # (3) Update GP.
         policy_params = policy.get_policy_tuple()
         self.xs.append([policy_params.params.pitch,
@@ -284,11 +311,19 @@ class UCB_Interaction(object):
         self.gp.fit(np.array(self.xs), np.array(self.ys))
 
         # (4) Visualize GP.
+<<<<<<< HEAD
         if self.ix % 1 == 0 and self.plot:
             #params = mech.get_mechanism_tuple().params
             #print('Range:', params.range/2.0)
             #print('Angle:', np.arctan2(params.axis[1], params.axis[0]))
             #print('GP:', gp.kernel_)
+=======
+        if ix % 1 == 0 and plot:
+            params = mech.get_mechanism_tuple().params
+            print('Range:', params.range/2.0)
+            print('Angle:', np.arctan2(params.axis[1], params.axis[0]))
+            print('GP:', gp.kernel_)
+>>>>>>> master
 
             # #plt.clf()
             # plt.figure(figsize=(15, 15))
@@ -401,45 +436,65 @@ def viz_gp_circles(gp, num, max_d, points=[], nn=None, image_data=None):
             mean_colors[ix, jx] = Y_pred[jx, 0]
             std_colors[ix, jx] = Y_std[jx]
 
-    plt.clf()
-    plt.figure(figsize=(20, 5))
-    #ax0 = plt.subplot(131)
-    #w, h, im = image_data
-    #np_im = np.array(im, dtype=np.uint8).reshape(h, w, 3)
-    #ax0.imshow(np_im)
-    #mps = bb._mechanisms[0].get_mechanism_tuple().params
-    #print('Angle:', np.rad2deg(np.arctan2(mps.axis[1], mps.axis[0])))
-    ax1 = plt.subplot(111, projection='polar')
-    ax1.set_title('Reward (T=%d)' % (num+1), color='w', y=1.15)
-    polar_plots(ax1, mean_colors, vmax=max_d)
-
-    #ax2 = plt.subplot(122, projection='polar')
-    #ax2.set_title('variance')
-    #polar_plots(ax2, std_colors, vmax=None, points=points)
-    #plt.show()
-
-    fname = 'gp_nn_polar_%d.png' % (num)
-    plt.savefig(fname, bbox_inches='tight', facecolor='k')
-
-    # -------------------------
     # plt.clf()
-    # plt.figure(figsize=(5, 5))
-    # # ax0 = plt.subplot(111)
-    # # w, h, im = image_data
-    # # np_im = np.array(im, dtype=np.uint8).reshape(h, w, 3)
-    # # ax0.imshow(np_im)
-    #
-    # ax1 = plt.subplot(111, projection='polar')
+    # f = plt.figure(figsize=(20, 5))
+    # f.set_facecolor((0, 0, 0))
+    # ax0 = plt.subplot(131)
+    # w, h, im = image_data
+    # np_im = np.array(im, dtype=np.uint8).reshape(h, w, 3)
+    # ax0.imshow(np_im)
+    # mps = bb._mechanisms[0].get_mechanism_tuple().params
+    # print('Angle:', np.rad2deg(np.arctan2(mps.axis[1], mps.axis[0])))
+    # ax1 = plt.subplot(132, projection='polar')
+    # ax1.set_title('mean')
     # max_d = bb._mechanisms[0].get_mechanism_tuple().params.range / 2.0
     # polar_plots(ax1, mean_colors, vmax=max_d)
-    # #
-    # # ax2 = plt.subplot(111, projection='polar')
-    # # polar_plots(ax2, std_colors, vmax=None, points=points)
+    #
+    # ax2 = plt.subplot(133, projection='polar')
+    # ax2.set_title('variance')
+    # polar_plots(ax2, std_colors, vmax=None, points=points)
+    # plt.show()
     #
     # if '/' in model_name:
     #     model_name = model_name.split('/')[-1].replace('.pt', '')
-    # fname = 'prior_plots/gp_polar_bb_%d_%d_%s_mean.png' % (kx, num, model_name)
+    # fname = 'prior_plots/gp_polar_bb_%d_%d_%s.png' % (kx, num, model_name)
     # plt.savefig(fname, bbox_inches='tight')
+
+    # -------------------------
+    plt.clf()
+    plt.figure(figsize=(5, 5))
+    # ax0 = plt.subplot(111)
+    # w, h, im = image_data
+    # np_im = np.array(im, dtype=np.uint8).reshape(h, w, 3)
+    # ax0.imshow(np_im)
+
+    ax1 = plt.subplot(111, projection='polar')
+    max_d = bb._mechanisms[0].get_mechanism_tuple().params.range / 2.0
+    polar_plots(ax1, mean_colors, vmax=max_d, points=points)
+    ax1.set_title('Reward (T=%d)' % (num + 1), color='w', y=1.15)
+    #
+    # ax2 = plt.subplot(111, projection='polar')
+    # polar_plots(ax2, std_colors, vmax=None, points=points)
+    # plt.show()
+    if '/' in model_name:
+        model_name = model_name.split('/')[-1].replace('.pt', '')
+    fname = 'videos/gp_polar_bb_%d_%d_%s_mean_arrow.png' % (kx, num, model_name)
+    plt.savefig(fname, bbox_inches='tight', facecolor='k')
+
+    plt.clf()
+    plt.figure(figsize=(5, 5))
+    ax1 = plt.subplot(111, projection='polar')
+    max_d = bb._mechanisms[0].get_mechanism_tuple().params.range / 2.0
+    polar_plots(ax1, mean_colors, vmax=max_d, points=None)
+    ax1.set_title('Reward (T=%d)' % (num+1), color='w', y=1.15)
+    #
+    # ax2 = plt.subplot(111, projection='polar')
+    # polar_plots(ax2, std_colors, vmax=None, points=points)
+    #plt.show()
+    if '/' in model_name:
+        model_name = model_name.split('/')[-1].replace('.pt', '')
+    fname = 'videos/gp_polar_bb_%d_%d_%s_mean.png' % (kx, num, model_name)
+    plt.savefig(fname, bbox_inches='tight', facecolor='k')
     # ----------------------------------
 
 
@@ -509,16 +564,16 @@ def evaluate_k_busyboxes(k, args, use_cuda=False):
 
     # GP-UCB-NN Models
     elif args.eval == 'gpucb_nn':
-        models = ['gpucb_data_2/torch_models/model_ntrain_1000.pt',
-                  'gpucb_data_2/torch_models/model_ntrain_2000.pt',
-                  'gpucb_data_2/torch_models/model_ntrain_3000.pt',
-                  'gpucb_data_2/torch_models/model_ntrain_4000.pt',
-                  'gpucb_data_2/torch_models/model_ntrain_5000.pt',
-                  'gpucb_data_2/torch_models/model_ntrain_6000.pt',
-                  'gpucb_data_2/torch_models/model_ntrain_7000.pt',
-                  'gpucb_data_2/torch_models/model_ntrain_8000.pt',
-                  'gpucb_data_2/torch_models/model_ntrain_9000.pt',
-                  'gpucb_data_2/torch_models/model_ntrain_10000.pt']
+        models = ['gpucb_data/model_ntrain_1000.pt',
+                  'gpucb_data/model_ntrain_2000.pt',
+                  'gpucb_data/model_ntrain_3000.pt',
+                  'gpucb_data/model_ntrain_4000.pt',
+                  'gpucb_data/model_ntrain_5000.pt',
+                  'gpucb_data/model_ntrain_6000.pt',
+                  'gpucb_data/model_ntrain_7000.pt',
+                  'gpucb_data/model_ntrain_8000.pt',
+                  'gpucb_data/model_ntrain_9000.pt',
+                  'gpucb_data/model_ntrain_10000.pt']
 
     # Random-NN Models
     elif args.eval == 'random_nn':
@@ -536,6 +591,10 @@ def evaluate_k_busyboxes(k, args, use_cuda=False):
                     'random_100bb_100int/torch_models/model_ntrain_1000.pt']
 
     # GP-UCB Models
+    elif args.eval == 'test_good':
+        models = ['gpucb_data/model_ntrain_10000.pt']
+    elif args.eval == 'test_bad':
+        models = ['gpucb_data/model_ntrain_1000.pt']
     else:
         models = ['']
 
@@ -547,13 +606,15 @@ def evaluate_k_busyboxes(k, args, use_cuda=False):
         avg_regrets, final_regrets = [], []
         for ix, result in enumerate(data[:k]):
             print('BusyBox', ix)
-            gp, nn, avg_regret, _ = ucb_interaction(result,
+            gp, nn, avg_regret, interactions = ucb_interaction(result,
                                                     max_iterations=args.n_interactions,
-                                                    plot=False,
+                                                    plot=True,
                                                     nn_fname=model,
                                                     kx=ix,
                                                     use_cuda=use_cuda,
                                                     urdf_num=args.urdf_num)
+            create_video(interactions)
+
             regret = test_model(gp, result, nn, use_cuda=use_cuda, urdf_num=args.urdf_num)
             avg_regrets.append(avg_regret)
             print('AVG:', avg_regret)
@@ -567,9 +628,9 @@ def evaluate_k_busyboxes(k, args, use_cuda=False):
                'final': np.mean(final_regrets),
                'regrets': final_regrets}
         results.append(res)
-        print('regret_results_%s_t%d_n%d_2.pickle' % (args.eval, args.n_interactions, k))
-        with open('regret_results_%s_t%d_n%d_2.pickle' % (args.eval, args.n_interactions, k), 'wb') as handle:
-            pickle.dump(results, handle)
+        print('regret_results_%s_t%d_n%d.pickle' % (args.eval, args.n_interactions, k))
+        # with open('regret_results_%s_t%d_n%d.pickle' % (args.eval, args.n_interactions, k), 'wb') as handle:
+        #     pickle.dump(results, handle)
 
 
 def create_gpucb_dataset(L=50, M=200, bb_fname='', fname=''):
