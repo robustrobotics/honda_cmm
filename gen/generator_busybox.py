@@ -6,7 +6,7 @@ import pybullet_data
 import aabbtree as aabb
 import cv2
 from actions.gripper import Gripper
-from util import util
+from utils import util
 from collections import namedtuple
 
 MechanismParams = namedtuple('MechanismParams', 'type params')
@@ -523,24 +523,35 @@ class BusyBox(object):
         return bb
 
     @staticmethod
-<<<<<<< HEAD
-    def bb_from_result(result, urdf_tag=str(6)):
+    def bb_from_result(result, urdf_num=0):
         width, height = 0.6, 0.6
-        dummy_bb = BusyBox.get_busybox(width, height, [], urdf_tag=urdf_tag+'1')
-=======
-    def bb_from_result(result, urdf_num=6):
-        width, height = 0.6, 0.6
-        dummy_bb = BusyBox.get_busybox(width, height, [], urdf_tag=str(urdf_num)+'1')
->>>>>>> master
+        # so dummy doesn't conflict with final bb
+        dummy_bb = BusyBox.get_busybox(width, height, [], urdf_tag=str(urdf_num)+'_dummy')
         if result.mechanism_params.type == 'Slider':
             mech = Slider.mech_from_result(result, dummy_bb)
         elif result.mechanism_params.type == 'Door':
             mech = Door.mech_from_result(result, dummy_bb)
-<<<<<<< HEAD
-        return BusyBox.get_busybox(width, height, [mech], urdf_tag=str(urdf_tag))
-=======
         return BusyBox.get_busybox(width, height, [mech], urdf_tag=str(urdf_num))
->>>>>>> master
+
+
+def create_simulated_baxter_slider():
+    # Create the slider.
+    slider = Slider(x_offset=-0.0525,
+                    z_offset=-0.19,
+                    range=0.33,
+                    axis=(1.0, 0),
+                    color=(1, 0, 0),
+                    bb_thickness=0.05)
+
+    # Create the busybox.
+    bb = BusyBox(width=0.6,
+                 height=0.6,
+                 mechanisms=[slider],
+                 bb_thickness=0.05,
+                 file_name='models/busybox_real.urdf')
+    with open('models/busybox_real.urdf', 'w') as handle:
+        handle.write(bb.get_urdf())
+    return bb
 
 
 if __name__ == '__main__':
