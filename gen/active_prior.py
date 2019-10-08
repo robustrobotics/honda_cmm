@@ -22,12 +22,12 @@ AttemptedGoal = namedtuple('AttemptedGoal', 'goal competence')
 # THIS IS ONLY MADE FOR PRISMATIC POLICIES
 
 # params
-g_max = 7  # max samples per region
+g_max = 10  # max samples per region
 R = 0.05    # region to sample for low competence
 n_int = 3   # maximum number of samples in a region to calc interest
-min_region = 0.0
-alpha = 0.992 # probability of exploring versus exploting
-discount = True # discount the exploration prob every iteration
+min_region = 0.003
+alpha = .9 # probability of exploring versus exploting
+discount = False # discount the exploration prob every iteration
 
 class ActivePolicyLearner(object):
 
@@ -47,6 +47,8 @@ class ActivePolicyLearner(object):
         self.all_random = all_random
         self.all_interact_goals = []
         self.lite = lite
+        self.x_lims = (-self.max_region.coord.x, -1*(self.max_region.coord.x-self.max_region.dims.width))
+        self.y_lims = (self.max_region.coord.z, self.max_region.coord.z+self.max_region.dims.height)
 
         #plt.ion()
         if not self.lite:
@@ -54,17 +56,15 @@ class ActivePolicyLearner(object):
             self.prior_fig.suptitle('prior')
             self.prior_ax.set_aspect('equal')
             self.reset_plot(self.prior_ax)
-            self.made_prior_colorbar = False
 
             self.interest_fig, self.interest_ax = plt.subplots()
             self.interest_fig.suptitle('average interest')
             self.interest_avgs, self.interest_vars, self.interest_mins, self.interest_maxes = [], [], [], []
 
             self.interact_fig, self.interact_ax = plt.subplots()
-            self.interact_fig.suptitle('interactions')
+            #self.interact_fig.suptitle('interactions')
             self.interact_ax.set_aspect('equal')
             self.reset_plot(self.interact_ax)
-            self.made_interact_colorbar = False
 
     def learn(self, n_int_samples, n_prior_samples, model_path, hdim):
         # if prior model exists then load the model and generate regions from model
@@ -169,7 +169,7 @@ class ActivePolicyLearner(object):
             region_interests = tuple([region.interest/total_interest for region in self.regions])
         return region_interests
 
-
+    # sample a region weighted by the total competence in each region
     def select_exploit_goal(self):
         probs = []
         for region in self.regions:
@@ -206,7 +206,7 @@ class ActivePolicyLearner(object):
             region = None
             while region is None:
                 goal, high_comp_goal = orig_region.sample_goal('biased')
-                circle = plt.Circle([-high_comp_goal.x, high_comp_goal.z], R, facecolor=str(.5))
+                #circle = plt.Circle([-high_comp_goal.x, high_comp_goal.z], R, facecolor=str(.5))
                 #self.interact_ax.add_artist(circle)
                 #self.interact_ax.plot([-high_comp_goal.x], [high_comp_goal.z], 'm.')
                 #self.interact_ax.plot([-goal[0]], [goal[1]], 'r.')
@@ -249,7 +249,7 @@ class ActivePolicyLearner(object):
         coeff = np.divide(np.dot(final_pos_handle, final_pos_handle), np.linalg.norm(goal_pos_handle)**2)
         motion_proj_handle = np.dot(coeff, goal_pos_handle)
         motion_towards_goal = np.linalg.norm(motion_proj_handle)
-        competence = motion_towards_goal*np.divide(motion_towards_goal, init_dist_to_goal)
+        competence = np.divide(motion_towards_goal, init_dist_to_goal)
         return competence
 
     def reset(self):
@@ -265,7 +265,9 @@ class ActivePolicyLearner(object):
         center = [self.start_pos[0], self.start_pos[2]]
         endpoint0 = np.add(center, np.multiply(self.mech.range/2, self.mech.axis))
         endpoint1 = np.add(center, np.multiply(-self.mech.range/2, self.mech.axis))
-        ax.plot([-endpoint0[0], -endpoint1[0]], [endpoint0[1], endpoint1[1]], '--r')
+        #ax.plot([-endpoint0[0], -endpoint1[0]], [endpoint0[1], endpoint1[1]], '--r')
+        image = util.imshow(self.image_data, False)
+        ax.imshow(image, extent=(*self.x_lims, *self.y_lims))
 
     def update_plot(self, mode):
         if mode == 'predict':
@@ -276,6 +278,7 @@ class ActivePolicyLearner(object):
         # clear figure
         plt.cla()
         self.reset_plot(ax)
+
         interest_probs = self.region_interest_probs()
         all_goals = []
         for region in self.regions:
@@ -290,27 +293,21 @@ class ActivePolicyLearner(object):
             for i in range(4):
                 # flip since axes are reversed in pybullet
                 ax.plot(np.multiply(-1,[corner_coords[i].x, corner_coords[i+1].x]),
-                                [corner_coords[i].z, corner_coords[i+1].z], 'k')
+                                [corner_coords[i].z, corner_coords[i+1].z], 'k', linewidth=.5)
                 ax.fill_between([-corner_coords[0].x, -corner_coords[1].x],
                                         [corner_coords[0].z, corner_coords[1].z],
                                         [corner_coords[2].z, corner_coords[3].z],
-                                        color=prob, alpha=.3)
+                                        color=prob, alpha=.1)
             # redraw goals
             goals = []
             for element in region.attempted_goals:
                 if mode == element[2]:
                     im = ax.scatter([-element[0].x], [element[0].z], c=[element[1]], s=4, vmin=0, vmax=max_comp)
-                    if (mode == 'predict') and not self.made_prior_colorbar:
-                        fig.colorbar(im)
-                        self.made_prior_colorbar = True
-                    if (mode == 'interact') and not self.made_interact_colorbar:
-                        fig.colorbar(im)
-                        self.made_interact_colorbar = True
         if mode == 'interact':
             last_goal = self.all_interact_goals[-1]
             colors = {1: 'r', 2: 'darkorchid', 3: 'hotpink', 'exploit': 'tan'}
-            ax.plot(-last_goal[0][0], last_goal[0][1], '.', color=colors[last_goal[2]])
-        ax.set_title(mode)
+            #ax.plot(-last_goal[0][0], last_goal[0][1], '.', color=colors[last_goal[2]])
+        ax.set_title('Competence of Sampled Goals')
 
         minmax = True
         if minmax:
@@ -327,12 +324,16 @@ class ActivePolicyLearner(object):
             plt.pause(0.01)
         plt.show()
         if self.viz_plot_final:
+            # TODO: colorbar doesn't update with interactive plotting
+            fig.colorbar(im)
             input('enter to continue')
-            plt.close()
+            plt.close('all')
 
     def reset_plot(self, ax):
-        ax.set_xlim(-self.max_region.coord.x, -1*(self.max_region.coord.x-self.max_region.dims.width))
-        ax.set_ylim(self.max_region.coord.z, self.max_region.coord.z+self.max_region.dims.height)
+        ax.set_xlim(*self.x_lims)
+        ax.set_ylim(*self.y_lims)
+        ax.set_yticklabels([])
+        ax.set_xticklabels([])
         self.plot_mech(ax)
 
     def get_params(self):
@@ -465,8 +466,7 @@ def generate_dataset(n_bbs, n_int_samples, n_prior_samples, viz, debug, urdf_num
         final_figs = []
         interest_figs = []
     for i in range(n_bbs):
-        if bb is None:
-            bb = BusyBox.generate_random_busybox(max_mech=max_mech, mech_types=[Slider], urdf_tag=urdf_num, debug=debug)
+        bb = BusyBox.generate_random_busybox(max_mech=max_mech, mech_types=[Slider], urdf_tag=urdf_num, debug=debug)
         active_learner = ActivePolicyLearner(bb, viz, debug, viz_plot_final, viz_plot_cont, all_random, lite)
         active_learner.learn(n_int_samples, n_prior_samples, model_path, hdim)
         if not lite:

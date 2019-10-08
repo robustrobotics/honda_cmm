@@ -5,6 +5,7 @@ from learning.models.nn_disp_pol_vis import DistanceRegressor as NNPolVis
 from learning.dataloaders import setup_data_loaders, parse_pickle_file
 import learning.viz as viz
 from learning.test_model import test_env
+from learning.train import train_eval
 from collections import namedtuple
 from utils import util
 from torch.utils.tensorboard import SummaryWriter
@@ -16,89 +17,42 @@ import matplotlib.pyplot as plt
 import traceback, sys, pdb
 torch.backends.cudnn.enabled = True
 
-def train_eval(args, parsed_data, pviz=False):
-
-    train_set = setup_data_loaders(parsed_data, batch_size=args.batch_size, train_only=True)
-
-    # Setup Model (TODO: Update the correct policy dims)
-    net = NNPolVis(policy_names=['Prismatic', 'Revolute'],
-                   policy_dims=[2, 12],
-                   hdim=args.hdim,
-                   im_h=53,  # 154,
-                   im_w=115,  # 205,
-                   kernel_size=3,
-                   image_encoder=args.image_encoder)
-
-    if args.use_cuda:
-        net = net.cuda()
-
-    loss_fn = torch.nn.MSELoss()
-    optim = torch.optim.Adam(net.parameters())
-
-    # Add the graph to TensorBoard viz,
-    k, x, q, im, y, _ = train_set.dataset[0]
-    pol = torch.Tensor([util.name_lookup[k]])
-    if args.use_cuda:
-        x = x.cuda().unsqueeze(0)
-        q = q.cuda().unsqueeze(0)
-        im = im.cuda().unsqueeze(0)
-        pol = pol.cuda()
-
-    # Training loop.
-    best_train_error = 10000
-    for ex in range(1, args.n_epochs+1):
-        train_losses = []
-        net.train()
-        for bx, (k, x, q, im, y, _) in enumerate(train_set):
-            pol = util.name_lookup[k[0]]
-            if args.use_cuda:
-                x = x.cuda()
-                q = q.cuda()
-                im = im.cuda()
-                y = y.cuda()
-            optim.zero_grad()
-            yhat = net.forward(pol, x, q, im)
-
-            loss = loss_fn(yhat, y)
-            loss.backward()
-
-            optim.step()
-
-            train_losses.append(loss.item())
-        train_loss_ex = np.mean(train_losses)
-        best_train_error = min(best_train_error, train_loss_ex)
-        print('[Epoch {}] - Training Loss: {}'.format(ex, train_loss_ex))
-    return best_train_error, net.state_dict()
-
-def get_train_params(args):
-    return {'batch_size': args.batch_size,
-            'hdim': args.hdim,
-            'n_epochs': args.n_epochs,
-            'n_bbs': args.n_bbs,
+def get_cont_learning_params(args):
+    return {'n_bbs': args.n_bbs,
             'data_type': args.data_type,
             'n_inter': args.n_inter,
             'n_prior': args.n_prior,
             'train_freq': args.train_freq,
-            'bb_file': args.bb_file}
+            'bb_train_file': args.bb_train_file,
+            'val_data_file': args.val_data_file,
+            }
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+
+    # arguments for training
     parser.add_argument('--batch-size', type=int, default=16, help='Batch size to use for training.')
     parser.add_argument('--hdim', type=int, default=16, help='Hidden dimensions for the neural nets.')
     parser.add_argument('--n-epochs', type=int, default=10)
-    #parser.add_argument('--plot-freq', type=int, default=5)
+    parser.add_argument('--val-freq', default=5, type=int)
+    parser.add_argument('--mode', choices=['ntrain', 'normal'], default='normal')
     parser.add_argument('--use-cuda', default=False, action='store_true')
-    parser.add_argument('--debug', action='store_true')
     parser.add_argument('--image-encoder', type=str, default='spatial', choices=['spatial', 'cnn'])
+
+    # arguments for continual learning
+    parser.add_argument('--debug', action='store_true')
+    #parser.add_argument('--plot-freq', type=int, default=5)
     parser.add_argument('--n-bbs', type=int, default=5) # maximum number of robot interactions
-    parser.add_argument('--data-type', choices=['sagg', 'sagg-learner', 'random', 'random-learner'])
+    parser.add_argument('--data-type', required=True, choices=['sagg', 'sagg-learner', 'random', 'random-learner'])
     parser.add_argument('--n-inter', default=20, type=int) # number of samples used during interactions
     parser.add_argument('--n-prior', default=10, type=int) # number of samples used to generate prior
     parser.add_argument('--viz-cont', action='store_true') # visualize interactions and prior as they're generated
     parser.add_argument('--viz-final', action='store_true') # visualize final interactions and priors
     parser.add_argument('--lite', action='store_true') # if used, does not generate or save any plots
     parser.add_argument('--train-freq', default=1, type=int) # frequency to retrain and test model
-    parser.add_argument('--bb-file', type=str)
+    parser.add_argument('--bb-train-file', type=str)
+    parser.add_argument('--val-data-file', type=str, required=True)
+
     parser.add_argument('--urdf-tag', type=str, default='0')
     args = parser.parse_args()
 
@@ -106,7 +60,7 @@ if __name__ == '__main__':
         pdb.set_trace()
 
     try:
-        # remove directories for tensorboard logs and torch model then remake
+        # move directories for tensorboard logs and torch model then remake
         model_dir = './torch_models_prior/'
         runs_dir = './runs_active'
         dirs = [model_dir, runs_dir]
@@ -117,8 +71,10 @@ if __name__ == '__main__':
             os.makedirs(dir)
         plt.ion()
 
-        if args.bb_file:
-            bbps = util.read_from_file(args.bb_file)
+        # read in bb train file and validation data file
+        if args.bb_train_file:
+            bbps = util.read_from_file(args.bb_train_file)
+        parsed_val_data = parse_pickle_file(fname=args.val_data_file)
 
         dataset = []
         writer = SummaryWriter(runs_dir)
@@ -126,7 +82,7 @@ if __name__ == '__main__':
         model_path = None
         for i in range(1,args.n_bbs+1):
             print('BusyBox: ', i, '/', args.n_bbs)
-            if args.bb_file:
+            if args.bb_train_file:
                 bbp = bbps[i-1]
                 bb = BusyBox.get_busybox(bbp.width, bbp.height, bbp._mechanisms, urdf_tag=args.urdf_tag)
             else:
@@ -181,15 +137,14 @@ if __name__ == '__main__':
             dataset += learner.interactions
 
             if not i % args.train_freq:
-                # train model
-                parsed_data = parse_pickle_file(data=dataset)
-                train_error, model = train_eval(args, parsed_data)
-
-                # save model
+                # train model (saves to model_path)
+                parsed_train_data = parse_pickle_file(data=dataset)
                 model_path = model_dir + args.data_type + str(i) + '.pt'
-                torch.save(model, model_path)
-                writer.add_scalar('Loss/train', train_error, i)
+                train_eval(args, i, parsed_train_data, parsed_val_data, model_path, writer)
 
+                # save dataset
+                dataset_path = model_dir + args.data_type + str(i) + '_dataset.pickle'
+                util.write_to_file(dataset_path, dataset)
         writer.close()
         import git
         repo = git.Repo(search_parent_directories=True)

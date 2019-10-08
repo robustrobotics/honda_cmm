@@ -41,7 +41,7 @@ Result contains the performance information after the gripper tries to move a me
 :param randomness: float in [0,1] representing how far from the true policy the random samples came from
 """
 ## Visualization Helper Functions
-'''
+
 def viz_train_test_data(train_data, test_data):
     import matplotlib.pyplot as plt
     from gen.generator_busybox import BusyBox
@@ -64,7 +64,7 @@ def viz_train_test_data(train_data, test_data):
             mech = bb._mechanisms[0]
             true_policy = policies.generate_policy(bb, mech, True, 0.0)
             pos = (true_policy.rigid_position[0], true_policy.rigid_position[2])
-            pos_ax.plot(pos[0], pos[1], 'm.')
+            pos_ax.plot(*pos, 'm.')
             pos_ax.annotate(i, pos)
             if i == len(test_data):
                 angle_ax.plot(true_policy.pitch, 2.0, 'k.', label = 'test data')
@@ -85,7 +85,7 @@ def viz_train_test_data(train_data, test_data):
         true_policy = policies.generate_policy(bb, mech, True, 0.0)
         pitches += [true_policy.pitch]
         pos = (true_policy.rigid_position[0], true_policy.rigid_position[2])
-        pos_ax.plot(pos[0], pos[1], 'c.')
+        pos_ax.plot(*pos, 'c.')
 
         if n in dataset_sizes:
             angle_ax.clear()
@@ -98,7 +98,14 @@ def viz_train_test_data(train_data, test_data):
             #angle_fig.savefig('dataset_imgs/pitches_n_bbs'+str(n))
             plt.show()
             input('enter to close')
-'''
+
+            angle_ax.set_title('Historgram of Training Data Angle, n_bbs='+str(n))
+            angle_ax.hist(pitches, 30)
+            plot_test_set()
+            #angle_fig.savefig('dataset_imgs/pitches_n_bbs'+str(n))
+            plt.show()
+            input('enter to close')
+
 ImageData = namedtuple('ImageData', 'width height rgbPixels')
 """
 ImageData contains a subset of the image data returned by pybullet
@@ -367,12 +374,6 @@ def quaternion_from_euler(roll, pitch, yaw):
     return to_pyquat(trans_q)
 
 if __name__ == '__main__':
-    # train_data = read_from_file('active_100bb_100i.pickle')
-    # test_data = read_from_file('active_100bb_100i.pickle')
-    # viz_train_test_data(train_data, test_data)
-    data = read_from_file('active_100bb_100i.pickle')
-    new_data = []
-    for i in range(0, 10000, 100):
-        new_data.append(data[i])
-    with open('active_100bbs.pickle', 'wb') as handle:
-        pickle.dump(new_data, handle)
+    train_data = read_from_file('square_bb_100.pickle')
+    test_data = read_from_file('prism_gp_evals.pickle')
+    viz_train_test_data(train_data, test_data)
