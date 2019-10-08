@@ -189,8 +189,6 @@ class Slider(Mechanism):
 
         # get busybox back_link pose
         client = p.connect(p.DIRECT)
-        bb_file = dummy_bb.file_name
-
         model = p.loadURDF(dummy_bb.file_name, [0., -.3, 0.])
         dummy_bb.set_mechanism_ids(model)
         p_dummy_bb = p.getLinkState(dummy_bb.bb_id, 0)[0]
