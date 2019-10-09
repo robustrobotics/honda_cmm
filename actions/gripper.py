@@ -4,7 +4,6 @@ from utils import util
 from collections import namedtuple
 import itertools
 import sys
-import time
 
 """
 Naming convention
