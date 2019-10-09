@@ -30,8 +30,7 @@ def generate_dataset(args, git_hash):
             for mech in bb._mechanisms:
                 # generate either a random or model-based policy and goal configuration
                 pose_handle_base_world = mech.get_pose_handle_base_world()
-                #policy = policies.generate_policy(bb, mech, args.match_policies, args.randomness, init_pose=pose_handle_base_world)
-                policy = policies.Prismatic._gen(bb, mech, args.randomness, pitch=-.15)
+                policy = policies.generate_policy(bb, mech, args.match_policies, args.randomness, init_pose=pose_handle_base_world)
                 config_goal = policy.generate_config(mech, args.goal_config)
                 pose_handle_world_init = util.Pose(*p.getLinkState(bb.bb_id, mech.handle_id)[:2])
 
