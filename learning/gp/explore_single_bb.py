@@ -252,12 +252,7 @@ class UCB_Interaction(object):
             self.true_range = true_range
         self.optim = GPOptimizer(urdf_num, self.pos, self.orn, self.true_range, nn=self.nn, result=result)
 
-<<<<<<< HEAD
     def sample(self):
-=======
-    for ix in range(0, max_iterations):
-
->>>>>>> master
         # (1) Choose a point to interact with.
         if len(self.xs) < 1 and self.nn is None:
             # (a) Choose policy randomly.
@@ -271,29 +266,9 @@ class UCB_Interaction(object):
         self.ix += 1
         return policy, q
 
-<<<<<<< HEAD
     def update(self, policy, q, motion):
         # TODO: Update without the NN.
-=======
-        if image_data is None:
-            image_data = im
 
-        # (2) Interact with BusyBox to get result.
-        traj = policy.generate_trajectory(pose_handle_base_world, q, True)
-        gripper = Gripper(bb.bb_id)
-        c_motion, motion, handle_pose_final = gripper.execute_trajectory(traj, mech, policy.type, False)
-        p.disconnect()
-
-        result = util.Result(policy.get_policy_tuple(), mech.get_mechanism_tuple(), \
-                             motion, c_motion, handle_pose_final, handle_pose_final, \
-                             q, image_data, None, -1)
-        interaction_data.append(result)
-
-        if ix == 0:
-            print('GP:', gp.kernel)
-            viz_gp_circles(gp, result, -1, bb, image_data, nn=nn, kx=kx, model_name=nn_fname)
-
->>>>>>> master
         # (3) Update GP.
         policy_params = policy.get_policy_tuple()
         self.xs.append([policy_params.params.pitch,
@@ -311,19 +286,11 @@ class UCB_Interaction(object):
         self.gp.fit(np.array(self.xs), np.array(self.ys))
 
         # (4) Visualize GP.
-<<<<<<< HEAD
         if self.ix % 1 == 0 and self.plot:
             #params = mech.get_mechanism_tuple().params
             #print('Range:', params.range/2.0)
             #print('Angle:', np.arctan2(params.axis[1], params.axis[0]))
             #print('GP:', gp.kernel_)
-=======
-        if ix % 1 == 0 and plot:
-            params = mech.get_mechanism_tuple().params
-            print('Range:', params.range/2.0)
-            print('Angle:', np.arctan2(params.axis[1], params.axis[0]))
-            print('GP:', gp.kernel_)
->>>>>>> master
 
             # #plt.clf()
             # plt.figure(figsize=(15, 15))
@@ -548,7 +515,7 @@ def fit_random_dataset(data):
 
 
 def evaluate_k_busyboxes(k, args, use_cuda=False):
-
+    '''
     # Active-NN Models
     if args.eval == 'active_nn':
         models = ['conv2_models/model_ntrain_1000.pt',
@@ -597,12 +564,12 @@ def evaluate_k_busyboxes(k, args, use_cuda=False):
         models = ['gpucb_data/model_ntrain_1000.pt']
     else:
         models = ['']
-
+    '''
     with open('prism_gp_evals_square_50.pickle', 'rb') as handle:
         data = pickle.load(handle)
 
     results = []
-    for model in models:
+    for model in args.models:
         avg_regrets, final_regrets = [], []
         for ix, result in enumerate(data[:k]):
             print('BusyBox', ix)
@@ -690,6 +657,7 @@ if __name__ == '__main__':
     parser.add_argument('--eval', type=str)
     parser.add_argument('--urdf-num', default=0)
     parser.add_argument('--debug', action='store_true')
+    parser.add_argument('--models', nargs='*')
     args = parser.parse_args()
 
     if args.debug:
