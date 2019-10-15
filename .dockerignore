@@ -7,3 +7,8 @@ models/*.urdf
 # tensorflow run log data
 /runs*
 /torch_models*
+/videos
+/ns_exp
+/datasets
+/scratch
+/.venv

@@ -157,7 +157,7 @@ if __name__ == '__main__':
     parser.add_argument('--n-epochs', type=int, default=10)
     parser.add_argument('--val-freq', type=int, default=5)
     parser.add_argument('--mode', choices=['ntrain', 'normal'], default='normal')
-    parser.add_argument('--use-cuda', default=False, action='store_true')
+    parser.add_argument('--use-cuda', default=False, type=lambda x: (str(x).lower() == 'true'))
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--data-fname', type=str)
     parser.add_argument('--save-dir', required=True, type=str)
@@ -169,7 +169,7 @@ if __name__ == '__main__':
     parser.add_argument('--n-runs', type=int, default=1)
     parser.add_argument('--pviz', action='store_true')
     args = parser.parse_args()
-
+    print(args)
     if args.debug:
         import pdb; pdb.set_trace()
 
