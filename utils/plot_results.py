@@ -2,7 +2,7 @@ import torch
 import argparse
 import matplotlib.pyplot as plt
 import numpy as np
-from util import util
+from utils import util
 import sys
 from learning.test_model import get_pred_motions
 from actions.policies import PrismaticParams, RevoluteParams
@@ -425,12 +425,9 @@ class TestMechPoliciesPitchOnly(PlotFunc):
     def description():
         return 'show performance on policies for a multiple busybox where ONLY PITCH is varied'
 
-    def _plot(self, data, model, bbps=None, n_samples=11, n_pitches=5, urdf_tag=4):
+
+    def _plot(self, data, model, n_samples=11, n_pitches=5, urdf_tag=4):
         randomness = 0.0
-        if bbps is None:
-            n_bbs = 25
-        else:
-            n_bbs = len(bbps)
         n_bbs = 6
         #delta_yaws = np.zeros((n_policies, n_policies))
         delta_pitches = np.zeros((n_pitches, n_bbs))

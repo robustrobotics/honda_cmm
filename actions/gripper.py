@@ -1,10 +1,9 @@
 import pybullet as p
 import numpy as np
-from util import util
+from utils import util
 from collections import namedtuple
 import itertools
 import sys
-import time
 
 """
 Naming convention
@@ -183,8 +182,6 @@ class Gripper:
         finished = False
         handle_base_ps = []
         for i in itertools.count():
-            if debug:
-                p.addUserDebugLine(np.add(pose_handle_base_world_des.p, [0.,0.,0.]), np.add(pose_handle_base_world_des.p, [0.,0.,1]), lifeTime=.5)
             handle_base_ps.append(mech.get_pose_handle_base_world().p)
             self._control_fingers('close', debug=debug)
             if (not last_traj_p) and self._at_des_handle_base_pose(pose_handle_base_world_des, q_offset, mech, 0.01):
@@ -206,8 +203,6 @@ class Gripper:
             self.errors += [(p_handle_base_world_err, lin_v_com_world_err)]
             self.forces += [(f, tau)]
             p_com_world, q_com_world = self._get_pose_com_('world')
-            if debug:
-                p.addUserDebugLine(p_com_world, np.add(p_com_world, p_handle_base_world_err), [1,0,0], lifeTime=.05)
             p.applyExternalForce(self._id, -1, f, p_com_world, p.WORLD_FRAME)
             # there is a bug in pyBullet. the link frame and world frame are inverted
             # this should be executed in the WORLD_FRAME
@@ -222,7 +217,8 @@ class Gripper:
             self.k = [3000.0,20.0]
             self.d = [250.0,0.45]
 
-    def execute_trajectory(self, traj, mech, policy_type, debug, sleep_time=-1):
+    def execute_trajectory(self, traj, mech, policy_type, debug):
+        pose_handle_base_world = mech.get_pose_handle_base_world()
         self.set_control_params(policy_type)
 
         # initial grasp pose
@@ -238,8 +234,6 @@ class Gripper:
             last_traj_p = (i == len(traj)-1)
             handle_base_ps, finished = self._move_PD(traj[i], q_offset, mech, last_traj_p, debug)
             cumu_motion = np.add(cumu_motion, np.linalg.norm(np.subtract(handle_base_ps[-1],handle_base_ps[0])))
-            if sleep_time > 0:
-                time.sleep(sleep_time)
             if finished:
                 break
         pose_handle_world_final = None

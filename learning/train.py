@@ -5,7 +5,7 @@ from learning.models.nn_disp_pol_vis import DistanceRegressor as NNPolVis
 from learning.dataloaders import setup_data_loaders, parse_pickle_file
 import learning.viz as viz
 from collections import namedtuple
-from util import util
+from utils import util
 import os
 import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter

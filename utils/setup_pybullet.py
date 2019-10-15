@@ -1,7 +1,7 @@
 import pybullet as p
 import pybullet_data
 import numpy as np
-from util import util
+from utils import util
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -22,7 +22,7 @@ def setup_env(bb, viz, debug, show_im=False):
     p.setRealTimeSimulation(0)
 
     p.resetDebugVisualizerCamera(
-        cameraDistance=0.2,
+        cameraDistance=.15,
         cameraYaw=180,
         cameraPitch=0,
         cameraTargetPosition=(0., 0., bb.height/2))

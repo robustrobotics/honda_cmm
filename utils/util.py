@@ -1,16 +1,16 @@
 import pybullet as p
 import numpy as np
 import pickle
-import util.transformations as trans
-from util import setup_pybullet
+import utils.transformations as trans
+#from utils import setup_pybullet
 import math
 from collections import namedtuple
 import os
 import torch
-from learning.models.nn_disp_pol import DistanceRegressor as NNPol
+#from learning.models.nn_disp_pol import DistanceRegressor as NNPol
 from learning.models.nn_disp_pol_vis import DistanceRegressor as NNPolVis
-from learning.models.nn_disp_pol_mech import DistanceRegressor as NNPolMech
-from actions import policies
+#from learning.models.nn_disp_pol_mech import DistanceRegressor as NNPolMech
+#from actions import policies
 import matplotlib.pyplot as plt
 import matplotlib.pyplot as plt
 
@@ -32,11 +32,11 @@ Result contains the performance information after the gripper tries to move a me
 :param mechanism_params: gen.generator_busybox.MechanismParams
 :param net_motion: scalar, the net distance the mechanism handle moved, 0.0 if the gripper lost contact with the mechanism
 :param net_motion: scalar, the cummulative distance the mechanism handle moved
-:param pose_joint_world_init: util.Pose object, the initial pose of the mechanism handle
-:param pose_joint_world_final: util.Pose object or None, the final pose of the mechanism handle if the
+:param pose_joint_world_init: utils.Pose object, the initial pose of the mechanism handle
+:param pose_joint_world_final: utils.Pose object or None, the final pose of the mechanism handle if the
                     gripper tip is in contact with the mechanism at completion, else None
 :param config_goal: the goal configuration which the joint was attempting to reach
-:param image_data: util.util.ImageData
+:param image_data: utils.util.ImageData
 :param git_hash: None or str representing the git hash when the data was collected
 :param randomness: float in [0,1] representing how far from the true policy the random samples came from
 """
@@ -99,6 +99,13 @@ def viz_train_test_data(train_data, test_data):
             plt.show()
             input('enter to close')
 
+            angle_ax.set_title('Historgram of Training Data Angle, n_bbs='+str(n))
+            angle_ax.hist(pitches, 30)
+            plot_test_set()
+            #angle_fig.savefig('dataset_imgs/pitches_n_bbs'+str(n))
+            plt.show()
+            input('enter to close')
+
 ImageData = namedtuple('ImageData', 'width height rgbPixels')
 """
 ImageData contains a subset of the image data returned by pybullet
@@ -107,6 +114,19 @@ ImageData contains a subset of the image data returned by pybullet
 :param rgbPixels: list of [char RED,char GREEN,char BLUE, char ALPHA] [0..width*height],
                     list of pixel colors in R,G,B,A format, in range [0..255] for each color
 """
+
+def draw_thick_line(endpoints, color, lifeTime=0):
+    # add to y and z dimensions
+    n = 10
+    w = .0005
+    delta_ys = np.linspace(-w, w, n)
+    delta_zs = np.linspace(-w, w, n)
+    lines = []
+    for delta_y in delta_ys:
+        for delta_z in delta_zs:
+            lines += [p.addUserDebugLine(np.add(endpoints[0], [0, delta_y, delta_z]), np.add(endpoints[1], [0, delta_y, delta_z]), color, lifeTime=lifeTime)]
+    return lines
+
 def imshow(image_data, show=True):
     img = np.reshape(image_data.rgbPixels, [image_data.height, image_data.width, 3])
     if show:
@@ -193,6 +213,7 @@ def merge_files(in_file_names, out_file_name):
     return results
 
 ### PyBullet Helper Functions ###
+'''
 def replay_result(result):
     from actions.gripper import Gripper
     from gen.generator_busybox import BusyBox
@@ -208,7 +229,7 @@ def replay_result(result):
     traj = policy.generate_trajectory(pose_handle_base_world, config_goal, True)
     _, net_motion, _ = gripper.execute_trajectory(traj, mech, policy.type, True)
     p.disconnect()
-
+'''
 def vis_frame(pos, quat, length=0.2, lifeTime=0.4):
     """ This function visualizes a coordinate frame for the supplied frame where the
     red,green,blue lines correpsond to the x,y,z axes.
@@ -353,12 +374,6 @@ def quaternion_from_euler(roll, pitch, yaw):
     return to_pyquat(trans_q)
 
 if __name__ == '__main__':
-    # train_data = read_from_file('active_100bb_100i.pickle')
-    # test_data = read_from_file('active_100bb_100i.pickle')
-    # viz_train_test_data(train_data, test_data)
-    data = read_from_file('active_100bb_100i.pickle')
-    new_data = []
-    for i in range(0, 10000, 100):
-        new_data.append(data[i])
-    with open('active_100bbs.pickle', 'wb') as handle:
-        pickle.dump(new_data, handle)
+    train_data = read_from_file('square_bb_100.pickle')
+    test_data = read_from_file('prism_gp_evals.pickle')
+    viz_train_test_data(train_data, test_data)

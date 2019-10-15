@@ -9,7 +9,7 @@ from torch.utils.data import Sampler
 import torchvision.transforms as transforms
 import torchvision
 import matplotlib.pyplot as plt
-from util import util
+from utils import util
 
 class CustomSampler(Sampler):
     def __init__(self, items, batch_size):
@@ -113,7 +113,7 @@ def parse_pickle_file(fname=None, data=None):
     Can pass in either a file name or a data dictionary to be parsed.
     Extract relevant information into vector format.
     :param fname: str, name of the pickle file to load.
-    :param data: list of util.util.Results to load.
+    :param data: list of utils.util.Results to load.
     :return:
     """
     if data is None:
@@ -128,7 +128,7 @@ def parse_pickle_file(fname=None, data=None):
             pitch = [entry.policy_params.params.pitch]
             yaw = [entry.policy_params.params.yaw]
             policy_params = pitch + yaw
-            mech_params = [entry.mechanism_params.params.range]
+            # mech_params = [entry.mechanism_params.params.range]
         elif policy_type == 'Revolute':
             center = list(entry.policy_params.params.rot_center)
             roll = [entry.policy_params.params.rot_roll]
@@ -145,7 +145,7 @@ def parse_pickle_file(fname=None, data=None):
             'config': entry.config_goal,
             'image': entry.image_data,
             'y': motion,
-            'mech': mech_params,
+            # 'mech': mech_params,
             'delta_vals': entry.policy_params.delta_values
         })
 
@@ -169,7 +169,7 @@ def setup_data_loaders(data, batch_size=128, use_cuda=True, small_train=0, singl
     kwargs = {'num_workers': 0,
               'pin_memory': use_cuda}
 
-    random.Random(0).shuffle(data)
+
     if single_set:
         set = PolicyDataset(data)
         loader = torch.utils.data.DataLoader(dataset=set,
@@ -178,7 +178,10 @@ def setup_data_loaders(data, batch_size=128, use_cuda=True, small_train=0, singl
         return loader
     else:
         # Create datasplits.
-        train_data, val_data, test_data = create_data_splits(data)
+        train_data, val_data, test_data = create_data_splits(data, val_pct=.2)
+        random.Random(0).shuffle(train_data)
+        random.Random(0).shuffle(val_data)
+        random.Random(0).shuffle(test_data)
         #if small_train > 0:
         #    train_data = train_data[:small_train]
 

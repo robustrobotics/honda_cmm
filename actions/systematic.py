@@ -2,8 +2,8 @@ import argparse
 import numpy as np
 from actions.policies import Prismatic
 from gen.generator_busybox import BusyBox, Slider
-from util import util
-from util.setup_pybullet import setup_env
+from utils import util
+from utils.setup_pybullet import setup_env
 from actions.gripper import Gripper
 import pybullet as p
 
