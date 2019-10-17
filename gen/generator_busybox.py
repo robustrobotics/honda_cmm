@@ -48,6 +48,12 @@ class Mechanism(object):
     def get_mechanism_tuple(self):
         raise NotImplementedError('get_mechanism_tuple not implemented for mechanism: {0}'.format(self.mechanism_type))
 
+    def get_handle_pose(self):
+        return util.Pose(*p.getLinkState(self.bb_id, self.handle_id)[:2])
+
+    def get_contact_points(self, gripper_id):
+        return p.getContactPoints(gripper_id, self.bb_id, linkIndexB=self.handle_id)
+
     def reset_handle(self):
         p.resetJointState(self.bb_id, self.handle_id, 0.0)
 

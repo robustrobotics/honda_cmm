@@ -224,7 +224,7 @@ def replay_result(result):
     mech = bb._mechanisms[0]
     policy = policies.get_policy_from_tuple(result.policy_params)
     config_goal = result.config_goal
-    pose_handle_world_init = Pose(*p.getLinkState(bb.bb_id, mech.handle_id)[:2])
+    pose_handle_world_init = mech.get_handle_pose()
     pose_handle_base_world = mech.get_pose_handle_base_world()
     traj = policy.generate_trajectory(pose_handle_base_world, config_goal, True)
     _, net_motion, _ = gripper.execute_trajectory(traj, mech, policy.type, True)

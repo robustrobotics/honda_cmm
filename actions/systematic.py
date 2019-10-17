@@ -52,7 +52,7 @@ def execute_systematic(args):
             regrets += [(mech_range - motion)/mech_range]
 
             # reset mechanism and gripper
-            p.resetJointState(bb.bb_id, mech.handle_id, 0.0)
+            gripper.reset(mech)
             gripper._set_pose_tip_world(gripper.pose_tip_world_reset)
         avg_regrets += [np.mean(regrets)]
         min_regrets += [min(regrets)]

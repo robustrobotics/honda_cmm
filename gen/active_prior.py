@@ -39,7 +39,7 @@ class ActivePolicyLearner(object):
         self.viz_plot_final = viz_plot_final
         self.viz_plot_cont = viz_plot_cont
         self.image_data = setup_env(self.bb, self.viz_sim, self.debug)
-        self.start_pos = p.getLinkState(self.mech.bb_id, self.mech.handle_id)[0]
+        self.start_pos = self.mech.get_handle_pose().p
         self.gripper = Gripper(self.bb.bb_id)
         self.max_region = self.get_max_region()
         self.regions = [copy(self.max_region)]
@@ -80,7 +80,7 @@ class ActivePolicyLearner(object):
                         region.draw(self.bb)
                 self.sample(n, 'predict', model)
                 if n != n_prior_samples-1:
-                    self.reset()
+                    self.gripper.reset()
             if not self.lite and n_prior_samples>0:
                 self.update_plot('predict')
         for n in range(n_int_samples):
@@ -90,7 +90,7 @@ class ActivePolicyLearner(object):
                     region.draw(self.bb)
             self.sample(n, 'interact')
             if n != n_int_samples-1:
-                self.reset()
+                self.gripper.reset()
         if not self.lite:
             self.update_plot('interact')
 
@@ -216,7 +216,7 @@ class ActivePolicyLearner(object):
         return region, goal, mode
 
     def execute_interaction(self, policy, config_goal):
-        pose_handle_world_init = util.Pose(*p.getLinkState(self.bb.bb_id, self.mech.handle_id)[:2])
+        pose_handle_world_init = mech.get_handle_pose()
         pose_handle_base_world = self.mech.get_pose_handle_base_world()
         traj = policy.generate_trajectory(pose_handle_base_world, config_goal, self.debug)
         cumu_motion, net_motion, pose_handle_world_final = \
@@ -251,10 +251,6 @@ class ActivePolicyLearner(object):
         motion_towards_goal = np.linalg.norm(motion_proj_handle)
         competence = np.divide(motion_towards_goal, init_dist_to_goal)
         return competence
-
-    def reset(self):
-        p.resetJointState(self.bb.bb_id, self.mech.handle_id, 0.0)
-        self.gripper._set_pose_tip_world(self.gripper.pose_tip_world_reset)
 
     def get_goal_region(self, goal):
         for region in self.regions:

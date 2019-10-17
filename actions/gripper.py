@@ -49,7 +49,7 @@ class Gripper:
         :param d: a vector of length 2 where the first entry is the linear derivative
                     (damping) gain and the second entry is the angular derivative gain
         """
-        self._id = p.loadSDF("models/gripper/gripper_high_fric.sdf")[0]
+        self.id = p.loadSDF("models/gripper/gripper_high_fric.sdf")[0]
         self._bb_id = bb_id
         self._left_finger_tip_id = 2
         self._right_finger_tip_id = 5
@@ -63,8 +63,8 @@ class Gripper:
 
         # get mass of gripper
         mass = 0
-        for link in range(p.getNumJoints(self._id)):
-            mass += p.getDynamicsInfo(self._id, link)[0]
+        for link in range(p.getNumJoints(self.id)):
+            mass += p.getDynamicsInfo(self.id, link)[0]
         self._mass = mass
 
         # control parameters
@@ -72,26 +72,26 @@ class Gripper:
         self.d = d
 
     def _get_p_tip_world(self):
-        p_left_world = p.getLinkState(self._id, self._left_finger_tip_id)[0]
-        p_right_world = p.getLinkState(self._id, self._right_finger_tip_id)[0]
+        p_left_world = p.getLinkState(self.id, self._left_finger_tip_id)[0]
+        p_right_world = p.getLinkState(self.id, self._right_finger_tip_id)[0]
         p_tip_world = np.mean([p_left_world, p_right_world], axis=0)
         return p_tip_world
 
     def _get_p_tip_base(self):
-        p_base_world, q_base_world = p.getBasePositionAndOrientation(self._id)
+        p_base_world, q_base_world = p.getBasePositionAndOrientation(self.id)
         p_tip_world = self._get_p_tip_world()
         p_tip_base = util.transformation(p_tip_world, p_base_world, q_base_world, inverse=True)
         return p_tip_base
 
     def _get_pose_com_(self, frame):
         com_numerator = np.array([0.0, 0.0, 0.0])
-        for link_index in range(p.getNumJoints(self._id)):
-            link_com = p.getLinkState(self._id, link_index)[0]
-            link_mass = p.getDynamicsInfo(self._id, link_index)[0]
+        for link_index in range(p.getNumJoints(self.id)):
+            link_com = p.getLinkState(self.id, link_index)[0]
+            link_mass = p.getDynamicsInfo(self.id, link_index)[0]
             com_numerator = np.add(com_numerator, np.multiply(link_mass,link_com))
         p_com_world = np.divide(com_numerator, self._mass)
 
-        p_base_world, q_base_world = p.getBasePositionAndOrientation(self._id)
+        p_base_world, q_base_world = p.getBasePositionAndOrientation(self.id)
         q_com_world = q_base_world
 
         if frame == 'world':
@@ -110,7 +110,7 @@ class Gripper:
         p_com_tip, q_com_tip = self._get_pose_com_('tip')
         v_com_world_des = util.adjoint_transformation(v_tip_world_des, p_com_tip, q_com_tip, inverse=True)
 
-        v_base_world = np.concatenate(p.getBaseVelocity(self._id))
+        v_base_world = np.concatenate(p.getBaseVelocity(self.id))
         p_com_base, q_com_base = self._get_pose_com_('base')
         v_com_world = util.adjoint_transformation(v_base_world, p_com_base, q_com_base, inverse=True)
 
@@ -139,7 +139,7 @@ class Gripper:
         return movement < 0.005
 
     def _in_contact(self, mech):
-        points = p.getContactPoints(self._id, self._bb_id, linkIndexB=mech.handle_id)
+        points = mech.get_contact_points(self.id)
         if len(points)>0:
             return True
         return False
@@ -147,7 +147,7 @@ class Gripper:
     def _set_pose_tip_world(self, pose_tip_world_des, reset=False):
         p_base_tip = np.multiply(-1, self._get_p_tip_base())
         p_base_world_des = util.transformation(p_base_tip, pose_tip_world_des.p, pose_tip_world_des.q)
-        p.resetBasePositionAndOrientation(self._id, p_base_world_des, pose_tip_world_des.q)
+        p.resetBasePositionAndOrientation(self.id, p_base_world_des, pose_tip_world_des.q)
         p.stepSimulation()
 
     def _grasp_handle(self, pose_tip_world_des, debug=False):
@@ -172,10 +172,10 @@ class Gripper:
             finger_angle = 0.2
         elif finger_state == 'close':
             finger_angle = 0.0
-        p.setJointMotorControl2(self._id,self._left_finger_base_joint_id,p.POSITION_CONTROL,targetPosition=-finger_angle,force=self._finger_force)
-        p.setJointMotorControl2(self._id,self._right_finger_base_joint_id,p.POSITION_CONTROL,targetPosition=finger_angle,force=self._finger_force)
-        p.setJointMotorControl2(self._id,2,p.POSITION_CONTROL,targetPosition=0,force=self._finger_force)
-        p.setJointMotorControl2(self._id,5,p.POSITION_CONTROL,targetPosition=0,force=self._finger_force)
+        p.setJointMotorControl2(self.id,self._left_finger_base_joint_id,p.POSITION_CONTROL,targetPosition=-finger_angle,force=self._finger_force)
+        p.setJointMotorControl2(self.id,self._right_finger_base_joint_id,p.POSITION_CONTROL,targetPosition=finger_angle,force=self._finger_force)
+        p.setJointMotorControl2(self.id,2,p.POSITION_CONTROL,targetPosition=0,force=self._finger_force)
+        p.setJointMotorControl2(self.id,5,p.POSITION_CONTROL,targetPosition=0,force=self._finger_force)
         p.stepSimulation()
 
     def _move_PD(self, pose_handle_base_world_des, q_offset, mech, last_traj_p, debug=False, timeout=100):
@@ -203,10 +203,10 @@ class Gripper:
             self.errors += [(p_handle_base_world_err, lin_v_com_world_err)]
             self.forces += [(f, tau)]
             p_com_world, q_com_world = self._get_pose_com_('world')
-            p.applyExternalForce(self._id, -1, f, p_com_world, p.WORLD_FRAME)
+            p.applyExternalForce(self.id, -1, f, p_com_world, p.WORLD_FRAME)
             # there is a bug in pyBullet. the link frame and world frame are inverted
             # this should be executed in the WORLD_FRAME
-            p.applyExternalTorque(self._id, -1, tau, p.LINK_FRAME)
+            p.applyExternalTorque(self.id, -1, tau, p.LINK_FRAME)
             p.stepSimulation()
 
     def set_control_params(self, policy_type):
@@ -222,7 +222,7 @@ class Gripper:
         self.set_control_params(policy_type)
 
         # initial grasp pose
-        pose_handle_world_init = util.Pose(*p.getLinkState(self._bb_id, mech.handle_id)[:2])
+        pose_handle_world_init = mech.get_handle_pose()
         p_tip_world_init = np.add(pose_handle_world_init.p, [0., .015, 0.]) # back up a little for better grasp
         pose_tip_world_init = util.Pose(p_tip_world_init, self.pose_tip_world_reset.q)
 
@@ -238,7 +238,7 @@ class Gripper:
                 break
         pose_handle_world_final = None
         if self._in_contact(mech):
-            pose_handle_world_final = util.Pose(*p.getLinkState(self._bb_id, mech.handle_id)[:2])
+            pose_handle_world_final = mech.get_handle_pose()
         net_motion = 0.0
         if pose_handle_world_final is not None:
             net_motion = np.linalg.norm(np.subtract(pose_handle_world_final.p, pose_handle_world_init.p))

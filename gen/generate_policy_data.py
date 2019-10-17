@@ -32,7 +32,7 @@ def generate_dataset(args, git_hash):
                 pose_handle_base_world = mech.get_pose_handle_base_world()
                 policy = policies.generate_policy(bb, mech, args.match_policies, args.randomness, init_pose=pose_handle_base_world)
                 config_goal = policy.generate_config(mech, args.goal_config)
-                pose_handle_world_init = util.Pose(*p.getLinkState(bb.bb_id, mech.handle_id)[:2])
+                pose_handle_world_init = mech.get_handle_pose()
 
                 # calculate trajectory
                 traj = policy.generate_trajectory(pose_handle_base_world, config_goal, args.debug, color=[0,0,1])
@@ -40,7 +40,7 @@ def generate_dataset(args, git_hash):
                 # execute trajectory
                 cumu_motion, net_motion, pose_handle_world_final = \
                         gripper.execute_trajectory(traj, mech, policy.type, args.debug)
-
+                print(pose_handle_world_init, pose_handle_world_final)
                 # save result data
                 policy_params = policy.get_policy_tuple()
                 mechanism_params = mech.get_mechanism_tuple()

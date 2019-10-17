@@ -540,7 +540,7 @@ class TestMechsPitch(PlotFunc):
                 config_goal = limits[i]
 
                 # get true motion
-                pose_handle_world_init = util.Pose(*p.getLinkState(bb.bb_id, mech.handle_id)[:2])
+                pose_handle_world_init = mech.get_handle_pose()
                 pose_handle_base_world = mech.get_pose_handle_base_world()
                 traj = random_policy.generate_trajectory(pose_handle_base_world, config_goal, False)
                 _, true_motion, _, _ = gripper.execute_trajectory(traj, mech, random_policy.type)
