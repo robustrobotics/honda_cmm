@@ -31,6 +31,7 @@ class Mechanism(object):
         return self._bb.get_bb_id()
 
     def _get_handle_id(self):
+        assert self._handle_id is not None, 'BusyBox.set_mechanism_ids() must be called to access pyBullet ids'
         return self._handle_id
 
     def get_links(self):
@@ -338,6 +339,7 @@ class Door(Mechanism):
         return MechanismParams(self.mechanism_type, DoorParams(self.door_size, self.flipped))
 
     def _get_door_base_id(self):
+        assert self._door_base_id is not None, 'BusyBox.set_mechanism_ids() must be called to access pyBullet ids'
         return self._door_base_id
 
     def get_rot_center(self):
@@ -444,9 +446,12 @@ class BusyBox(object):
         return [pos[0], p_bb_base_w[1]+self.bb_thickness/2, pos[2]]
 
     def get_bb_id(self):
+        assert self._bb_id is not None, 'BusyBox.set_mechanism_ids() must be called to access pyBullet ids'
         return self._bb_id
 
     def set_mechanism_ids(self, bb_id):
+        self._bb_id = bb_id
+        bb_id = self.get_bb_id()
         num_joints = p.getNumJoints(bb_id)
         # joint_id 0 is the busybox back_link
         for joint_id in range(1, num_joints):
