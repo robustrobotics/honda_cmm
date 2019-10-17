@@ -259,3 +259,7 @@ class Gripper:
 
         plt.show()
         input()
+
+    def reset(self, mech):
+        mech.reset_handle()
+        self._set_pose_tip_world(self.pose_tip_world_reset)

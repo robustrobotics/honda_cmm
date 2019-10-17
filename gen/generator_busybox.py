@@ -48,6 +48,9 @@ class Mechanism(object):
     def get_mechanism_tuple(self):
         raise NotImplementedError('get_mechanism_tuple not implemented for mechanism: {0}'.format(self.mechanism_type))
 
+    def reset_handle(self):
+        p.resetJointState(self.bb_id, self.handle_id, 0.0)
+
     @staticmethod
     def random():
         raise NotImplementedError('Cannot generate a random mechanism.')
