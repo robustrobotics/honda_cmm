@@ -21,12 +21,9 @@ def generate_dataset(args, git_hash):
             bb = BusyBox.generate_random_busybox(max_mech=args.max_mech, mech_types=[Slider], urdf_tag=args.urdf_num, debug=args.debug)
 
         image_data = setup_env(bb, args.viz, args.debug)
+        gripper = Gripper()
         for j in range(args.n_samples):
             sys.stdout.write("\rProcessing sample %i/%i for busybox %i/%i" % (j+1, args.n_samples, i+1, args.n_bbs))
-            # setup env and get image before load gripper
-            setup_env(bb, args.viz, args.debug)
-            gripper = Gripper()
-
             for mech in bb._mechanisms:
                 # generate either a random or model-based policy and goal configuration
                 pose_handle_base_world = mech.get_pose_handle_base_world()
@@ -46,6 +43,8 @@ def generate_dataset(args, git_hash):
                 results.append(util.Result(policy_params, mechanism_params, net_motion, \
                             cumu_motion, pose_handle_world_init, pose_handle_world_final, \
                             config_goal, image_data, git_hash, args.randomness))
+
+                gripper.reset(mech)
 
         p.disconnect()
     print()
