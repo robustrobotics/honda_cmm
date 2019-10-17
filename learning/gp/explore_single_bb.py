@@ -56,7 +56,7 @@ def calc_random_policy(pos, orn):
 
 class GPOptimizer(object):
 
-    def __init__(self, urdf_num, pos, orn, true_range, result=None, nn=None, n_samples=500):
+    def __init__(self, urdf_num, pos, orn, true_range, image_data, nn=None, n_samples=500):
         """
         Initialize one of these for each BusyBox.
         """
@@ -64,14 +64,6 @@ class GPOptimizer(object):
         self.nn_samples = []
         self.true_range = true_range
         self.nn = nn
-        if result:
-            self.bb = BusyBox.bb_from_result(result, urdf_num)
-        else:
-            self.bb = create_simulated_baxter_slider()
-
-        image_data = setup_env(self.bb, viz=False, debug=False)
-        mech_tuple = self.bb._mechanisms[0].get_mechanism_tuple()
-        p.disconnect()
         self.image_data = image_data
 
         # Generate random policies.
@@ -81,8 +73,8 @@ class GPOptimizer(object):
             policy_type = random_policy.type
             policy_tuple = random_policy.get_policy_tuple()
 
-            results = [util.Result(policy_tuple, mech_tuple, 0.0, 0.0,
-                                   None, None, q, image_data, None, 1.0)]
+            results = [util.Result(policy_tuple, None, 0.0, 0.0,
+                                   None, None, q, self.image_data, None, 1.0)]
             self.sample_policies.append(results)
 
             if not self.nn is None:
@@ -214,7 +206,7 @@ def test_model(gp, result, nn=None, use_cuda=False, urdf_num=0):
 
 class UCB_Interaction(object):
 
-    def __init__(self, urdf_num, result=None, plot=False, true_range=None, pos=None, orn=None, nn_fname=''):
+    def __init__(self, urdf_num, image_data, plot=False, true_range=None, pos=None, orn=None, nn_fname=''):
         # Pretrained Kernel
         # kernel = ConstantKernel(0.005, constant_value_bounds=(0.005, 0.005)) * RBF(length_scale=(0.247, 0.084, 0.0592), length_scale_bounds=(0.0592, 0.247)) + WhiteKernel(noise_level=1e-5, noise_level_bounds=(1e-5, 1e2))
         self.variance = 0.005
@@ -240,17 +232,10 @@ class UCB_Interaction(object):
         if nn_fname != '':
             self.nn = util.load_model(nn_fname, 16, use_cuda=False)
 
-        if result:
-            bb = BusyBox.bb_from_result(result)
-            setup_env(bb, viz=False, debug=False)
-            self.pos = list(bb._mechanisms[0].get_pose_handle_base_world().p)
-            self.orn = [0., 0., 0., 1.] # if from result then all policies in this frame
-            self.true_range = bb._mechanisms[0].range/2
-        else:
-            self.pos = list(pos)
-            self.orn = list(orn)
-            self.true_range = true_range
-        self.optim = GPOptimizer(urdf_num, self.pos, self.orn, self.true_range, nn=self.nn, result=result)
+        self.pos = list(pos)
+        self.orn = list(orn)
+        self.true_range = true_range
+        self.optim = GPOptimizer(urdf_num, self.pos, self.orn, self.true_range, image_data, nn=self.nn)
 
     def sample(self):
         # (1) Choose a point to interact with.
@@ -443,10 +428,10 @@ def viz_gp_circles(gp, num, max_d, points=[], nn=None, image_data=None):
     # ax2 = plt.subplot(111, projection='polar')
     # polar_plots(ax2, std_colors, vmax=None, points=points)
     # plt.show()
-    if '/' in model_name:
-        model_name = model_name.split('/')[-1].replace('.pt', '')
-    fname = 'videos/gp_polar_bb_%d_%d_%s_mean_arrow.png' % (kx, num, model_name)
-    plt.savefig(fname, bbox_inches='tight', facecolor='k')
+    #if '/' in model_name:
+    #    model_name = model_name.split('/')[-1].replace('.pt', '')
+    #fname = 'videos/gp_polar_bb_%d_%d_%s_mean_arrow.png' % (kx, num, model_name)
+    #plt.savefig(fname, bbox_inches='tight', facecolor='k')
 
     plt.clf()
     plt.figure(figsize=(5, 5))
@@ -458,10 +443,10 @@ def viz_gp_circles(gp, num, max_d, points=[], nn=None, image_data=None):
     # ax2 = plt.subplot(111, projection='polar')
     # polar_plots(ax2, std_colors, vmax=None, points=points)
     #plt.show()
-    if '/' in model_name:
-        model_name = model_name.split('/')[-1].replace('.pt', '')
-    fname = 'videos/gp_polar_bb_%d_%d_%s_mean.png' % (kx, num, model_name)
-    plt.savefig(fname, bbox_inches='tight', facecolor='k')
+    #if '/' in model_name:
+    #    model_name = model_name.split('/')[-1].replace('.pt', '')
+    #fname = 'videos/gp_polar_bb_%d_%d_%s_mean.png' % (kx, num, model_name)
+    #plt.savefig(fname, bbox_inches='tight', facecolor='k')
     # ----------------------------------
 
 
@@ -600,7 +585,7 @@ def evaluate_k_busyboxes(k, args, use_cuda=False):
         #     pickle.dump(results, handle)
 
 
-def create_gpucb_dataset(L=50, M=200, bb_fname='', fname=''):
+def create_gpucb_dataset(urdf_num, L=50, M=200, bb_fname='', plot=False, nn_fname='', fname=''):
     """
     :param L: The number of BusyBoxes to include in the dataset.
     :param M: The number of interactions per BusyBox.
@@ -608,7 +593,7 @@ def create_gpucb_dataset(L=50, M=200, bb_fname='', fname=''):
     """
     # Create a dataset of L busyboxes.
     if bb_fname == '':
-        Args = namedtuple('args', 'max_mech, urdf_num, debug, n_bbs, n_samples, viz, match_policies, randomness, goal_config')
+        Args = namedtuple('args', 'max_mech, urdf_num, debug, n_bbs, n_samples, viz, match_policies, randomness, goal_config, bb_file')
         args = Args(max_mech=1,
                     urdf_num=0,
                     debug=False,
@@ -617,7 +602,8 @@ def create_gpucb_dataset(L=50, M=200, bb_fname='', fname=''):
                     viz=False,
                     match_policies=True,
                     randomness=1.0,
-                    goal_config=None)
+                    goal_config=None,
+                    bb_file=None)
         busybox_data = generate_dataset(args, None)
         print('BusyBoxes created.')
     else:
@@ -636,41 +622,106 @@ def create_gpucb_dataset(L=50, M=200, bb_fname='', fname=''):
         dataset = []
 
     for ix, result in enumerate(busybox_data):
-        _, _, _, interaction_data = ucb_interaction(result,
-                                                    max_iterations=M,
-                                                    plot=False,
-                                                    nn_fname='',
-                                                    kx=-1)
-        dataset.extend(interaction_data)
+        # initialize BB in pyBullet
+        bb = BusyBox.bb_from_result(result, urdf_num=urdf_num)
+        image_data = setup_env(bb, viz=False, debug=False)
+        mech = bb._mechanisms[0]
+        pose_handle_base_world = mech.get_pose_handle_base_world()
+        pos = pose_handle_base_world.p
+        orn = [0., 0., 0., 1.] # if from result then all policies in this frame
+        true_range = mech.range/2
+
+        # interact with BB
+        sampler = UCB_Interaction(urdf_num, image_data, plot, true_range, pos, orn, nn_fname=nn_fname)
+        for m in range(M):
+            # sample a policy
+            policy, q = sampler.sample()
+
+            # execute
+            traj = policy.generate_trajectory(pose_handle_base_world, q)
+            gripper = Gripper(bb.bb_id)
+            c_motion, motion, handle_pose_final = gripper.execute_trajectory(traj, mech, policy.type, False)
+            #p.disconnect()
+
+            result = util.Result(policy.get_policy_tuple(), mech.get_mechanism_tuple(), \
+                                 motion, c_motion, handle_pose_final, handle_pose_final, \
+                                 q, image_data, None, -1)
+            dataset.append(result)
+
+            # update GP
+            sampler.update(policy, q, motion)
+
         print('Interacted with BusyBox %d.' % ix)
 
         # Save the dataset.
         if fname != '':
             with open(fname, 'wb') as handle:
-                pickle.dump(dataset, handle)
+                pickle.dump(sampler.dataset, handle)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--n-train', type=int)
-    parser.add_argument('--n-interactions', type=int)
-    parser.add_argument('--eval', type=str)
-    parser.add_argument('--urdf-num', default=0)
-    parser.add_argument('--debug', action='store_true')
-    parser.add_argument('--models', nargs='*')
+    parser.add_argument(
+        '--n-train',
+        type=int,
+        help='number of samples to use when fitting a GP to data')
+    parser.add_argument(
+        '--M',
+        type=int,
+        help='number of interactions within a single BusyBox')
+    parser.add_argument(
+        '--L',
+        type=int,
+        help='number of BusyBoxes to interact with')
+    parser.add_argument(
+        '--eval',
+        type=str,
+        choices=['active_nn', 'gpucb_nn', 'random_nn', 'test_good', 'test_bad'],
+        help='evaluation type')
+    parser.add_argument(
+        '--urdf-num',
+        default=0,
+        help='number to append to generated urdf files. Use if generating multiple datasets simultaneously.')
+    parser.add_argument(
+        '--bb-fname',
+        default='',
+        help='path to file of BusyBoxes to interact with')
+    parser.add_argument(
+        '--plot',
+        action='store_true',
+        help='use to generate polar plots durin GP-UCB interactions')
+    parser.add_argument(
+        '--nn-fname',
+        default='',
+        help='path to NN to initialize GP-UCB interactions')
+    parser.add_argument(
+        '--fname',
+        default='',
+        help='path to save resulting dataset to')
+    parser.add_argument(
+        '--debug',
+        action='store_true',
+        help='use to enter debug mode')
+    parser.add_argument(
+        '--models',
+        nargs='*',
+        help='list of NN model files to evaluate with GP-UCB method')
     args = parser.parse_args()
 
     if args.debug:
         import pdb; pdb.set_trace()
 
-    # create_gpucb_dataset(L=100,
-    #                      M=100,
-    #                      bb_fname='active_100bbs.pickle',
-    #                      fname='gpucb_100bb_100i.pickle')
+    create_gpucb_dataset(args.urdf_num,
+                         L=args.L,
+                         M=args.M,
+                         bb_fname=args.bb_fname,
+                         plot=args.plot,
+                         nn_fname=args.nn_fname)
 
     # evaluate_k_busyboxes(50, args, use_cuda=True)
 
     # fit_random_dataset(data)
+    '''
     results = util.read_from_file('test')
     result=results[0]
     sampler = UCB_Interaction(args.urdf_num, result=result,#pos=(0.,0.,0.),
@@ -680,3 +731,4 @@ if __name__ == '__main__':
                                      nn_fname='../overflow/random_100bb_100int_90/torch_models/model_ntrain_9000.pt')
     policy, q = sampler.sample()
     sampler.update(policy, q, 0.2)
+    '''
