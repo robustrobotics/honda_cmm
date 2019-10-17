@@ -477,82 +477,7 @@ def polar_plots(ax, colors, vmax, points=None):
                 ax.scatter(x[0], x[2], c='r', s=10)
 
 
-def fit_random_dataset(data):
-    X, Y, X_pred = process_data(data, args.n_train, None)
-
-    # kernel = ConstantKernel(1.0) * RBF(length_scale=(1.0, 1.0, 1.0), length_scale_bounds=(1e-5, 1)) + WhiteKernel(noise_level=0.01)
-    # kernel = ConstantKernel(1.0) * ExpSineSquared(1.0, 5.0, periodicity_bounds=(1e-3, 1e2)) + WhiteKernel(noise_level=0.01)
-    kernel = ConstantKernel(0.00038416, constant_value_bounds=(0.00038416, 0.00038416)) * RBF(length_scale=(0.247, 0.084, 0.0592), length_scale_bounds=(0.0592, 0.247)) + WhiteKernel(noise_level=1e-5)
-
-    gp = GaussianProcessRegressor(kernel=kernel, n_restarts_optimizer=10)
-    gp.fit(X, Y)
-    print(gp.kernel_)
-    viz_gp(gp, data[0], 1)
-
-    max_x = optimize_gp(gp, data[0], urdf_num=urdf_num)
-
-    Y_pred, Y_std = gp.predict(X_pred, return_std=True)
-
-    plt.plot(X_pred[:, 0], Y_pred, c='r', ls='-')
-    plt.plot(X_pred[:, 0], Y_pred[:, 0] + Y_std, c='r', ls='--')
-    plt.plot(X_pred[:, 0], Y_pred[:, 0] - Y_std, c='r', ls='--')
-    plt.scatter(X[:, 0], Y, c='b')
-    max_y = gp.predict(np.array([[max_x[0], 0, max_x[1]]]))
-    plt.scatter(max_x[0], max_y[0], c='g')
-    plt.show()
-
-
 def evaluate_busyboxes(n_interactions, n_bbs, args, use_cuda=False):
-    '''
-    # Active-NN Models
-    if args.eval == 'active_nn':
-        models = ['conv2_models/model_ntrain_1000.pt',
-                  'conv2_models/model_ntrain_2000.pt',
-                  'conv2_models/model_ntrain_3000.pt',
-                  'conv2_models/model_ntrain_4000.pt',
-                  'conv2_models/model_ntrain_5000.pt',
-                  'conv2_models/model_ntrain_6000.pt',
-                  'conv2_models/model_ntrain_7000.pt',
-                  'conv2_models/model_ntrain_8000.pt',
-                  'conv2_models/model_ntrain_9000.pt',
-                  'conv2_models/model_ntrain_10000.pt']
-
-    # GP-UCB-NN Models
-    elif args.eval == 'gpucb_nn':
-        models = ['gpucb_data/model_ntrain_1000.pt',
-                  'gpucb_data/model_ntrain_2000.pt',
-                  'gpucb_data/model_ntrain_3000.pt',
-                  'gpucb_data/model_ntrain_4000.pt',
-                  'gpucb_data/model_ntrain_5000.pt',
-                  'gpucb_data/model_ntrain_6000.pt',
-                  'gpucb_data/model_ntrain_7000.pt',
-                  'gpucb_data/model_ntrain_8000.pt',
-                  'gpucb_data/model_ntrain_9000.pt',
-                  'gpucb_data/model_ntrain_10000.pt']
-
-    # Random-NN Models
-    elif args.eval == 'random_nn':
-        models = ['random_100bb_100int/torch_models/model_ntrain_500.pt',
-                    'random_100bb_100int/torch_models/model_ntrain_1000.pt',
-                    'random_100bb_100int/torch_models/model_ntrain_1500.pt',
-                    'random_100bb_100int/torch_models/model_ntrain_2000.pt',
-                    'random_100bb_100int/torch_models/model_ntrain_3000.pt',
-                    'random_100bb_100int/torch_models/model_ntrain_4000.pt',
-                    'random_100bb_100int/torch_models/model_ntrain_5000.pt',
-                    'random_100bb_100int/torch_models/model_ntrain_6000.pt',
-                    'random_100bb_100int/torch_models/model_ntrain_7000.pt',
-                    'random_100bb_100int/torch_models/model_ntrain_8000.pt',
-                    'random_100bb_100int/torch_models/model_ntrain_9000.pt',
-                    'random_100bb_100int/torch_models/model_ntrain_1000.pt']
-
-    # GP-UCB Models
-    elif args.eval == 'test_good':
-        models = ['gpucb_data/model_ntrain_10000.pt']
-    elif args.eval == 'test_bad':
-        models = ['gpucb_data/model_ntrain_1000.pt']
-    else:
-        models = ['']
-    '''
     with open(args.bb_fname, 'rb') as handle:
         data = pickle.load(handle)
 
@@ -728,20 +653,5 @@ if __name__ == '__main__':
     if args.debug:
         import pdb; pdb.set_trace()
 
-    '''
-    create_gpucb_dataset(args.M, args.L, args)
-    '''
+    #create_gpucb_dataset(args.M, args.L, args)
     evaluate_busyboxes(args.T, args.N, args, use_cuda=True)
-
-    # fit_random_dataset(data)
-    '''
-    results = util.read_from_file('test')
-    result=results[0]
-    sampler = UCB_Interaction(args.urdf_num, result=result,#pos=(0.,0.,0.),
-                                     #orn=(0.,0.,0.,1.),
-                                     #true_range=0.3,
-                                     plot=True,
-                                     nn_fname='../overflow/random_100bb_100int_90/torch_models/model_ntrain_9000.pt')
-    policy, q = sampler.sample()
-    sampler.update(policy, q, 0.2)
-    '''
