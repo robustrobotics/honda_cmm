@@ -220,7 +220,7 @@ def replay_result(result):
 
     bb = BusyBox.bb_from_result(result)
     image_data = setup_pybullet.setup_env(bb, True, True)
-    gripper = Gripper(bb.bb_id)
+    gripper = Gripper()
     mech = bb._mechanisms[0]
     policy = policies.get_policy_from_tuple(result.policy_params)
     config_goal = result.config_goal

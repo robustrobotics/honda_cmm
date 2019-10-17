@@ -39,18 +39,16 @@ _thresh - threshold
 _M - matrix form of a pose/transformation
 """
 class Gripper:
-    def __init__(self, bb_id, k=[2000.0,20.0], d=[0.45,0.45]):
+    def __init__(self, k=[2000.0,20.0], d=[0.45,0.45]):
         """
         This class defines the actions a gripper can take such as grasping a handle
         and executing PD control
-        :param bb_id: int, the pybullet id of the BusyBox
         :param k: a vector of length 2 where the first entry is the linear position
                     (stiffness) gain and the second entry is the angular position gain
         :param d: a vector of length 2 where the first entry is the linear derivative
                     (damping) gain and the second entry is the angular derivative gain
         """
         self.id = p.loadSDF("models/gripper/gripper_high_fric.sdf")[0]
-        self._bb_id = bb_id
         self._left_finger_tip_id = 2
         self._right_finger_tip_id = 5
         self._left_finger_base_joint_id = 0

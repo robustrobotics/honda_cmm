@@ -163,7 +163,7 @@ def test_env(model, bb=None, plot=False, viz=False, debug=False, use_cuda=False)
     mech = bb._mechanisms[0]
     pose_handle_base_world = mech.get_pose_handle_base_world()
     traj = policy_final.generate_trajectory(pose_handle_base_world, config_final, True)
-    gripper = Gripper(bb.bb_id)
+    gripper = Gripper()
     policy_type = policy_final.type
     _, motion, _ = gripper.execute_trajectory(traj, mech, policy_type, debug)
     p.disconnect()
@@ -206,7 +206,7 @@ def viz_final(bb, policy_final, config_final, debug):
     mech = bb._mechanisms[0]
     pose_handle_base_world = mech.get_pose_handle_base_world()
     traj = policy_final.generate_trajectory(pose_handle_base_world, config_final, True)
-    gripper = Gripper(bb.bb_id)
+    gripper = Gripper()
     policy_type = policy_final.type
     gripper.execute_trajectory(traj, mech, policy_type, debug)
     p.disconnect()

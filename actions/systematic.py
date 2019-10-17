@@ -37,7 +37,7 @@ def execute_systematic(args):
         setup_env(bb, args.viz, args.debug)
         pos = mech.get_pose_handle_base_world().p
         orn = [0., 0., 0., 1.]
-        gripper = Gripper(bb.bb_id)
+        gripper = Gripper()
         policies = calc_systematic_policies(pos, orn, args.T)
 
         # try each goal

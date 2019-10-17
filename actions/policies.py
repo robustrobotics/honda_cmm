@@ -307,7 +307,7 @@ class Revolute(Policy):
         rot_axis = util.quaternion_from_euler(rot_axis_roll+delta_roll,rot_axis_pitch+delta_pitch, 0.0)
         p_handle_base_world = mech.get_pose_handle_base_world().p
         if mech.mechanism_type == 'Door':
-            rot_center_true = p.getLinkState(bb.bb_id, mech.door_base_id)[0]
+            rot_center_true = mech.get_rot_center()
         elif mech.mechanism_type == 'Slider':
             raise NotImplementedError('need to implement random revolute policy for slider')
         rot_radius_world_true = np.subtract(p_handle_base_world, rot_center_true)
@@ -381,7 +381,7 @@ def get_policy_from_tuple(policy_params):
 
 ## Helper Functions
 def _random_p(bb):
-    bb_center = p.getLinkState(bb.bb_id,0)[0]
+    bb_center = bb.get_center_pos()
     x_limits = np.add(bb_center[0], [-bb.width/2,bb.width/2])
     z_limits = np.add(bb_center[2], [-bb.height/2,bb.height/2])
     x = np.random.uniform(*x_limits)

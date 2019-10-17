@@ -567,7 +567,7 @@ def get_bb_params(bb_result, args):
     pos = pose_handle_base_world.p
     orn = [0., 0., 0., 1.] # if from result then all policies in this frame
     true_range = mech.range/2
-    gripper = Gripper(bb.bb_id)
+    gripper = Gripper()
     return pos, orn, true_range, image_data, mech, pose_handle_base_world, bb, gripper
 
 def create_single_bb_gpucb_dataset(bb_result, n_interactions, args):

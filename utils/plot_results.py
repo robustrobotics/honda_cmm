@@ -373,7 +373,7 @@ class TestMechPolicies(PlotFunc):
 
                 for k in range(n_samples):
                     image_data = util.setup_pybullet.setup_env(bb, False, False)
-                    gripper = Gripper(bb.bb_id)
+                    gripper = Gripper()
                     sample = util.Result(policy_tuple,
                                          mech_tuple,
                                          0.0,
@@ -456,7 +456,7 @@ class TestMechPoliciesPitchOnly(PlotFunc):
 
                 for k in range(n_samples):
                     util.setup_pybullet.setup_env(bb, False, False)
-                    gripper = Gripper(bb.bb_id)
+                    gripper = Gripper()
                     sample = util.Result(policy_tuple,
                                          mech_tuple,
                                          0.0,
@@ -526,14 +526,14 @@ class TestMechsPitch(PlotFunc):
         for i in range(n_mechs):
             bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider])
             image_data = util.setup_pybullet.setup_env(bb, False, False)
-            gripper = Gripper(bb.bb_id)
+            gripper = Gripper()
             mech = bb._mechanisms[0]
             limits += [mech.range/2.0]
             mech_tuple = mech.get_mechanism_tuple()
             for j in range(n_samples):
                 # reset env
                 util.setup_pybullet.setup_env(bb, False, False)
-                gripper = Gripper(bb.bb_id)
+                gripper = Gripper()
 
                 # random policy
                 random_policy = policies.generate_policy(bb, mech, True, 1.0)

@@ -25,7 +25,7 @@ def generate_dataset(args, git_hash):
             sys.stdout.write("\rProcessing sample %i/%i for busybox %i/%i" % (j+1, args.n_samples, i+1, args.n_bbs))
             # setup env and get image before load gripper
             setup_env(bb, args.viz, args.debug)
-            gripper = Gripper(bb.bb_id)
+            gripper = Gripper()
 
             for mech in bb._mechanisms:
                 # generate either a random or model-based policy and goal configuration

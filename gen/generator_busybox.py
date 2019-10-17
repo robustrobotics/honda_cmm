@@ -327,6 +327,9 @@ class Door(Mechanism):
     def get_mechanism_tuple(self):
         return MechanismParams(self.mechanism_type, DoorParams(self.door_size, self.flipped))
 
+    def get_rot_center(self):
+        p.getLinkState(self.bb_id, self.door_base_id)[0]
+
     @staticmethod
     def random(width, height, bb_thickness=0.05):
         door_offset = (np.random.uniform(-width/2.0, width/2.0),
@@ -453,6 +456,16 @@ class BusyBox(object):
             elements += m.get_joints()
         robot = urdf.Robot('busybox', *elements)
         return str(robot)
+
+    def get_center_pos(self):
+        return p.getLinkState(self.bb_id,0)[0]
+
+    def set_joint_control_mode(self, mode, maxForce):
+        for jx in range(0, p.getNumJoints(self.bb_id)):
+            p.setJointMotorControl2(bodyUniqueId=self.bb_id,
+                                    jointIndex=jx,
+                                    controlMode=mode,
+                                    force=maxForce)
 
     @staticmethod
     def _check_collision(width, height, mechs, mech):

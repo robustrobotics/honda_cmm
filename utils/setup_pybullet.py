@@ -34,12 +34,8 @@ def setup_env(bb, viz, debug, show_im=False):
     #p.setGravity(0, 0, -10)
     maxForce = 10
     mode = p.VELOCITY_CONTROL
-    for jx in range(0, p.getNumJoints(bb.bb_id)):
-        p.setJointMotorControl2(bodyUniqueId=bb.bb_id,
-                                jointIndex=jx,
-                                controlMode=mode,
-                                force=maxForce)
-
+    bb.set_joint_control_mode(mode, maxForce)
+    
     # can change resolution and shadows with this call
     view_matrix = p.computeViewMatrixFromYawPitchRoll(distance=0.4,
                                                       yaw=180,

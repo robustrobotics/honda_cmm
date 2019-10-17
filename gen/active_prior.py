@@ -40,7 +40,7 @@ class ActivePolicyLearner(object):
         self.viz_plot_cont = viz_plot_cont
         self.image_data = setup_env(self.bb, self.viz_sim, self.debug)
         self.start_pos = self.mech.get_handle_pose().p
-        self.gripper = Gripper(self.bb.bb_id)
+        self.gripper = Gripper()
         self.max_region = self.get_max_region()
         self.regions = [copy(self.max_region)]
         self.interactions = []
@@ -155,7 +155,7 @@ class ActivePolicyLearner(object):
 
     def get_max_region(self):
         # for now regions are just in the x-z plane. will need to move to 3d with doors
-        p_bb_base_w = p.getLinkState(self.bb.bb_id,0)[0]
+        p_bb_base_w = self.bb.get_center_pos()
         p_bb_ll_w = Point(p_bb_base_w[0]+self.bb.width/2, p_bb_base_w[2]-self.bb.height/2)
         start_region = Region(Point(p_bb_ll_w[0], p_bb_ll_w[1]),
                                     Dims(self.bb.width, self.bb.height))
