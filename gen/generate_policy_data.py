@@ -40,7 +40,6 @@ def generate_dataset(args, git_hash):
                 # execute trajectory
                 cumu_motion, net_motion, pose_handle_world_final = \
                         gripper.execute_trajectory(traj, mech, policy.type, args.debug)
-                print(pose_handle_world_init, pose_handle_world_final)
                 # save result data
                 policy_params = policy.get_policy_tuple()
                 mechanism_params = mech.get_mechanism_tuple()

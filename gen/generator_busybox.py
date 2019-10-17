@@ -22,8 +22,16 @@ class Mechanism(object):
         """
         self.mechanism_type = p_type
         self.handle_length = 0.05
+        self._handle_id = None
+        self._bb = None
         self._links = []
         self._joints = []
+
+    def _get_bb_id(self):
+        return self._bb.get_bb_id()
+
+    def _get_handle_id(self):
+        return self._handle_id
 
     def get_links(self):
         return self._links
@@ -32,7 +40,9 @@ class Mechanism(object):
         return self._joints
 
     def get_pose_handle_base_world(self):
-        pose_handle_world = util.Pose(*p.getLinkState(self.bb_id, self.handle_id)[:2])
+        handle_id = self._get_handle_id()
+        bb_id = self._get_bb_id()
+        pose_handle_world = util.Pose(*p.getLinkState(bb_id, handle_id)[:2])
         p_handle_base = [0., 0., self.handle_length/2]
         p_handle_base_world = util.transformation(p_handle_base, *pose_handle_world)
         return util.Pose(p_handle_base_world, pose_handle_world.q)
@@ -49,13 +59,19 @@ class Mechanism(object):
         raise NotImplementedError('get_mechanism_tuple not implemented for mechanism: {0}'.format(self.mechanism_type))
 
     def get_handle_pose(self):
-        return util.Pose(*p.getLinkState(self.bb_id, self.handle_id)[:2])
+        handle_id = self._get_handle_id()
+        bb_id = self._get_bb_id()
+        return util.Pose(*p.getLinkState(bb_id, handle_id)[:2])
 
     def get_contact_points(self, gripper_id):
-        return p.getContactPoints(gripper_id, self.bb_id, linkIndexB=self.handle_id)
+        handle_id = self._get_handle_id()
+        bb_id = self._get_bb_id()
+        return p.getContactPoints(gripper_id, bb_id, linkIndexB=handle_id)
 
     def reset_handle(self):
-        p.resetJointState(self.bb_id, self.handle_id, 0.0)
+        handle_id = self._get_handle_id()
+        bb_id = self._get_bb_id()
+        p.resetJointState(bb_id, handle_id, 0.0)
 
     @staticmethod
     def random():
@@ -150,13 +166,10 @@ class Slider(Mechanism):
 
         self.handle_name = slider_handle_name
         self.track_name = slider_track_name
-        self.handle_id = None
-        self.bb_id = None
         self.origin = (x_offset, z_offset)
         self.range = range
         self.handle_radius = handle_radius
         self.axis = axis
-        self.joint_model = None
 
     def get_bounding_box(self):
         a = np.arctan2(self.axis[1], self.axis[0])
@@ -202,7 +215,7 @@ class Slider(Mechanism):
 
         model = p.loadURDF(dummy_bb.file_name, [0., -.3, 0.])
         dummy_bb.set_mechanism_ids(model)
-        p_dummy_bb = p.getLinkState(dummy_bb.bb_id, 0)[0]
+        p_dummy_bb = dummy_bb.get_center_pos()
         p.disconnect()
 
         # get slider params
@@ -296,16 +309,13 @@ class Door(Mechanism):
         self._joints.append(door_joint)
         self._links.append(door_handle)
         self._joints.append(door_handle_joint)
+        self._door_base_id = None
 
         self.handle_name = door_handle_name
-        self.handle_id = None
         self.door_base_name = door_base_name
-        self.door_base_id = None
-        self.bb_id = None
         self.origin = door_offset
         self.door_size = door_size
         self.flipped = flipped
-        self.joint_model = None
 
     def get_bounding_box(self):
         """ This method should return a bounding box of the 2-dimensional
@@ -327,8 +337,13 @@ class Door(Mechanism):
     def get_mechanism_tuple(self):
         return MechanismParams(self.mechanism_type, DoorParams(self.door_size, self.flipped))
 
+    def _get_door_base_id(self):
+        return self._door_base_id
+
     def get_rot_center(self):
-        p.getLinkState(self.bb_id, self.door_base_id)[0]
+        bb_id = self._get_bb_id()
+        door_base_id = self._get_door_base_id()
+        p.getLinkState(bb_id, door_base_id)[0]
 
     @staticmethod
     def random(width, height, bb_thickness=0.05):
@@ -360,7 +375,7 @@ class BusyBox(object):
         self.height = height
         self.bb_thickness = bb_thickness
         self.file_name = file_name
-        self.bb_id = None # set with mechanism ids
+        self._bb_id = None # set with mechanism ids
 
     def _create_skeleton(self, width, height, bb_thickness=0.05):
         """
@@ -424,8 +439,12 @@ class BusyBox(object):
         self._joints.append(fixed_joint)
 
     def project_onto_backboard(self, pos):
-        p_bb_base_w = p.getLinkState(self.bb_id,0)[0]
+        bb_id = self.get_bb_id()
+        p_bb_base_w = p.getLinkState(bb_id,0)[0]
         return [pos[0], p_bb_base_w[1]+self.bb_thickness/2, pos[2]]
+
+    def get_bb_id(self):
+        return self._bb_id
 
     def set_mechanism_ids(self, bb_id):
         num_joints = p.getNumJoints(bb_id)
@@ -435,16 +454,16 @@ class BusyBox(object):
             link_name = joint_info[12]
             set = False
             for mech in self._mechanisms:
-                mech.bb_id = bb_id
+                mech._bb = self
                 if mech.handle_name == link_name.decode("utf-8"):
-                    mech.handle_id = joint_info[0]
+                    mech._handle_id = joint_info[0]
                     set = True
                     break
                 if mech.mechanism_type == 'Door' and mech.door_base_name == link_name.decode("utf-8"):
-                    mech.door_base_id = joint_info[0]
+                    mech._door_base_id = joint_info[0]
                     set = True
                     break
-        self.bb_id = bb_id
+        self._bb_id = bb_id
 
     def get_urdf(self):
         """
@@ -458,11 +477,13 @@ class BusyBox(object):
         return str(robot)
 
     def get_center_pos(self):
-        return p.getLinkState(self.bb_id,0)[0]
+        bb_id = self.get_bb_id()
+        return p.getLinkState(bb_id,0)[0]
 
     def set_joint_control_mode(self, mode, maxForce):
-        for jx in range(0, p.getNumJoints(self.bb_id)):
-            p.setJointMotorControl2(bodyUniqueId=self.bb_id,
+        bb_id = self.get_bb_id()
+        for jx in range(0, p.getNumJoints(bb_id)):
+            p.setJointMotorControl2(bodyUniqueId=bb_id,
                                     jointIndex=jx,
                                     controlMode=mode,
                                     force=maxForce)
