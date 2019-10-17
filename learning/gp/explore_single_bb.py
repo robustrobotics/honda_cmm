@@ -178,7 +178,7 @@ def test_model(gp, result, args, nn=None, use_cuda=False, urdf_num=0):
     :return: Regret.
     """
     # Optimize the GP to get the best result.
-    pos, orn, true_range, image_data, _, _, _ = get_bb_params(result, args)
+    pos, orn, true_range, image_data, _, _, _, gripper = get_bb_params(result, args)
     optim_gp = GPOptimizer(urdf_num, pos, orn, true_range, image_data, nn=nn)
     x_final, _ = optim_gp.optimize_gp(gp, ucb=False)
 
@@ -193,7 +193,6 @@ def test_model(gp, result, args, nn=None, use_cuda=False, urdf_num=0):
     q = x_final[-1]
 
     traj = policy.generate_trajectory(pose_handle_base_world, q, True)
-    gripper = Gripper(bb.bb_id)
     _, motion, _ = gripper.execute_trajectory(traj, mech, policy.type, False)
     # import time
     # time.sleep(1)
@@ -273,7 +272,7 @@ class UCB_Interaction(object):
         self.gp.fit(np.array(self.xs), np.array(self.ys))
 
         # (4) Visualize GP.
-        if self.ix % 1 == 0 and self.plot:
+        #if self.ix % 1 == 0 and self.plot:
             #params = mech.get_mechanism_tuple().params
             #print('Range:', params.range/2.0)
             #print('Angle:', np.arctan2(params.axis[1], params.axis[0]))
@@ -289,7 +288,9 @@ class UCB_Interaction(object):
             # #plt.savefig('gp_samples_%d.png' % ix)
             # plt.show()
             # viz_gp(gp, result, ix, bb, nn=nn)
-            viz_gp_circles(self.gp, self.ix, self.true_range, points=self.xs, nn=self.nn, image_data=self.optim.image_data)
+
+    def viz_polar_plots(self):
+        viz_gp_circles(self.gp, self.ix, self.true_range, points=self.xs, nn=self.nn, image_data=self.optim.image_data)
 
     def calc_avg_regret(self):
         regrets = []
@@ -416,14 +417,14 @@ def viz_gp_circles(gp, num, max_d, points=[], nn=None, image_data=None):
     # plt.savefig(fname, bbox_inches='tight')
 
     # -------------------------
-    plt.clf()
-    plt.figure(figsize=(5, 5))
-    # ax0 = plt.subplot(111)
-    # w, h, im = image_data
-    # np_im = np.array(im, dtype=np.uint8).reshape(h, w, 3)
-    # ax0.imshow(np_im)
+    #plt.clf()
+    #plt.figure(figsize=(5, 5))
+    ax0 = plt.subplot(121)
+    w, h, im = image_data
+    np_im = np.array(im, dtype=np.uint8).reshape(h, w, 3)
+    ax0.imshow(np_im)
 
-    ax1 = plt.subplot(111, projection='polar')
+    ax1 = plt.subplot(122, projection='polar')
     max_d = bb._mechanisms[0].get_mechanism_tuple().params.range / 2.0
     polar_plots(ax1, mean_colors, vmax=max_d, points=points)
     ax1.set_title('Reward (T=%d)' % (num + 1), color='w', y=1.15)
@@ -436,12 +437,12 @@ def viz_gp_circles(gp, num, max_d, points=[], nn=None, image_data=None):
     #fname = 'videos/gp_polar_bb_%d_%d_%s_mean_arrow.png' % (kx, num, model_name)
     #plt.savefig(fname, bbox_inches='tight', facecolor='k')
 
-    plt.clf()
-    plt.figure(figsize=(5, 5))
-    ax1 = plt.subplot(111, projection='polar')
-    max_d = bb._mechanisms[0].get_mechanism_tuple().params.range / 2.0
-    polar_plots(ax1, mean_colors, vmax=max_d, points=None)
-    ax1.set_title('Reward (T=%d)' % (num+1), color='w', y=1.15)
+    #plt.clf()
+    #plt.figure(figsize=(5, 5))
+    #ax1 = plt.subplot(111, projection='polar')
+    #max_d = bb._mechanisms[0].get_mechanism_tuple().params.range / 2.0
+    #polar_plots(ax1, mean_colors, vmax=max_d, points=None)
+    #ax1.set_title('Reward (T=%d)' % (num+1), color='w', y=1.15)
     #
     # ax2 = plt.subplot(111, projection='polar')
     # polar_plots(ax2, std_colors, vmax=None, points=points)
@@ -451,7 +452,7 @@ def viz_gp_circles(gp, num, max_d, points=[], nn=None, image_data=None):
     #fname = 'videos/gp_polar_bb_%d_%d_%s_mean.png' % (kx, num, model_name)
     #plt.savefig(fname, bbox_inches='tight', facecolor='k')
     # ----------------------------------
-
+    plt.show()
 
 
 def polar_plots(ax, colors, vmax, points=None):
@@ -477,7 +478,7 @@ def polar_plots(ax, colors, vmax, points=None):
                 ax.scatter(x[0], x[2], c='r', s=10)
 
 
-def evaluate_busyboxes(n_interactions, n_bbs, args, use_cuda=False):
+def evaluate_models(n_interactions, n_bbs, args, use_cuda=False):
     with open(args.bb_fname, 'rb') as handle:
         data = pickle.load(handle)
 
@@ -534,12 +535,13 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
         # Load in a file with predetermined BusyBoxes.
         with open(args.bb_fname, 'rb') as handle:
             busybox_data = pickle.load(handle)
+        busybox_data = busybox_data[:n_bbs]
 
     # Do a GP-UCB interaction and return Result tuples.
-    if os.path.exists(fname):
+    if os.path.exists(args.fname):
         with open(args.fname, 'rb') as handle:
             dataset = pickle.load(handle)
-        n_collected = len(dataset)//M
+        n_collected = len(dataset)//n_interactions
         busybox_data = busybox_data[n_collected:]
         print('Already Collected: %d\tRemaining: %d' % (n_collected, len(busybox_data)))
     else:
@@ -551,9 +553,9 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
         print('Interacted with BusyBox %d.' % ix)
 
     # Save the dataset.
-    if fname != '':
-        with open(fname, 'wb') as handle:
-            pickle.dump(sampler.dataset, handle)
+    if args.fname != '':
+        with open(args.fname, 'wb') as handle:
+            pickle.dump(dataset, handle)
 
 
 def get_bb_params(bb_result, args):
@@ -565,10 +567,11 @@ def get_bb_params(bb_result, args):
     pos = pose_handle_base_world.p
     orn = [0., 0., 0., 1.] # if from result then all policies in this frame
     true_range = mech.range/2
-    return pos, orn, true_range, image_data, mech, pose_handle_base_world, bb
+    gripper = Gripper(bb.bb_id)
+    return pos, orn, true_range, image_data, mech, pose_handle_base_world, bb, gripper
 
 def create_single_bb_gpucb_dataset(bb_result, n_interactions, args):
-    pos, orn, true_range, image_data, mech, pose_handle_base_world, bb = get_bb_params(bb_result, args)
+    pos, orn, true_range, image_data, mech, pose_handle_base_world, bb, gripper = get_bb_params(bb_result, args)
     dataset = []
 
     # interact with BB
@@ -579,9 +582,8 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, args):
 
         # execute
         traj = policy.generate_trajectory(pose_handle_base_world, q)
-        gripper = Gripper(bb.bb_id)
         c_motion, motion, handle_pose_final = gripper.execute_trajectory(traj, mech, policy.type, False)
-        #p.disconnect()
+        gripper.reset(mech)
 
         result = util.Result(policy.get_policy_tuple(), mech.get_mechanism_tuple(), \
                              motion, c_motion, handle_pose_final, handle_pose_final, \
@@ -590,6 +592,9 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, args):
 
         # update GP
         sampler.update(policy, q, motion)
+
+    if args.plot:
+        sampler.viz_polar_plots()
     return dataset, sampler.calc_avg_regret(), sampler.gp
 
 if __name__ == '__main__':
@@ -653,5 +658,5 @@ if __name__ == '__main__':
     if args.debug:
         import pdb; pdb.set_trace()
 
-    #create_gpucb_dataset(args.M, args.L, args)
-    evaluate_busyboxes(args.T, args.N, args, use_cuda=True)
+    create_gpucb_dataset(args.M, args.L, args)
+    #evaluate_models(args.T, args.N, args, use_cuda=True)
