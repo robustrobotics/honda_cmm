@@ -364,7 +364,6 @@ def viz_gp(gp, result, num, bb, nn=None):
 def viz_gp_circles(gp, num, max_d, points=[], nn=None, image_data=None):
     n_pitch = 40
     n_q = 20
-    bb = create_simulated_baxter_slider()
 
     radii = np.linspace(-0.25, 0.25, num=n_q)
     thetas = np.linspace(-np.pi, 0, num=n_pitch)
@@ -425,7 +424,6 @@ def viz_gp_circles(gp, num, max_d, points=[], nn=None, image_data=None):
     ax0.imshow(np_im)
 
     ax1 = plt.subplot(122, projection='polar')
-    max_d = bb._mechanisms[0].get_mechanism_tuple().params.range / 2.0
     polar_plots(ax1, mean_colors, vmax=max_d, points=points)
     ax1.set_title('Reward (T=%d)' % (num + 1), color='w', y=1.15)
     #
