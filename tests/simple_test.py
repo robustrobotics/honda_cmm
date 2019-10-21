@@ -99,7 +99,6 @@ def test_train():
     torch.manual_seed(SEED)
     working_model_file = 'tests/train/torch_models/model_nrun_0.pt'
     working_data_file = 'tests/random_dataset.pickle'
-    test_model_dir = 'tests/test_train/'
     args = Namespace(batch_size=3,
             hdim=3,
             n_epochs=3,
@@ -108,20 +107,24 @@ def test_train():
             use_cuda=False,
             debug=None,
             data_fname=working_data_file,
-            save_dir=test_model_dir,
+            save_dir='',
             n_train_min=0,
             n_train_max=0,
             step=0,
             image_encoder='spatial',
             n_runs=1,
             pviz=None)
-    writer = SummaryWriter('tests/runs')
-    test_model_file = test_model_dir+'model.pt'
+    runs_dir = 'tests/runs/'
+    writer = SummaryWriter(runs_dir)
+    test_model_file = 'tests/model_nrun_0'
     train_eval(args, args.hdim, args.batch_size, args.pviz, test_model_file, writer)
     working_model = load_model(working_model_file, hdim=args.hdim)
-    test_model = load_model(test_model_file, hdim=args.hdim)
+    test_model = load_model(test_model_file+'.pt', hdim=args.hdim)
     if compare_models(working_model, test_model):
-        os.remove(test_model_file)
+        os.remove(test_model_file+'.pt')
+        for file in os.listdir(runs_dir):
+            os.remove(runs_dir+file)
+        os.rmdir(runs_dir)
     else:
         assert False, 'the learning.train module is broken'
 
