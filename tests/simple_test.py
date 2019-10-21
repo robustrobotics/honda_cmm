@@ -69,7 +69,7 @@ def test_gp_gen_dataset():
     np.random.seed(SEED)
     working_output_file = 'tests/gp_ucb_dataset.pickle'
     test_output_file = 'tests/test_gpucb_dataset.pickle'
-    args = Namespace(n_train=10,
+    args = Namespace(n_gp_samples=500,
             T=None,
             M=5,
             L=2,
@@ -88,8 +88,8 @@ def test_gp_gen_dataset():
     if compare_results(test_output, working_output):
         os.remove(test_output_file)
     else:
-        assert False, 'the learning.gp.explore_single_bb module is broken'
-        
+        assert False, 'the learning.gp.explore_single_bb.create_gpucb_dataset function \
+                is broken'
 
 def test_train():
     """ Tests the training code to see if the same model is output from the same
@@ -125,8 +125,45 @@ def test_train():
     else:
         assert False, 'the learning.train module is broken'
 
+
+def test_gp_eval():
+    """ Tests the code for evaluating a trained model with the GP-UCB algorithm.
+    """
+    np.random.seed(SEED)
+    torch.manual_seed(SEED)
+    working_model_file = 'tests/train/torch_models/model_nrun_0.pt'
+    fname = 'regret_results_%s_t%d_n%d.pickle'
+    eval = ''
+    n_interactions = 5
+    n_bbs = 2
+    test_output_file = fname % (eval, n_interactions, n_bbs)
+    working_output_file = 'tests/working_regret_results.pickle'
+    args = Namespace(n_gp_samples=3,
+            T=n_interactions,
+            M=None,
+            L=None,
+            N=n_bbs,
+            eval='',
+            urdf_num=0,
+            bb_fname=BB_FILE,
+            plot=None,
+            nn_fname=None,
+            fname=None,
+            debug=None,
+            models=[working_model_file],
+            hdim=3)
+    evaluate_models(args.T, args.N, args, use_cuda=False)
+    test_output = read_from_file(test_output_file)
+    working_output = read_from_file(working_output_file)
+    if compare_results(test_output, working_output):
+        os.remove(test_output_file)
+    else:
+        assert False, 'the learning.gp.explore_single_bb.evaluate_models function \
+                is broken'
+
 if __name__ == '__main__':
     test_systematic()
     test_gen_dataset()
     test_gp_gen_dataset()
     test_train()
+    test_gp_eval()
