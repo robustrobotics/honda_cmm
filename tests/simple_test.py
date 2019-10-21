@@ -1,14 +1,18 @@
 """
 A quick sanity check that the main exported functions of the honda_cmm repo are
-working.
+working. This test file is missing tests for the gen.active_prior and
+learning.train_active modules.
 """
 import numpy as np
-from utils.util import read_from_file, compare_results
+import os
+from utils.util import read_from_file, compare_results, load_model, compare_models
 from argparse import Namespace
+from torch.utils.tensorboard import SummaryWriter
+import torch
 from actions.systematic import execute_systematic
 from gen.generate_policy_data import generate_dataset
-from learning.gp.explore_single_bb import create_gpucb_dataset
-import os
+from learning.gp.explore_single_bb import create_gpucb_dataset, evaluate_models
+from learning.train import train_eval
 
 BB_FILE = 'tests/bbs_file.pickle'
 SEED = 1
@@ -85,16 +89,44 @@ def test_gp_gen_dataset():
         os.remove(test_output_file)
     else:
         assert False, 'the learning.gp.explore_single_bb module is broken'
+        
 
-'''
-python -m actions.systematic --viz --N 1 --T 5 --bb-file bbs_file.pickle
-python -m gen.generate_policy_data --n-samples 2 --n-bbs 2 --match-policies --viz
-python explore_single_bb
-active_prior
-train
-train_prior
-'''
+def test_train():
+    """ Tests the training code to see if the same model is output from the same
+    input (given a random seed).
+    """
+    np.random.seed(SEED)
+    torch.manual_seed(SEED)
+    working_model_file = 'tests/train/torch_models/model_nrun_0.pt'
+    working_data_file = 'tests/random_dataset.pickle'
+    test_model_dir = 'tests/test_train/'
+    args = Namespace(batch_size=3,
+            hdim=3,
+            n_epochs=3,
+            val_freq=3,
+            mode='normal',
+            use_cuda=False,
+            debug=None,
+            data_fname=working_data_file,
+            save_dir=test_model_dir,
+            n_train_min=0,
+            n_train_max=0,
+            step=0,
+            image_encoder='spatial',
+            n_runs=1,
+            pviz=None)
+    writer = SummaryWriter('tests/runs')
+    test_model_file = test_model_dir+'model.pt'
+    train_eval(args, args.hdim, args.batch_size, args.pviz, test_model_file, writer)
+    working_model = load_model(working_model_file, hdim=args.hdim)
+    test_model = load_model(test_model_file, hdim=args.hdim)
+    if compare_models(working_model, test_model):
+        os.remove(test_model_file)
+    else:
+        assert False, 'the learning.train module is broken'
+
 if __name__ == '__main__':
     test_systematic()
     test_gen_dataset()
     test_gp_gen_dataset()
+    test_train()
