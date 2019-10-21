@@ -40,6 +40,74 @@ Result contains the performance information after the gripper tries to move a me
 :param git_hash: None or str representing the git hash when the data was collected
 :param randomness: float in [0,1] representing how far from the true policy the random samples came from
 """
+
+def compare_results(list_a, list_b):
+    """ Compare two lists of utils.util.Results.
+
+    Parameters:
+    -----------
+    list_a: list of utils.util.Results
+
+    list_b: list of utils.util.Results
+
+    Returns:
+    --------
+    same: boolean, True iff the lists are equivalent
+    """
+
+    def compare_elem(a_name, elem_a, b_name, elem_b):
+        """ Compare two elements.
+
+        Parameters:
+        -----------
+        a_name: str, name of elem_a
+
+        elem_a: either a tuple, list, or something that can be checked for equality
+                directly
+
+        b_name: str, name of elem_b
+
+        elem_b: either a tuple, list, or something that can be checked for equality
+                directly
+
+        Returns:
+        --------
+        boolean indicating if the elements are equivalent
+        """
+        ignore_names = ['git_hash']
+        try:
+            # if in ignore names or not tuple then this will work
+            if a_name in ignore_names or (a_name not in ignore_names and elem_a == elem_b):
+                return True
+            else:
+                print('file_1_' + a_name + ':', elem_a,
+                    '\nfile_2_' + b_name + ':', elem_b)
+                return False
+        except:
+            # enter except look if tried to check equality of a tuple
+            try:
+                tup_a_names = [a_name + '_' + a_field for a_field in elem_a._fields]
+                tup_b_names = [b_name + '_' + b_field for b_field in elem_b._fields]
+            except:
+                tup_a_names = [a_name + '_' + str(a_field) for a_field in range(len(elem_a))]
+                tup_b_names = [b_name + '_' + str(b_field) for b_field in range(len(elem_b))]
+            same = True
+            for (j, (elem_a_a, elem_b_b)) in enumerate(zip(elem_a, elem_b)):
+                same = same and compare_elem(tup_a_names[j], elem_a_a, tup_b_names[j], elem_b_b)
+            return same
+
+    for (tup_a, tup_b) in zip(list_a, list_b):
+        try:
+            tup_a_names = tup_a._fields
+            tup_b_names = tup_b._fields
+        except:
+            tup_a_names = range(len(tup_a))
+            tup_b_names = range(len(tup_b))
+        same = True
+        for (i, (elem_a, elem_b)) in enumerate(zip(tup_a, tup_b)):
+            same = same and compare_elem(tup_a_names[i], elem_a, tup_b_names[i], elem_b)
+    return same
+
 ## Visualization Helper Functions
 
 def viz_train_test_data(train_data, test_data):
