@@ -547,7 +547,7 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
 
     for ix, bb_result in enumerate(busybox_data):
         single_dataset, _, _ = create_single_bb_gpucb_dataset(bb_result, n_interactions, args)
-        dataset.append(single_dataset)
+        dataset.extend(single_dataset)
         print('Interacted with BusyBox %d.' % ix)
 
     # Save the dataset.
