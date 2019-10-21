@@ -31,12 +31,9 @@ def view_points(img, points):
     return fig
 
 
-def train_eval(args, hdim, batch_size, pviz, fname, writer, n=0, data_fname=None):
+def train_eval(args, hdim, batch_size, pviz, fname, writer, n=0):
     # Load data
-    if args.data_fname:
-        data = parse_pickle_file(fname=args.data_fname)
-    else:
-        data = parse_pickle_file(fname=data_fname)
+    data = parse_pickle_file(fname=args.data_fname)
 
     if n > 0:
         data = data[:n]
@@ -132,10 +129,7 @@ def train_eval(args, hdim, batch_size, pviz, fname, writer, n=0, data_fname=None
             # if best epoch so far, save model
             if curr_val < best_val:
                 best_val = curr_val
-                if fname[-3:] != '.pt':
-                    full_path = fname+'.pt'
-                else:
-                    full_path = fname
+                full_path = fname+'.pt'
                 torch.save(net.state_dict(), full_path)
 
                 # save plot of prediction error
@@ -162,7 +156,7 @@ if __name__ == '__main__':
     parser.add_argument('--mode', choices=['ntrain', 'normal'], default='normal')
     parser.add_argument('--use-cuda', default=False, type=lambda x: (str(x).lower() == 'true'))
     parser.add_argument('--debug', action='store_true')
-    parser.add_argument('--data-fname', type=str)
+    parser.add_argument('--data-fname', type=str, required=True)
     parser.add_argument('--save-dir', required=True, type=str)
     # if 0 then use all samples in dataset, else use ntrain number of samples
     parser.add_argument('--ntrain-min', type=int, default=0)
@@ -175,7 +169,6 @@ if __name__ == '__main__':
     print(args)
     if args.debug:
         import pdb; pdb.set_trace()
-
     # remake dirs (don't want to overwrite data)
     model_dir = './'+args.save_dir+'/torch_models/'
     runs_dir = './'+args.save_dir+'/runs'
