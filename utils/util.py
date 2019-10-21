@@ -222,6 +222,24 @@ def discrete_sampler(range_vals, slope, n_bins=10):
     return val
 
 ### Model Testing Helper Functions ###
+def compare_models(model_a, model_b):
+    """ Compare two pyTorch models.
+
+    Parameters
+    ----------
+    model_a: a pyTorch model (loaded)
+
+    model_b: a pyTorch model (loaded)
+
+    Returns
+    -------
+    True iff the given models are identical
+    """
+    for pa, pb in zip(model_a.parameters(), model_b.parameters()):
+        if pa.data.ne(pb.data).sum() > 0:
+            return False
+    return True
+
 def load_model(model_fname, hdim=32, model_type='polvis', use_cuda=False, image_encoder='spatial'):
     if model_type == 'pol':
         model = NNPol(policy_names=['Prismatic', 'Revolute'],
