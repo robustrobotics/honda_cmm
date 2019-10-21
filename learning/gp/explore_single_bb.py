@@ -57,7 +57,7 @@ def calc_random_policy(pos, orn):
 
 class GPOptimizer(object):
 
-    def __init__(self, urdf_num, pos, orn, true_range, image_data, nn=None, n_samples=500):
+    def __init__(self, urdf_num, pos, orn, true_range, image_data, n_samples, nn=None):
         """
         Initialize one of these for each BusyBox.
         """
@@ -170,7 +170,7 @@ class GPOptimizer(object):
         return x_final, dataset
 
 
-def test_model(gp, result, args, nn=None, use_cuda=False, urdf_num=0):
+def test_model(gp, bb_result, args, nn=None, use_cuda=False, urdf_num=0):
     """
     Maximize the GP mean function to get the best policy.
     :param gp: A GP fit to the current BusyBox.
@@ -178,13 +178,11 @@ def test_model(gp, result, args, nn=None, use_cuda=False, urdf_num=0):
     :return: Regret.
     """
     # Optimize the GP to get the best result.
-    pos, orn, true_range, image_data, _, _, _, gripper = get_bb_params(result, args)
-    optim_gp = GPOptimizer(urdf_num, pos, orn, true_range, image_data, nn=nn)
+    pos, orn, true_range, image_data, _, _, bb, gripper = get_bb_params(bb_result, args)
+    optim_gp = GPOptimizer(urdf_num, pos, orn, true_range, image_data, args.n_gp_samples, nn=nn)
     x_final, _ = optim_gp.optimize_gp(gp, ucb=False)
 
     # Execute the policy and observe the true motion.
-    bb = BusyBox.bb_from_result(result, urdf_num=urdf_num)
-    setup_env(bb, viz=False, debug=False)
     mech = bb._mechanisms[0]
     ps = mech.get_mechanism_tuple().params
     pose_handle_base_world = mech.get_pose_handle_base_world()
@@ -207,7 +205,7 @@ def test_model(gp, result, args, nn=None, use_cuda=False, urdf_num=0):
 
 class UCB_Interaction(object):
 
-    def __init__(self, urdf_num, image_data, plot=False, true_range=None, pos=None, orn=None, nn_fname=''):
+    def __init__(self, image_data, args, true_range=None, pos=None, orn=None, nn_fname=''):
         # Pretrained Kernel
         # kernel = ConstantKernel(0.005, constant_value_bounds=(0.005, 0.005)) * RBF(length_scale=(0.247, 0.084, 0.0592), length_scale_bounds=(0.0592, 0.247)) + WhiteKernel(noise_level=1e-5, noise_level_bounds=(1e-5, 1e2))
         self.variance = 0.005
@@ -228,15 +226,15 @@ class UCB_Interaction(object):
         self.xs, self.ys, self.moves = [], [], []
 
         self.ix = 0
-        self.plot = plot
+        self.plot = args.plot
         self.nn = None
         if nn_fname != '':
-            self.nn = util.load_model(nn_fname, 16, use_cuda=False)
+            self.nn = util.load_model(nn_fname, args.hdim, use_cuda=False)
 
         self.pos = list(pos)
         self.orn = list(orn)
         self.true_range = true_range
-        self.optim = GPOptimizer(urdf_num, self.pos, self.orn, self.true_range, image_data, nn=self.nn)
+        self.optim = GPOptimizer(args.urdf_num, self.pos, self.orn, self.true_range, image_data, args.n_gp_samples, nn=self.nn)
 
     def sample(self):
         # (1) Choose a point to interact with.
@@ -480,18 +478,14 @@ def evaluate_models(n_interactions, n_bbs, args, use_cuda=False):
     with open(args.bb_fname, 'rb') as handle:
         data = pickle.load(handle)
 
-    if args.nn_fname != '':
-        nn = util.load_model(args.nn_fname, 16, use_cuda=False)
-    else:
-        nn = None
-
     results = []
     for model in args.models:
         avg_regrets, final_regrets = [], []
-        for ix, result in enumerate(data[:n_bbs]):
+        for ix, bb_result in enumerate(data[:n_bbs]):
             print('BusyBox', ix)
-            dataset, avg_regret, gp = create_single_bb_gpucb_dataset(result, n_interactions, args)
-            regret = test_model(gp, result, args, nn, use_cuda=use_cuda, urdf_num=args.urdf_num)
+            dataset, avg_regret, gp = create_single_bb_gpucb_dataset(bb_result, n_interactions, model, args)
+            nn = util.load_model(model, args.hdim, use_cuda=False)
+            regret = test_model(gp, bb_result, args, nn, use_cuda=use_cuda, urdf_num=args.urdf_num)
             avg_regrets.append(avg_regret)
             print('Average Regret:', avg_regret)
             final_regrets.append(regret)
@@ -504,9 +498,10 @@ def evaluate_models(n_interactions, n_bbs, args, use_cuda=False):
                'final': np.mean(final_regrets),
                'regrets': final_regrets}
         results.append(res)
-        print('regret_results_%s_t%d_n%d.pickle' % (args.eval, n_interactions, n_bbs))
-        # with open('regret_results_%s_t%d_n%d.pickle' % (args.eval, args.n_interactions, k), 'wb') as handle:
-        #     pickle.dump(results, handle)
+        results_fname = 'regret_results_%s_t%d_n%d.pickle'
+        print(results_fname % (args.eval, n_interactions, n_bbs))
+        with open(results_fname % (args.eval, n_interactions, n_bbs), 'wb') as handle:
+            pickle.dump(results, handle)
 
 
 def create_gpucb_dataset(n_interactions, n_bbs, args):
@@ -546,7 +541,7 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
         dataset = []
 
     for ix, bb_result in enumerate(busybox_data):
-        single_dataset, _, _ = create_single_bb_gpucb_dataset(bb_result, n_interactions, args)
+        single_dataset, _, _ = create_single_bb_gpucb_dataset(bb_result, n_interactions, args.nn_fname, args)
         dataset.extend(single_dataset)
         print('Interacted with BusyBox %d.' % ix)
 
@@ -568,12 +563,12 @@ def get_bb_params(bb_result, args):
     gripper = Gripper()
     return pos, orn, true_range, image_data, mech, pose_handle_base_world, bb, gripper
 
-def create_single_bb_gpucb_dataset(bb_result, n_interactions, args):
+def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, args):
     pos, orn, true_range, image_data, mech, pose_handle_base_world, bb, gripper = get_bb_params(bb_result, args)
     dataset = []
 
     # interact with BB
-    sampler = UCB_Interaction(args.urdf_num, image_data, args.plot, true_range, pos, orn, nn_fname=args.nn_fname)
+    sampler = UCB_Interaction(image_data, args, true_range, pos, orn, nn_fname=nn_fname)
     for _ in range(n_interactions):
         # sample a policy
         policy, q = sampler.sample()
@@ -598,8 +593,9 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--n-train',
+        '--n-gp-samples',
         type=int,
+        default=500,
         help='number of samples to use when fitting a GP to data')
     parser.add_argument(
         '--T',
@@ -651,10 +647,16 @@ if __name__ == '__main__':
         '--models',
         nargs='*',
         help='list of NN model files to evaluate with GP-UCB method')
+    parser.add_argument(
+        '--hdim',
+        type=int,
+        default=16,
+        help='hdim of supplied model(s), used to load model file'
+    )
     args = parser.parse_args()
 
     if args.debug:
         import pdb; pdb.set_trace()
 
-    create_gpucb_dataset(args.M, args.L, args)
-    #evaluate_models(args.T, args.N, args, use_cuda=True)
+    #create_gpucb_dataset(args.M, args.L, args)
+    evaluate_models(args.T, args.N, args, use_cuda=True)
