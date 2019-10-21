@@ -91,7 +91,7 @@ def train_eval(args, hdim, batch_size, pviz, fname, writer, n=0, data_fname=None
 
             train_losses.append(loss.item())
 
-            if bx == 0:
+            if bx == 0 and args.debug:
                 for kx in range(0, yhat.shape[0]//2):
                     fig = view_points(im[kx, :, :, :].cpu(),
                                       points[kx, :, :].cpu().detach().numpy())
@@ -132,7 +132,10 @@ def train_eval(args, hdim, batch_size, pviz, fname, writer, n=0, data_fname=None
             # if best epoch so far, save model
             if curr_val < best_val:
                 best_val = curr_val
-                full_path = fname+'.pt'
+                if fname[-3:] != '.pt':
+                    full_path = fname+'.pt'
+                else:
+                    full_path = fname
                 torch.save(net.state_dict(), full_path)
 
                 # save plot of prediction error
