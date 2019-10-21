@@ -60,7 +60,11 @@ def execute_systematic(args):
     final_regret = np.mean(min_regrets)
     results = {'T': args.T, 'final': final_regret, 'avg_regrets': avg_regrets, 'min_regrets': min_regrets}
     print('Final Regret:', final_regret)
-    util.write_to_file('systematic_n'+str(args.N)+'_t'+str(args.T)+'.pickle', results)
+    fname = args.fname
+    if not fname:
+        fname = 'systematic_n'+str(args.N)+'_t'+str(args.T)+'.pickle'
+    util.write_to_file(fname, results)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -71,6 +75,7 @@ if __name__ == '__main__':
     # if running multiple gens, give then a urdf_num so the correct urdf is read from/written to
     parser.add_argument('--urdf-num', type=int, default=0)
     parser.add_argument('--bb-file', type=str)
+    parser.add_argument('--fname', type=str)
     args = parser.parse_args()
 
     if args.debug:
