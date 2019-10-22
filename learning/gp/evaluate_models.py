@@ -72,7 +72,6 @@ if __name__ == '__main__':
     parser.add_argument(
         '--eval',
         type=str,
-        choices=['active_nn', 'gpucb_nn', 'random_nn', 'test_good', 'test_bad'],
         default='',
         help='evaluation type')
     parser.add_argument(
