@@ -11,7 +11,8 @@ from torch.utils.tensorboard import SummaryWriter
 import torch
 from actions.systematic import execute_systematic
 from gen.generate_policy_data import generate_dataset
-from learning.gp.explore_single_bb import create_gpucb_dataset, evaluate_models
+from learning.gp.explore_single_bb import create_gpucb_dataset
+from learning.gp.evaluate_models import evaluate_models
 from learning.train import train_eval
 
 BB_FILE = 'tests/bbs_file.pickle'
@@ -31,7 +32,9 @@ def test_systematic():
             debug=None)
     execute_systematic(args) # saves a dictionary to file which can be compared with ==
     working_output = read_from_file(working_output_file)
+    print(working_output)
     test_output = read_from_file(test_output_file)
+    print(test_output)
     if working_output == test_output:
         os.remove(test_output_file)
     else:

@@ -598,10 +598,6 @@ if __name__ == '__main__':
         default=500,
         help='number of samples to use when fitting a GP to data')
     parser.add_argument(
-        '--T',
-        type=int,
-        help='number of interactions within a single BusyBox during evaluation time')
-    parser.add_argument(
         '--M',
         type=int,
         help='number of interactions within a single BusyBox during training time')
@@ -609,16 +605,6 @@ if __name__ == '__main__':
         '--L',
         type=int,
         help='number of BusyBoxes to interact with during training time')
-    parser.add_argument(
-        '--N',
-        type=int,
-        help='number of BusyBoxes to interact with during evaluation time')
-    parser.add_argument(
-        '--eval',
-        type=str,
-        choices=['active_nn', 'gpucb_nn', 'random_nn', 'test_good', 'test_bad'],
-        default='',
-        help='evaluation type')
     parser.add_argument(
         '--urdf-num',
         default=0,
@@ -644,10 +630,6 @@ if __name__ == '__main__':
         action='store_true',
         help='use to enter debug mode')
     parser.add_argument(
-        '--models',
-        nargs='*',
-        help='list of NN model files to evaluate with GP-UCB method')
-    parser.add_argument(
         '--hdim',
         type=int,
         default=16,
@@ -658,5 +640,4 @@ if __name__ == '__main__':
     if args.debug:
         import pdb; pdb.set_trace()
 
-    #create_gpucb_dataset(args.M, args.L, args)
-    evaluate_models(args.T, args.N, args, use_cuda=True)
+    create_gpucb_dataset(args.M, args.L, args)
