@@ -295,7 +295,10 @@ class UCB_Interaction(object):
         for y in self.moves:
             regrets.append((self.true_range - y[0])/self.true_range)
             #print(y, true_range)
-        return np.mean(regrets)
+        if len(regrets) > 0:
+            return np.mean(regrets)
+        else:
+            return 'n/a'
 
 
 def format_batch(X_pred, image_data):
@@ -472,36 +475,6 @@ def polar_plots(ax, colors, vmax, points=None):
                 ax.scatter(x[0] - np.pi, -1*x[2], c='r', s=10)
             else:
                 ax.scatter(x[0], x[2], c='r', s=10)
-
-
-def evaluate_models(n_interactions, n_bbs, args, use_cuda=False):
-    with open(args.bb_fname, 'rb') as handle:
-        data = pickle.load(handle)
-
-    results = []
-    for model in args.models:
-        avg_regrets, final_regrets = [], []
-        for ix, bb_result in enumerate(data[:n_bbs]):
-            print('BusyBox', ix)
-            dataset, avg_regret, gp = create_single_bb_gpucb_dataset(bb_result, n_interactions, model, args)
-            nn = util.load_model(model, args.hdim, use_cuda=False)
-            regret = test_model(gp, bb_result, args, nn, use_cuda=use_cuda, urdf_num=args.urdf_num)
-            avg_regrets.append(avg_regret)
-            print('Average Regret:', avg_regret)
-            final_regrets.append(regret)
-            print('Test Regret   :', regret)
-        print('Results')
-        print('Average Regret:', np.mean(avg_regrets))
-        print('Final Regret  :', np.mean(final_regrets))
-        res = {'model': model,
-               'avg': np.mean(avg_regrets),
-               'final': np.mean(final_regrets),
-               'regrets': final_regrets}
-        results.append(res)
-        results_fname = 'regret_results_%s_t%d_n%d.pickle'
-        print(results_fname % (args.eval, n_interactions, n_bbs))
-        with open(results_fname % (args.eval, n_interactions, n_bbs), 'wb') as handle:
-            pickle.dump(results, handle)
 
 
 def create_gpucb_dataset(n_interactions, n_bbs, args):
