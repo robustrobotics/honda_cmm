@@ -19,39 +19,30 @@ def evaluate_models(n_interactions, n_bbs, args, use_cuda=False):
     with open(args.bb_fname, 'rb') as handle:
         bb_data = pickle.load(handle)
 
-    all_results = []
+    all_results = {}
     for L in range(1000, 10001, 1000):
         models = get_models(L, args.models_path)
-        all_model_results = []
-        L_final_regrets = []
+        all_L_results = {}
         for model in models:
-            model_final_regrets = []
+            all_model_test_regrets = []
             for ix, bb_result in enumerate(bb_data[:n_bbs]):
-                print('BusyBox', ix)
+                if args.debug:
+                    print('BusyBox', ix)
                 dataset, avg_regret, gp = create_single_bb_gpucb_dataset(bb_result, n_interactions, model, args)
                 nn = util.load_model(model, args.hdim, use_cuda=False)
                 regret = test_model(gp, bb_result, args, nn, use_cuda=use_cuda, urdf_num=args.urdf_num)
-                model_final_regrets.append(regret)
-                L_final_regrets.append(regret)
+                all_model_test_regrets.append(regret)
                 if args.debug:
-                    print('Average Regret:', avg_regret)
                     print('Test Regret   :', regret)
             if args.debug:
                 print('Results')
                 #print('Average Regret:', np.mean(avg_regrets))
-                print('Final Regret  :', np.mean(model_final_regrets))
-            model_result = {'model': model,
-                           'final': np.mean(model_final_regrets)}
-            all_model_results.append(model_result)
+                print('Final Regret  :', np.mean(all_model_test_regrets))
+            all_L_results[model] = all_model_test_regrets
         if len(models) > 0:
-            L_result = {'L': L/100, # TODO: this shouldn't be hard coded to 100 interactions per BB
-                        'final': np.mean(L_final_regrets),
-                        'model_data': all_model_results}
-            all_results.append(L_result)
-    results_fname = 'regret_results_%s_%dT_%dN.pickle'
-    #print(results_fname % (args.eval, n_interactions, n_bbs))
-    with open(results_fname % (args.eval, n_interactions, n_bbs), 'wb') as handle:
-        pickle.dump(all_results, handle)
+            # TODO: this shouldn't be hard coded to 100 interactions per BB
+            all_results[L/100] =  all_L_results
+    util.write_to_file('regret_results_%s_%dT_%dN.pickle' % (args.type, n_interactions, n_bbs), all_results, verbose=True)
 
 
 if __name__ == '__main__':
@@ -70,10 +61,10 @@ if __name__ == '__main__':
         type=int,
         help='number of BusyBoxes to interact with during evaluation time')
     parser.add_argument(
-        '--eval',
+        '--type',
         type=str,
-        default='',
-        help='evaluation type')
+        required=True,
+        help='evaluation type in [random, gpucb, active, systematic]')
     parser.add_argument(
         '--urdf-num',
         default=0,
