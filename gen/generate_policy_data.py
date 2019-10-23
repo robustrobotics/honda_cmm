@@ -18,7 +18,11 @@ def generate_dataset(args, git_hash):
         if args.bb_file is not None:
             bb = BusyBox.bb_from_result(bb_data[i])
         else:
-            bb = BusyBox.generate_random_busybox(max_mech=args.max_mech, mech_types=[Slider], urdf_tag=args.urdf_num, debug=args.debug)
+            mech_classes = []
+            for mech_type in args.mech_types:
+                if mech_type == 'slider': mech_classes.append(Slider)
+                if mech_type == 'door': mech_classes.append(Door)
+            bb = BusyBox.generate_random_busybox(max_mech=args.max_mech, mech_types=mech_classes, urdf_tag=args.urdf_num, debug=args.debug)
 
         image_data = setup_env(bb, args.viz, args.debug)
         gripper = Gripper()
@@ -57,6 +61,7 @@ if __name__ == '__main__':
     parser.add_argument('--n-samples', type=int, default=1) # number samples per bb
     parser.add_argument('--n-bbs', type=int, default=5) # number bbs to generate
     parser.add_argument('--max-mech', type=int, default=1) # mechanisms per bb
+    parser.add_argument('--mech-types', nargs='+', default='slider')
     parser.add_argument('--fname', type=str) # give filename if want to save to file
     # if running multiple gens, give then a urdf_num so the correct urdf is read from/written to
     parser.add_argument('--urdf-num', type=int, default=0)
