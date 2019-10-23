@@ -34,6 +34,24 @@ class DoorRadiusMotion(PlotFunc):
         plt.ylabel('Motion of Handle')
         plt.title('Motion of Doors')
 
+class DoorRadiusPerf(PlotFunc):
+
+    @staticmethod
+    def description():
+        return 'Plot of the door radius versus the joint motion percentage'
+
+    def _plot(self, data, model):
+        plt.figure()
+        for data_point in data:
+            motion_radius = data_point.mechanism_params.params.door_size[0] - 0.025
+            des_motion = 2*np.pi*motion_radius/4
+            if data_point.mechanism_params.type == 'Door':
+                performance = data_point.net_motion/des_motion
+                plt.plot(data_point.mechanism_params.params.door_size[0], performance, 'b.')
+        plt.xlabel('Door Radius')
+        plt.ylabel('Door Performance')
+        plt.title('Door Performance versus Radius')
+
 class DoorConfigMotion(PlotFunc):
 
     @staticmethod
@@ -43,13 +61,15 @@ class DoorConfigMotion(PlotFunc):
     def _plot(self, data, model):
         plt.figure()
         for point in data:
+            motion_radius = point.mechanism_params.params.door_size[0] - 0.025
+            des_motion = 2*np.pi*motion_radius/4
             if point.pose_joint_world_final is None:
                 plt.plot(abs(point.config_goal/(np.pi/2)),
-                        point.net_motion/(2*np.pi*point.mechanism_params.params.door_size[0]/4),
+                        point.net_motion/des_motion,
                         'r.')
             else:
                 plt.plot(abs(point.config_goal/(np.pi/2)),
-                        point.net_motion/(2*np.pi*point.mechanism_params.params.door_size[0]/4),
+                        point.net_motion/des_motion,
                         'b.')
         plt.xlabel('Desired final config fraction')
         plt.ylabel('Actual final config fraction')
