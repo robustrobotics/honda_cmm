@@ -345,7 +345,7 @@ class Door(Mechanism):
     def get_rot_center(self):
         bb_id = self._get_bb_id()
         door_base_id = self._get_door_base_id()
-        p.getLinkState(bb_id, door_base_id)[0]
+        return p.getLinkState(bb_id, door_base_id)[0]
 
     @staticmethod
     def random(width, height, bb_thickness=0.05):
