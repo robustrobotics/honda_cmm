@@ -18,7 +18,8 @@ Tuple for storing policy data
 PrismaticParams = namedtuple('PrismaticParams', 'rigid_position rigid_orientation pitch yaw')
 PrismaticDelta = namedtuple('PrismaticDelta', 'delta_pitch delta_yaw')
 
-RevoluteParams = namedtuple('RevoluteParams', 'rot_center rot_roll rot_pitch rot_radius rot_orientation')
+RevoluteParams = namedtuple('RevoluteParams', 'rot_center rot_axis_roll rot_axis_pitch \
+                            rot_axis rot_radius_x rot_orientation')
 RevoluteDelta = namedtuple('RevoluteDelta', 'delta_roll, delta_pitch, delta_radius_x')
 
 class Policy(object):
@@ -220,8 +221,8 @@ class Prismatic(Policy):
         return policy, goal_config
 
 class Revolute(Policy):
-    def __init__(self, center, axis_roll, axis_pitch, rot_axis, radius_x, orn, delta_roll=None,
-                    delta_pitch=None, delta_radius_x=None):
+    def __init__(self, rot_center, rot_axis_roll, rot_axis_pitch, rot_axis, rot_radius_x,
+                    rot_orientation, delta_roll=None, delta_pitch=None, delta_radius_x=None):
         """
         :param center: vector of length 3, a rigid (x,y,z) position in the world frame
                     of the center of rotation
@@ -236,12 +237,12 @@ class Revolute(Policy):
         :param delta_radius_x: scalar or None, distance from true revolute radius in x-direction for Door, else None
         :param delta_radius_z: scalar or None, distance from true revolute radius in z-direction for Door, else None
         """
-        self.rot_center = center
-        self.rot_axis_roll = axis_roll
-        self.rot_axis_pitch = axis_pitch
+        self.rot_center = rot_center
+        self.rot_axis_roll = rot_axis_roll
+        self.rot_axis_pitch = rot_axis_pitch
         self.rot_axis = rot_axis
-        self.rot_radius_x = radius_x
-        self.rot_orientation = orn
+        self.rot_radius_x = rot_radius_x
+        self.rot_orientation = rot_orientation
         self.delta_roll = delta_roll
         self.delta_pitch = delta_pitch
         self.delta_radius_x = delta_radius_x
@@ -283,7 +284,8 @@ class Revolute(Policy):
 
     def get_policy_tuple(self):
         rev_params = RevoluteParams(self.rot_center, self.rot_axis_roll, \
-                        self.rot_axis_pitch, self.rot_radius_x, self.rot_orientation)
+                        self.rot_axis_pitch, self.rot_axis, self.rot_radius_x, \
+                        self.rot_orientation)
         delta_values = RevoluteDelta(self.delta_roll, self.delta_pitch, self.delta_radius_x)
         return PolicyParams(self.type, rev_params, delta_values)
 
@@ -377,9 +379,9 @@ def get_policy_from_tuple(policy_params):
     params = policy_params.params
     delta_values = policy_params.delta_values
     if policy_params.type == 'Revolute':
-        return Revolute(params.center, params.axis_roll, params.axis_pitch,
-                        params.radius, params.orn, delta_values.delta_roll,
-                        delta_values.delta_pitch, delta_values.delta_radius_x)
+        return Revolute(params.rot_center, params.rot_axis_roll, params.rot_axis_pitch,
+                        params.rot_axis, params.rot_radius_x, params.rot_orientation,
+                        delta_values.delta_roll, delta_values.delta_pitch, delta_values.delta_radius_x)
     if policy_params.type == 'Prismatic':
         return Prismatic(params.rigid_position, params.rigid_orientation, params.pitch,
                         params.yaw, delta_values.delta_pitch, delta_values.delta_yaw)
