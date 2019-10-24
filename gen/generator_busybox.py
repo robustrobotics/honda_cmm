@@ -69,11 +69,6 @@ class Mechanism(object):
         bb_id = self._get_bb_id()
         return p.getContactPoints(gripper_id, bb_id, linkIndexB=handle_id)
 
-    def reset_handle(self):
-        handle_id = self._get_handle_id()
-        bb_id = self._get_bb_id()
-        p.resetJointState(bb_id, handle_id, 0.0)
-
     @staticmethod
     def random():
         raise NotImplementedError('Cannot generate a random mechanism.')
@@ -185,6 +180,11 @@ class Slider(Mechanism):
 
     def get_mechanism_tuple(self):
         return MechanismParams(self.mechanism_type, SliderParams(self.axis, self.range))
+
+    def reset(self):
+        handle_id = self._get_handle_id()
+        bb_id = self._get_bb_id()
+        p.resetJointState(bb_id, handle_id, 0.0)
 
     @staticmethod
     def random(width, height, bb_thickness=0.05):
@@ -346,6 +346,11 @@ class Door(Mechanism):
         bb_id = self._get_bb_id()
         door_base_id = self._get_door_base_id()
         return p.getLinkState(bb_id, door_base_id)[0]
+
+    def reset(self):
+        door_base_id = self._get_door_base_id()
+        bb_id = self._get_bb_id()
+        p.resetJointState(bb_id, door_base_id, 0.0)
 
     @staticmethod
     def random(width, height, bb_thickness=0.05):
