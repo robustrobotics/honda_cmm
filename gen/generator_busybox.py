@@ -10,8 +10,8 @@ from utils import util
 from collections import namedtuple
 
 MechanismParams = namedtuple('MechanismParams', 'type params')
-SliderParams = namedtuple('SliderParams', 'axis range')
-DoorParams = namedtuple('DoorParams', 'door_size flipped')
+SliderParams = namedtuple('SliderParams', 'x_offset z_offset range axis')
+DoorParams = namedtuple('DoorParams', 'door_offset door_size handle_offset flipped')
 
 class Mechanism(object):
     def __init__(self, p_type):
@@ -68,6 +68,14 @@ class Mechanism(object):
         handle_id = self._get_handle_id()
         bb_id = self._get_bb_id()
         return p.getContactPoints(gripper_id, bb_id, linkIndexB=handle_id)
+
+    @staticmethod
+    def mech_from_mech_params(mech_params):
+        color = (1., 0., 0.)
+        if mech_params.type == 'Slider':
+            return Slider(*mech_params.params, color)
+        if mech_params.type == 'Door':
+            return Door(*mech_params.params, color)
 
     @staticmethod
     def random():
@@ -179,7 +187,11 @@ class Slider(Mechanism):
         return aabb.AABB([(x_min, x_max), (z_min, z_max)])
 
     def get_mechanism_tuple(self):
-        return MechanismParams(self.mechanism_type, SliderParams(self.axis, self.range))
+        return MechanismParams(self.mechanism_type,
+                SliderParams(self.origin[0],
+                                self.origin[1],
+                                self.range,
+                                self.axis))
 
     def reset(self):
         handle_id = self._get_handle_id()
@@ -204,28 +216,6 @@ class Slider(Mechanism):
                  np.random.uniform(0, 1))
         color = (1, 0, 0)
         return Slider(x_offset, z_offset, range, axis, color, bb_thickness)
-
-    @staticmethod
-    def mech_from_result(result, dummy_bb):
-        # TODO: save offsets to result.mechanism_params.params so don't have to make a bb to get them
-        # also save bb params so can remake environment. change to mech_from_mech_params()
-
-        # get busybox back_link pose
-        client = p.connect(p.DIRECT)
-        bb_file = dummy_bb.file_name
-
-        model = p.loadURDF(dummy_bb.file_name, [0., -.3, 0.])
-        dummy_bb.set_mechanism_ids(model)
-        p_dummy_bb = dummy_bb.get_center_pos()
-        p.disconnect()
-
-        # get slider params
-        p_slider_center = result.policy_params.params.rigid_position
-        offset = np.subtract(p_slider_center, p_dummy_bb)
-        range = result.mechanism_params.params.range
-        axis = result.mechanism_params.params.axis
-        color = (1, 0, 0)
-        return Slider(offset[0], offset[2], range, axis, color)
 
 class Door(Mechanism):
     n_doors = 0
@@ -316,6 +306,7 @@ class Door(Mechanism):
         self.door_base_name = door_base_name
         self.origin = door_offset
         self.door_size = door_size
+        self.handle_offset = handle_offset
         self.flipped = flipped
 
     def get_bounding_box(self):
@@ -336,7 +327,11 @@ class Door(Mechanism):
         return aabb.AABB([(x_min, x_max), (z_min, z_max)])
 
     def get_mechanism_tuple(self):
-        return MechanismParams(self.mechanism_type, DoorParams(self.door_size, self.flipped))
+        return MechanismParams(self.mechanism_type,
+                DoorParams(self.origin,
+                            self.door_size,
+                            self.handle_offset,
+                            self.flipped))
 
     def _get_door_base_id(self):
         assert self._door_base_id is not None, 'BusyBox.set_mechanism_ids() must be called to access pyBullet ids'
@@ -368,10 +363,6 @@ class Door(Mechanism):
                  np.random.uniform(0, 1))
 
         return Door(door_offset, door_size, handle_offset, flipped, color, bb_thickness)
-
-    @staticmethod
-    def mech_from_result(result, dummy_bb):
-        raise NotImplementedError('mech_from_result for Doors not implemented yet')
 
 class BusyBox(object):
     def __init__(self, width, height, mechanisms, bb_thickness=0.05, file_name=None):
@@ -579,12 +570,7 @@ class BusyBox(object):
     @staticmethod
     def bb_from_result(result, urdf_num=0):
         width, height = 0.6, 0.6
-        # so dummy doesn't conflict with final bb
-        dummy_bb = BusyBox.get_busybox(width, height, [], urdf_tag=str(urdf_num)+'_dummy')
-        if result.mechanism_params.type == 'Slider':
-            mech = Slider.mech_from_result(result, dummy_bb)
-        elif result.mechanism_params.type == 'Door':
-            mech = Door.mech_from_result(result, dummy_bb)
+        mech = Mechanism.mech_from_mech_params(result.mechanism_params)
         return BusyBox.get_busybox(width, height, [mech], urdf_tag=str(urdf_num))
 
 
