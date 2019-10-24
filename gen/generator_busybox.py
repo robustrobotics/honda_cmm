@@ -354,6 +354,7 @@ class Door(Mechanism):
         door_size = (np.random.uniform(0.08, 0.15),
                      np.random.uniform(0.05, 0.15))
         # 0.015 is the handle radius.
+        # offset in the z (up/down) direction
         handle_offset = np.random.uniform(-door_size[1]/2+0.015, door_size[1]/2-0.015)
 
         flipped = np.random.binomial(n=1, p=0.5)
