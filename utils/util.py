@@ -2,7 +2,6 @@ import pybullet as p
 import numpy as np
 import pickle
 import utils.transformations as trans
-#from utils import setup_pybullet
 import math
 from collections import namedtuple
 import os
@@ -303,23 +302,24 @@ def merge_files(in_file_names, out_file_name):
     return results
 
 ### PyBullet Helper Functions ###
-'''
+
 def replay_result(result):
     from actions.gripper import Gripper
     from gen.generator_busybox import BusyBox
+    from utils.setup_pybullet import setup_env
+    from actions.policies import get_policy_from_tuple
 
     bb = BusyBox.bb_from_result(result)
-    image_data = setup_pybullet.setup_env(bb, True, True)
+    image_data = setup_env(bb, True, True)
     gripper = Gripper()
     mech = bb._mechanisms[0]
-    policy = policies.get_policy_from_tuple(result.policy_params)
-    config_goal = result.config_goal
-    pose_handle_world_init = mech.get_handle_pose()
+    policy = get_policy_from_tuple(result.policy_params)
     pose_handle_base_world = mech.get_pose_handle_base_world()
-    traj = policy.generate_trajectory(pose_handle_base_world, config_goal, True)
-    _, net_motion, _ = gripper.execute_trajectory(traj, mech, policy.type, True)
+    traj = policy.generate_trajectory(pose_handle_base_world, result.config_goal, True)
+    cumu_motion, net_motion, pose_handle_world_final = gripper.execute_trajectory(traj, mech, policy.type, True)
+    import pdb; pdb.set_trace()
     p.disconnect()
-'''
+
 def vis_frame(pos, quat, length=0.2, lifeTime=0.4):
     """ This function visualizes a coordinate frame for the supplied frame where the
     red,green,blue lines correpsond to the x,y,z axes.
