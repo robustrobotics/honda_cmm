@@ -183,12 +183,16 @@ ImageData contains a subset of the image data returned by pybullet
                     list of pixel colors in R,G,B,A format, in range [0..255] for each color
 """
 
-def draw_thick_line(endpoints, color, lifeTime=0):
+def draw_line(endpoints, color, lifeTime=0, thick=False):
     # add to y and z dimensions
-    n = 10
-    w = .0005
-    delta_ys = np.linspace(-w, w, n)
-    delta_zs = np.linspace(-w, w, n)
+    if thick:
+        n = 10
+        w = .0005
+        delta_ys = np.linspace(-w, w, n)
+        delta_zs = np.linspace(-w, w, n)
+    else:
+        delta_ys = [0]
+        delta_zs = [0]
     lines = []
     for delta_y in delta_ys:
         for delta_z in delta_zs:
