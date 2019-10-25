@@ -229,21 +229,29 @@ class DoorPolicyDelta(PlotFunc):
                 c = 'b.'
             else:
                 c = 'c.'
-            plt.plot(data_point.delta_values.delta_roll, data_point.net_motion, c)
+            motion_radius = data_point.mechanism_params.params.door_size[0] - 0.025
+            max_motion = 2*np.pi*motion_radius/4
+            performance = data_point.net_motion/max_motion
+            plt.plot(data_point.policy_params.delta_values.delta_roll, performance, c)
         plt.xlabel('Delta Axis Roll')
-        plt.ylabel('Motion')
+        plt.ylabel('Motion as Percentage of Max Possible Door Motion')
         plt.title('Distance from true axis roll value versus Motion for a '+data_point.mechanism_params.type)
 
+        '''
         plt.figure()
         for data_point in data:
             if data_point.pose_joint_world_final is None:
                 c = 'b.'
             else:
                 c = 'c.'
-            plt.plot(data_point.delta_values.delta_pitch, data_point.net_motion, c)
+            motion_radius = data_point.mechanism_params.params.door_size[0] - 0.025
+            max_motion = 2*np.pi*motion_radius/4
+            performance = data_point.net_motion/max_motion
+            plt.plot(data_point.policy_params.delta_values.delta_pitch, performance, c)
         plt.xlabel('Delta Axis Pitch')
-        plt.ylabel('Motion')
+        plt.ylabel('Motion as Percentage of Max Possible Door Motion')
         plt.title('Distance from true axis pitch value versus Motion for a '+data_point.mechanism_params.type)
+        '''
 
         plt.figure()
         for data_point in data:
@@ -251,22 +259,13 @@ class DoorPolicyDelta(PlotFunc):
                 c = 'b.'
             else:
                 c = 'c.'
-            plt.plot(data_point.delta_values.delta_radius_x, data_point.net_motion, c)
+            motion_radius = data_point.mechanism_params.params.door_size[0] - 0.025
+            max_motion = 2*np.pi*motion_radius/4
+            performance = data_point.net_motion/max_motion
+            plt.plot(data_point.policy_params.delta_values.delta_radius_x, performance, c)
         plt.xlabel('Delta Radius x')
-        plt.ylabel('Motion')
+        plt.ylabel('Motion as Percentage of Max Possible Door Motion')
         plt.title('Distance from true radius x value versus Motion for a '+data_point.mechanism_params.type)
-
-        plt.figure()
-        for data_point in data:
-            if data_point.pose_joint_world_final is None:
-                c = 'b.'
-            else:
-                c = 'c.'
-            plt.plot(data_point.delta_values.delta_radius_z, data_point.net_motion, c)
-        plt.xlabel('Delta Radius z')
-        plt.ylabel('Motion')
-        plt.title('Distance from true radius z value versus Motion for a '+data_point.mechanism_params.type)
-
 
 class DataHist(PlotFunc):
 
