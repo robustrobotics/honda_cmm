@@ -41,9 +41,9 @@ def train_eval(args, hdim, batch_size, pviz, fname, writer, n=0):
     train_set, val_set, _ = setup_data_loaders(data=data,
                                               batch_size=batch_size)
 
-    # Setup Model (TODO: Update the correct policy dims)
+    # Setup Model
     net = NNPolVis(policy_names=['Prismatic', 'Revolute'],
-                   policy_dims=[2, 12],
+                   policy_dims=[2, 3],
                    hdim=hdim,
                    im_h=53,  # 154,
                    im_w=115,  # 205,
@@ -182,7 +182,7 @@ if __name__ == '__main__':
     if args.mode == 'normal':
         for n_run in range(args.n_runs):
             fname = model_dir+'model_nrun_'+str(n_run)
-            train_eval(args, args.hdim, args.batch_size, args.pviz, fname, writer)
+            train_eval(args, args.hdim, args.batch_size, args.pviz, fname, writer, n=100)
 
     elif args.mode == 'ntrain':
         min = args.step

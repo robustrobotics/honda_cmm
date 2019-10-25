@@ -130,13 +130,13 @@ def parse_pickle_file(fname=None, data=None):
             policy_params = pitch + yaw
             # mech_params = [entry.mechanism_params.params.range]
         elif policy_type == 'Revolute':
-            center = list(entry.policy_params.params.rot_center)
-            roll = [entry.policy_params.params.rot_roll]
-            pitch = [entry.policy_params.params.rot_pitch]
-            orn = list(entry.policy_params.params.rot_orientation)
-            radius = list(entry.policy_params.params.rot_radius)
-            policy_params = center + roll + pitch + orn + radius
-            mech_params = []
+            #center = list(entry.policy_params.params.rot_center)
+            roll = [entry.policy_params.params.rot_axis_roll]
+            pitch = [entry.policy_params.params.rot_axis_pitch]
+            #orn = list(entry.policy_params.params.rot_orientation)
+            radius_x = [entry.policy_params.params.rot_radius_x]
+            policy_params = roll + pitch + radius_x
+            #mech_params = []
         motion = entry.net_motion
 
         parsed_data.append({
