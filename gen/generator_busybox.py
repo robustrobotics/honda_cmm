@@ -193,6 +193,9 @@ class Slider(Mechanism):
                                 self.range,
                                 self.axis))
 
+    def get_max_dist(self):
+        return self.range/2
+
     def reset(self):
         handle_id = self._get_handle_id()
         bb_id = self._get_bb_id()
@@ -341,6 +344,11 @@ class Door(Mechanism):
         bb_id = self._get_bb_id()
         door_base_id = self._get_door_base_id()
         return p.getLinkState(bb_id, door_base_id)[0]
+
+    def get_max_dist(self):
+        # .025 is the distance from the edge of the door to the handle center
+        motion_radius = self.door_size[0] - 0.025
+        return 2*np.pi*motion_radius/4
 
     def reset(self):
         door_base_id = self._get_door_base_id()
