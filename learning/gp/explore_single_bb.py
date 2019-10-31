@@ -362,7 +362,9 @@ def viz_gp(gp, result, num, bb, nn=None):
     # plt.savefig('gp_estimates_tuned_%d.png' % num)
 
 
-def viz_circles(policy_plot_data, image_data, mech, points=[], gp=None, nn=None):
+def viz_circles(image_data, mech, points=[], gp=None, nn=None):
+    policy_plot_data = Policy.get_plot_data(mech)
+
     n_angular = 40
     n_linear = 20
     n_bins = 5
@@ -420,11 +422,9 @@ def viz_circles(policy_plot_data, image_data, mech, points=[], gp=None, nn=None)
                         xpred_rowi += 1
 
 
-                Y_pred = None
+                Y_pred = np.zeros((X_pred.shape[0], 1))
                 if not gp is None:
-                    Y_pred, Y_std  = gp.predict(X_pred, return_std=True)
-                if len(Y_pred.shape) == 1:
-                    Y_pred = Y_pred.reshape(-1, 1)
+                    Y_pred_gp += gp.predict(X_pred)
                 if not nn is None:
                     loader = format_batch(X_pred, image_data)
                     k, x, q, im, _, _ = next(iter(loader))
@@ -558,7 +558,7 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
 
     if plot:
         policy_plot_data = Policy.get_plot_data(mech)
-        viz_circles(policy_plot_data, image_data, mech, points=sampler.xs, gp=sampler.gp, nn=sampler.nn)
+        viz_circles(image_data, mech, points=sampler.xs, gp=sampler.gp, nn=sampler.nn)
     return dataset, sampler.calc_avg_regret(), sampler.gp
 
 if __name__ == '__main__':
