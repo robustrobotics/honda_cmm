@@ -22,6 +22,9 @@ from learning.dataloaders import PolicyDataset, parse_pickle_file
 from gen.generate_policy_data import generate_dataset
 from collections import namedtuple
 import time
+from actions.policies import Policy
+import itertools
+from functools import reduce
 
 def process_data(data, n_train, true_range):
     """
@@ -205,7 +208,7 @@ def test_model(gp, bb_result, args, nn=None, use_cuda=False, urdf_num=0):
 
 class UCB_Interaction(object):
 
-    def __init__(self, image_data, args, true_range=None, pos=None, orn=None, nn_fname=''):
+    def __init__(self, image_data, plot, args, true_range=None, pos=None, orn=None, nn_fname=''):
         # Pretrained Kernel
         # kernel = ConstantKernel(0.005, constant_value_bounds=(0.005, 0.005)) * RBF(length_scale=(0.247, 0.084, 0.0592), length_scale_bounds=(0.0592, 0.247)) + WhiteKernel(noise_level=1e-5, noise_level_bounds=(1e-5, 1e2))
         self.variance = 0.005
@@ -226,7 +229,7 @@ class UCB_Interaction(object):
         self.xs, self.ys, self.moves = [], [], []
 
         self.ix = 0
-        self.plot = args.plot
+        self.plot = plot
         self.nn = None
         if nn_fname != '':
             self.nn = util.load_model(nn_fname, args.hdim, use_cuda=False)
@@ -286,9 +289,6 @@ class UCB_Interaction(object):
             # #plt.savefig('gp_samples_%d.png' % ix)
             # plt.show()
             # viz_gp(gp, result, ix, bb, nn=nn)
-
-    def viz_polar_plots(self):
-        viz_gp_circles(self.gp, self.ix, self.true_range, points=self.xs, nn=self.nn, image_data=self.optim.image_data)
 
     def calc_avg_regret(self):
         regrets = []
@@ -362,99 +362,92 @@ def viz_gp(gp, result, num, bb, nn=None):
     # plt.savefig('gp_estimates_tuned_%d.png' % num)
 
 
-def viz_gp_circles(gp, num, max_d, points=[], nn=None, image_data=None):
-    n_pitch = 40
-    n_q = 20
+def viz_circles(policy_plot_data, image_data, mech, points=[], gp=None, nn=None):
+    n_angular = 40
+    n_linear = 20
+    n_bins = 5
+    n_params = len(policy_plot_data)
 
-    radii = np.linspace(-0.25, 0.25, num=n_q)
-    thetas = np.linspace(-np.pi, 0, num=n_pitch)
-    r, th = np.meshgrid(radii, thetas)
-    mean_colors = np.zeros(r.shape)
-    std_colors = np.zeros(r.shape)
+    all_angular_params = list(filter(lambda x: x.type == 'angular', policy_plot_data))
+    all_linear_params = list(filter(lambda x: x.type == 'linear', policy_plot_data))
 
-    for ix in range(0, n_pitch):
-        x_preds = []
-        for jx in range(0, n_q):
-            x_preds.append([thetas[ix], 0, radii[jx]])
-        X_pred = np.array(x_preds)
-
-        Y_pred, Y_std = gp.predict(X_pred, return_std=True)
-        if len(Y_pred.shape) == 1:
-            Y_pred = Y_pred.reshape(-1, 1)
-        if not nn is None:
-            loader = format_batch(X_pred, image_data)
-            k, x, q, im, _, _ = next(iter(loader))
-            pol = torch.Tensor([util.name_lookup[k[0]]])
-            nn_preds = nn(pol, x, q, im)[0].detach().numpy()
-            Y_pred += nn_preds
-
-        for jx in range(0, n_q):
-            mean_colors[ix, jx] = Y_pred[jx, 0]
-            std_colors[ix, jx] = Y_std[jx]
-
-    # plt.clf()
-    # f = plt.figure(figsize=(20, 5))
-    # f.set_facecolor((0, 0, 0))
-    # ax0 = plt.subplot(131)
-    # w, h, im = image_data
-    # np_im = np.array(im, dtype=np.uint8).reshape(h, w, 3)
-    # ax0.imshow(np_im)
-    # mps = bb._mechanisms[0].get_mechanism_tuple().params
-    # print('Angle:', np.rad2deg(np.arctan2(mps.axis[1], mps.axis[0])))
-    # ax1 = plt.subplot(132, projection='polar')
-    # ax1.set_title('mean')
-    # max_d = bb._mechanisms[0].get_mechanism_tuple().params.range / 2.0
-    # polar_plots(ax1, mean_colors, vmax=max_d)
-    #
-    # ax2 = plt.subplot(133, projection='polar')
-    # ax2.set_title('variance')
-    # polar_plots(ax2, std_colors, vmax=None, points=points)
-    # plt.show()
-    #
-    # if '/' in model_name:
-    #     model_name = model_name.split('/')[-1].replace('.pt', '')
-    # fname = 'prior_plots/gp_polar_bb_%d_%d_%s.png' % (kx, num, model_name)
-    # plt.savefig(fname, bbox_inches='tight')
-
-    # -------------------------
-    #plt.clf()
-    #plt.figure(figsize=(5, 5))
-    ax0 = plt.subplot(121)
+    # make figure of an image of the mechanism
+    fig, ax = plt.subplots()
     w, h, im = image_data
     np_im = np.array(im, dtype=np.uint8).reshape(h, w, 3)
-    ax0.imshow(np_im)
+    ax.imshow(np_im)
 
-    ax1 = plt.subplot(122, projection='polar')
-    polar_plots(ax1, mean_colors, vmax=max_d, points=points)
-    ax1.set_title('Reward (T=%d)' % (num + 1), color='w', y=1.15)
-    #
-    # ax2 = plt.subplot(111, projection='polar')
-    # polar_plots(ax2, std_colors, vmax=None, points=points)
-    # plt.show()
-    #if '/' in model_name:
-    #    model_name = model_name.split('/')[-1].replace('.pt', '')
-    #fname = 'videos/gp_polar_bb_%d_%d_%s_mean_arrow.png' % (kx, num, model_name)
-    #plt.savefig(fname, bbox_inches='tight', facecolor='k')
+    # for each pair of (linear, angular) param pairs make a figure
+    for angular_param in all_angular_params:
+        for linear_param in all_linear_params:
+            linear_vals = np.linspace(*linear_param.range, n_linear)
+            angular_vals = np.linspace(*angular_param.range, n_angular)
+            l, a = np.meshgrid(linear_vals, angular_vals)
+            mean_colors = np.zeros(l.shape)
 
-    #plt.clf()
-    #plt.figure(figsize=(5, 5))
-    #ax1 = plt.subplot(111, projection='polar')
-    #max_d = bb._mechanisms[0].get_mechanism_tuple().params.range / 2.0
-    #polar_plots(ax1, mean_colors, vmax=max_d, points=None)
-    #ax1.set_title('Reward (T=%d)' % (num+1), color='w', y=1.15)
-    #
-    # ax2 = plt.subplot(111, projection='polar')
-    # polar_plots(ax2, std_colors, vmax=None, points=points)
-    #plt.show()
-    #if '/' in model_name:
-    #    model_name = model_name.split('/')[-1].replace('.pt', '')
-    #fname = 'videos/gp_polar_bb_%d_%d_%s_mean.png' % (kx, num, model_name)
-    #plt.savefig(fname, bbox_inches='tight', facecolor='k')
-    # ----------------------------------
+            # bin the other param values
+            all_other_params = list(filter(lambda x: (x!=angular_param)
+                                                    and (x!=linear_param),
+                                            policy_plot_data))
+            other_vals_and_inds = []
+            for other_params in all_other_params:
+                other_vals_and_inds += [list(enumerate(np.linspace(*other_params.range, n_bins)))]
+
+            # TODO: only works for up to 2 other_params (will have to figure out new
+            # visualization past that)
+            fig = plt.figure()
+            plt.suptitle(angular_param.param_name + ' vs ' + linear_param.param_name)
+            if len(other_vals_and_inds) == 1:
+                n_rows = 1
+                n_cols = len(other_vals_and_inds[0])
+            elif len(other_vals_and_inds) == 2:
+                n_cols = len(other_param_vals_and_inds[0])
+                n_rows = len(other_param_vals_and_inds[1])
+
+            # for each other value add a dimension of plots to the figure
+            for other_param_vals_and_inds in itertools.product(*other_vals_and_inds):
+                # make matrix of all values to predict dist for
+                X_pred = np.zeros((n_angular*n_linear, n_params))
+                xpred_rowi = 0
+                for ix in range(0, n_angular):
+                    for jx in range(0, n_linear):
+                        X_pred[xpred_rowi, angular_param.param_num] = angular_vals[ix]
+                        X_pred[xpred_rowi, linear_param.param_num] = linear_vals[jx]
+                        for otheri, other_param_val in enumerate(other_param_vals_and_inds):
+
+                            other_param_num = all_other_params[otheri].param_num
+                            X_pred[xpred_rowi, other_param_num] = other_param_val[1]
+                        xpred_rowi += 1
+
+
+                Y_pred = None
+                if not gp is None:
+                    Y_pred, Y_std  = gp.predict(X_pred, return_std=True)
+                if len(Y_pred.shape) == 1:
+                    Y_pred = Y_pred.reshape(-1, 1)
+                if not nn is None:
+                    loader = format_batch(X_pred, image_data)
+                    k, x, q, im, _, _ = next(iter(loader))
+                    pol = torch.Tensor([util.name_lookup[k[0]]])
+                    nn_preds = nn(pol, x, q, im)[0].detach().numpy()
+                    Y_pred += nn_preds
+                mean_colors = Y_pred.reshape(n_angular, n_linear)
+
+                row_col = [o[0]+1 for o in other_param_vals_and_inds]
+                if len(row_col) == 1:
+                    subplot_num = 1*row_col[0]
+                else:
+                    subplot_num = reduce(lambda x,y: x*y, row_col)
+                ax = plt.subplot(n_rows, n_cols, subplot_num, projection='polar')
+                ax.set_title(str([str(all_other_params[other_param_i].param_name) + ' = ' + str("%.2f" % other_val) for other_param_i, (plot_i, other_val) in enumerate(other_param_vals_and_inds)]))
+                max_dist = mech.get_max_dist()
+                im = polar_plots(ax, mean_colors, vmax=max_dist, points=points, \
+                                colorbar=False)
+            add_colorbar(fig, im)
+
     plt.show()
 
-
-def polar_plots(ax, colors, vmax, points=None):
+def polar_plots(ax, colors, vmax, points=None, colorbar=False):
     n_pitch, n_q = colors.shape
     thp, rp = np.linspace(0, 2*np.pi, n_pitch*2), np.linspace(0, 0.25, n_q//2)
     rp, thp = np.meshgrid(rp, thp)
@@ -464,18 +457,21 @@ def polar_plots(ax, colors, vmax, points=None):
     cp[0:n_pitch, :] = colors[:, 0:n_q//2][:, ::-1]
     cp[n_pitch:, :] = np.copy(colors[:, n_q//2:])
 
-    cbar = ax.pcolormesh(thp, rp, cp, vmax=vmax, cmap='viridis')
+    cbar = ax.pcolormesh(thp, rp, cp, vmin=0, vmax=vmax, cmap='viridis')
     ax.tick_params(axis='x', colors='white')
     ax.set_yticklabels([])
-    plt.colorbar(cbar, ax=ax, pad=0.2)
     if not points is None:
         for x in points:
-            #print([np.rad2deg(x[0]), x[2]])
             if x[2] < 0:
                 ax.scatter(x[0] - np.pi, -1*x[2], c='r', s=10)
             else:
                 ax.scatter(x[0], x[2], c='r', s=10)
+    return cbar
 
+def add_colorbar(fig, im):
+    fig.subplots_adjust(right=0.8)
+    cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
+    fig.colorbar(im, cax=cbar_ax)
 
 def create_gpucb_dataset(n_interactions, n_bbs, args):
     """
@@ -514,7 +510,7 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
         dataset = []
 
     for ix, bb_result in enumerate(busybox_data):
-        single_dataset, _, _ = create_single_bb_gpucb_dataset(bb_result, n_interactions, args.nn_fname, args)
+        single_dataset, _, _ = create_single_bb_gpucb_dataset(bb_result, n_interactions, args.nn_fname, args.plot, args)
         dataset.extend(single_dataset)
         print('Interacted with BusyBox %d.' % ix)
 
@@ -536,12 +532,13 @@ def get_bb_params(bb_result, args):
     gripper = Gripper()
     return pos, orn, true_range, image_data, mech, pose_handle_base_world, bb, gripper
 
-def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, args):
-    pos, orn, true_range, image_data, mech, pose_handle_base_world, bb, gripper = get_bb_params(bb_result, args)
+def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, args):
+    pos, orn, true_range, image_data, mech, pose_handle_base_world, bb, gripper \
+        = get_bb_params(bb_result, args)
     dataset = []
 
     # interact with BB
-    sampler = UCB_Interaction(image_data, args, true_range, pos, orn, nn_fname=nn_fname)
+    sampler = UCB_Interaction(image_data, plot, args, true_range, pos, orn, nn_fname=nn_fname)
     for _ in range(n_interactions):
         # sample a policy
         policy, q = sampler.sample()
@@ -559,8 +556,9 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, args):
         # update GP
         sampler.update(policy, q, motion)
 
-    if args.plot:
-        sampler.viz_polar_plots()
+    if plot:
+        policy_plot_data = Policy.get_plot_data(mech)
+        viz_circles(policy_plot_data, image_data, mech, points=sampler.xs, gp=sampler.gp, nn=sampler.nn)
     return dataset, sampler.calc_avg_regret(), sampler.gp
 
 if __name__ == '__main__':
@@ -606,8 +604,7 @@ if __name__ == '__main__':
         '--hdim',
         type=int,
         default=16,
-        help='hdim of supplied model(s), used to load model file'
-    )
+        help='hdim of supplied model(s), used to load model file')
     args = parser.parse_args()
 
     if args.debug:
