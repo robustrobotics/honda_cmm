@@ -22,6 +22,15 @@ RevoluteParams = namedtuple('RevoluteParams', 'rot_center rot_axis_roll rot_axis
                             rot_axis rot_radius_x rot_orientation')
 RevoluteDelta = namedtuple('RevoluteDelta', 'delta_roll, delta_pitch, delta_radius_x')
 
+
+PolicyPlotData = namedtuple('PolicyPlotData', 'param_name param_num range type')
+"""
+param_name: name of input param
+param_num: number of input to NN (config is always last)
+range: ranges for plotting
+type: angular or linear
+"""
+
 class Policy(object):
     def __init__(self, type=None):
         """ This is an interface for each Policy type. Each Policy must implement the
@@ -85,6 +94,23 @@ class Policy(object):
     @staticmethod
     def _gen(bb, mech, randomness):
         raise NotImplementedError('_gen not implemented for policy type '+self.type)
+
+    @staticmethod
+    def get_plot_data(mech):
+        """
+        Return a list of PolicyPlotData for each policy type.
+        This depends on the parameters that are passed into the Policy Encoder.
+        """
+        # these values are the mins and maxes generated in the _gen() functions
+        if mech.mechanism_type == 'Slider':
+            return [PolicyPlotData('pitch', 0, [-np.pi, 0], 'angular'),
+                    PolicyPlotData('yaw', 1, [-np.pi, 0], 'angular'),
+                    PolicyPlotData('config', 2, [-0.25, 0.25], 'linear')]
+        elif mech.mechanism_type == 'Door':
+            return [PolicyPlotData('roll', 0, [-np.pi, 0], 'angular'),
+                    PolicyPlotData('pitch', 1, [-np.pi, 0], 'angular'),
+                    PolicyPlotData('radius', 2, [-0.23, 0.23], 'linear'),
+                    PolicyPlotData('config', 3, [-np.pi, np.pi], 'linear')]
 
     def _draw_traj(self, poses, color):
         if len(self.traj_lines) > 0:
