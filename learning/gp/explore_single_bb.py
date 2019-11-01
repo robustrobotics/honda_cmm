@@ -367,13 +367,14 @@ def viz_circles(image_data, mech, points=[], gp=None, nn=None):
 
     n_angular = 40
     n_linear = 20
-    n_bins = 5
+    N_BINS = 5
     n_params = len(policy_plot_data)
 
     all_angular_params = list(filter(lambda x: x.type == 'angular', policy_plot_data))
     all_linear_params = list(filter(lambda x: x.type == 'linear', policy_plot_data))
 
     # make figure of an image of the mechanism
+    plt.ion()
     fig, ax = plt.subplots()
     w, h, im = image_data
     np_im = np.array(im, dtype=np.uint8).reshape(h, w, 3)
@@ -381,7 +382,11 @@ def viz_circles(image_data, mech, points=[], gp=None, nn=None):
 
     # for each pair of (linear, angular) param pairs make a figure
     for angular_param in all_angular_params:
+        if angular_param.range[0] == angular_param.range[1]:
+            continue
         for linear_param in all_linear_params:
+            if linear_param.range[0] == linear_param.range[1]:
+                continue
             linear_vals = np.linspace(*linear_param.range, n_linear)
             angular_vals = np.linspace(*angular_param.range, n_angular)
             l, a = np.meshgrid(linear_vals, angular_vals)
@@ -393,6 +398,10 @@ def viz_circles(image_data, mech, points=[], gp=None, nn=None):
                                             policy_plot_data))
             other_vals_and_inds = []
             for other_params in all_other_params:
+                if other_params.range[0] == other_params.range[1]:
+                    n_bins = 1
+                else:
+                    n_bins = N_BINS
                 other_vals_and_inds += [list(enumerate(np.linspace(*other_params.range, n_bins)))]
 
             # TODO: only works for up to 2 other_params (will have to figure out new
@@ -403,8 +412,8 @@ def viz_circles(image_data, mech, points=[], gp=None, nn=None):
                 n_rows = 1
                 n_cols = len(other_vals_and_inds[0])
             elif len(other_vals_and_inds) == 2:
-                n_cols = len(other_param_vals_and_inds[0])
-                n_rows = len(other_param_vals_and_inds[1])
+                n_cols = len(other_vals_and_inds[0])
+                n_rows = len(other_vals_and_inds[1])
 
             # for each other value add a dimension of plots to the figure
             for other_param_vals_and_inds in itertools.product(*other_vals_and_inds):
@@ -437,15 +446,19 @@ def viz_circles(image_data, mech, points=[], gp=None, nn=None):
                 if len(row_col) == 1:
                     subplot_num = 1*row_col[0]
                 else:
-                    subplot_num = reduce(lambda x,y: x*y, row_col)
+                    subplot_num = reduce(lambda x,y: n_cols*(x-1)+y, row_col)
                 ax = plt.subplot(n_rows, n_cols, subplot_num, projection='polar')
-                ax.set_title(str([str(all_other_params[other_param_i].param_name) + ' = ' + str("%.2f" % other_val) for other_param_i, (plot_i, other_val) in enumerate(other_param_vals_and_inds)]))
+                ax.set_title('\n'.join([str(all_other_params[other_param_i].param_name) \
+                    + ' = ' + str("%.2f" % other_val) for other_param_i, \
+                    (plot_i, other_val) in enumerate(other_param_vals_and_inds)]), \
+                    fontsize=10)
                 max_dist = mech.get_max_dist()
                 im = polar_plots(ax, mean_colors, vmax=max_dist, points=points, \
                                 colorbar=False)
             add_colorbar(fig, im)
 
     plt.show()
+    input('Enter to close plots')
 
 def polar_plots(ax, colors, vmax, points=None, colorbar=False):
     n_pitch, n_q = colors.shape
