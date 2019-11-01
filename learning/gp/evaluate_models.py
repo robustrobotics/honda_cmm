@@ -2,7 +2,7 @@ import pickle
 import argparse
 import os
 import numpy as np
-from learning.gp.explore_single_bb import create_single_bb_gpucb_dataset, test_model
+from learning.gp.explore_single_bb import create_single_bb_gpucb_dataset
 from utils import util
 
 def get_models(L, models_path):
@@ -14,6 +14,36 @@ def get_models(L, models_path):
                 full_path = root+'/'+file
                 models.append(full_path)
     return models
+
+def test_model(gp, bb_result, args, nn=None, use_cuda=False, urdf_num=0):
+    """
+    Maximize the GP mean function to get the best policy.
+    :param gp: A GP fit to the current BusyBox.
+    :param result: Result representing the current BusyBox.
+    :return: Regret.
+    """
+    # Optimize the GP to get the best result.
+    bb = BusyBox.bb_from_result(bb_result, urdf_num=urdf_num)
+    image_data = setup_env(bb, viz=False, debug=False)
+    optim_gp = GPOptimizer(urdf_num, bb, image_data, args.n_gp_samples, nn=nn)
+    policy, q = optim_gp.optimize_gp(gp, ucb=False)
+
+    # Execute the policy and observe the true motion.
+    mech = bb._mechanisms[0]
+    gripper = Gripper()
+    pose_handle_base_world = mech.get_pose_handle_base_world()
+
+    traj = policy.generate_trajectory(pose_handle_base_world, q, True)
+    _, motion, _ = gripper.execute_trajectory(traj, mech, policy.type, False)
+    # import time
+    # time.sleep(1)
+    p.disconnect()
+
+    # Calculate the regret.
+    max_d = bb._mechanisms[0].get_mechanism_tuple().params.range/2.0
+    regret = (max_d - motion)/max_d
+
+    return regret
 
 def evaluate_models(n_interactions, n_bbs, args, use_cuda=False):
     with open(args.bb_fname, 'rb') as handle:
