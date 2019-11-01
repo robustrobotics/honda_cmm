@@ -108,9 +108,9 @@ class Policy(object):
                     PolicyPlotData('config', 2, [-0.25, 0.25], 'linear')]
         elif mech.mechanism_type == 'Door':
             return [PolicyPlotData('roll', 0, [-np.pi, 0], 'angular'),
-                    PolicyPlotData('pitch', 1, [-np.pi, 0], 'angular'),
+                    PolicyPlotData('pitch', 1, [0, 0], 'angular'),
                     PolicyPlotData('radius', 2, [-0.23, 0.23], 'linear'),
-                    PolicyPlotData('config', 3, [-np.pi, np.pi], 'linear')]
+                    PolicyPlotData('config', 3, [-np.pi/2, np.pi/2], 'linear')]
 
     def _draw_traj(self, poses, color):
         if len(self.traj_lines) > 0:
