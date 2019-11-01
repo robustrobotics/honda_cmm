@@ -246,7 +246,7 @@ def compare_models(model_a, model_b):
 def load_model(model_fname, hdim=32, model_type='polvis', use_cuda=False, image_encoder='spatial'):
     if model_type == 'pol':
         model = NNPol(policy_names=['Prismatic', 'Revolute'],
-                      policy_dims=[2, 12],
+                      policy_dims=[2, 3],
                       hdim=hdim)
     elif model_type == 'mech':
         model = NNPolMech(policy_names=['Prismatic'],
@@ -255,7 +255,7 @@ def load_model(model_fname, hdim=32, model_type='polvis', use_cuda=False, image_
                           hdim=hdim)
     else:
         model = NNPolVis(policy_names=['Prismatic', 'Revolute'],
-                         policy_dims=[2, 12],
+                         policy_dims=[2, 3],
                          hdim=hdim,
                          im_h=53,
                          im_w=115,
