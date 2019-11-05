@@ -107,10 +107,10 @@ class Policy(object):
                     PolicyPlotData('yaw', 1, [-np.pi, 0], 'angular'),
                     PolicyPlotData('config', 2, [-0.25, 0.25], 'linear')]
         elif mech.mechanism_type == 'Door':
-            return [PolicyPlotData('roll', 0, [-np.pi, 0], 'angular'),
+            return [PolicyPlotData('roll', 0, [0, 2*np.pi], 'angular'),
                     PolicyPlotData('pitch', 1, [0, 0], 'angular'),
-                    PolicyPlotData('radius', 2, [-0.23, 0.23], 'linear'),
-                    PolicyPlotData('config', 3, [-np.pi/2, np.pi/2], 'linear')]
+                    PolicyPlotData('radius', 2, [.08, 0.15], 'linear'),
+                    PolicyPlotData('config', 3, [-np.pi/2, 0.0], 'linear')]
 
     def _draw_traj(self, poses, color):
         if len(self.traj_lines) > 0:
@@ -301,12 +301,9 @@ class Revolute(Policy):
     @staticmethod
     def generate_config(mech, goal_config):
         if goal_config is None:
-            return np.random.uniform(-np.pi/2,np.pi/2)
+            return -np.random.uniform(0.0,np.pi/2)
         else:
-            if mech.flipped:
-                return -goal_config*np.pi/2.0
-            else:
-                return goal_config*np.pi/2.0
+            return -goal_config*np.pi/2.0
 
     def get_policy_tuple(self):
         rev_params = RevoluteParams(self.rot_center, self.rot_axis_roll, \
@@ -322,25 +319,27 @@ class Revolute(Policy):
         self.traj_lines = lines
 
     @staticmethod
+    # TODO: randomness is binary (either on or off)
     def _gen(bb, mech, randomness):
         """ This function generates a Revolute policy. The ranges are
         based on the data.generator range revolute joints
         """
-        # calculate the orientation of the rotational axis
-        rot_axis_roll_world_true = 0.0
-        rot_axis_pitch_world_true = 0.0
-        delta_roll = randomness*np.random.uniform(-np.pi/2, np.pi/2)
-        delta_pitch = 0.0#randomness*np.random.uniform(-np.pi/2, np.pi/2)
-        rot_axis_roll_world = rot_axis_roll_world_true + delta_roll
-        rot_axis_pitch_world = rot_axis_pitch_world_true + delta_pitch
-        rot_axis_world = util.quaternion_from_euler(rot_axis_roll_world,rot_axis_pitch_world, 0.0)
-
-        # calculate the radius of the joint as a distance x in the rotational axis
-        p_rot_center_world_true = mech.get_rot_center()
         p_handle_base_world = mech.get_pose_handle_base_world().p
-        radius_x_true = np.subtract(p_handle_base_world, p_rot_center_world_true)[0]
-        delta_radius_x = randomness*np.random.uniform(-.08, .08)
-        radius_x = radius_x_true + delta_radius_x
+        if randomness > 0:
+            rot_axis_roll_world = np.random.uniform(0.0, 2*np.pi)
+            #radius_x = np.random.uniform(0.08, 0.15)
+            p_rot_center_world_true = mech.get_rot_center()
+            radius_x = abs(np.subtract(p_handle_base_world, p_rot_center_world_true)[0])
+        else:
+            rot_axis_roll_world = 0.0
+            p_rot_center_world_true = mech.get_rot_center()
+            radius_x = abs(np.subtract(p_handle_base_world, p_rot_center_world_true)[0])
+
+        if not mech.flipped:
+            rot_axis_pitch_world = np.pi
+        else:
+            rot_axis_pitch_world = 0.0
+        rot_axis_world = util.quaternion_from_euler(rot_axis_roll_world,rot_axis_pitch_world, 0.0)
 
         # calculate the center of rotation in the world frame
         radius = [-radius_x, 0.0, 0.0]
@@ -348,15 +347,13 @@ class Revolute(Policy):
 
         # calculate the orientation of the handle frame in the rotational axis frame
         rot_orn = [0., 0., 0., 1.]
+        util.vis_frame(p_rot_center_world, rot_axis_world, length=0.4, lifeTime=10000)
         return Revolute(p_rot_center_world,
                         rot_axis_roll_world,
                         rot_axis_pitch_world,
                         rot_axis_world,
                         radius_x,
-                        rot_orn,
-                        delta_roll,
-                        delta_pitch,
-                        delta_radius_x)
+                        rot_orn)
 
 class Poke(Policy):
     def __init__(self):
