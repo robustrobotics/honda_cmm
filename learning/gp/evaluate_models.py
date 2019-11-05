@@ -2,8 +2,10 @@ import pickle
 import argparse
 import os
 import numpy as np
-from learning.gp.explore_single_bb import create_single_bb_gpucb_dataset
-from utils import util
+from learning.gp.explore_single_bb import create_single_bb_gpucb_dataset, GPOptimizer
+from utils import util, setup_pybullet
+from gen.generator_busybox import BusyBox
+from actions.gripper import Gripper
 
 def get_models(L, models_path):
     all_files = os.walk(models_path)
@@ -24,7 +26,7 @@ def test_model(gp, bb_result, args, nn=None, use_cuda=False, urdf_num=0):
     """
     # Optimize the GP to get the best result.
     bb = BusyBox.bb_from_result(bb_result, urdf_num=urdf_num)
-    image_data = setup_env(bb, viz=False, debug=False)
+    image_data = setup_pybullet.setup_env(bb, viz=False, debug=False)
     optim_gp = GPOptimizer(urdf_num, bb, image_data, args.n_gp_samples, nn=nn)
     policy, q = optim_gp.optimize_gp(gp, ucb=False)
 
@@ -37,10 +39,10 @@ def test_model(gp, bb_result, args, nn=None, use_cuda=False, urdf_num=0):
     _, motion, _ = gripper.execute_trajectory(traj, mech, policy.type, False)
     # import time
     # time.sleep(1)
-    p.disconnect()
+    #p.disconnect()
 
     # Calculate the regret.
-    max_d = bb._mechanisms[0].get_mechanism_tuple().params.range/2.0
+    max_d = bb._mechanisms[0].get_max_dist()
     regret = (max_d - motion)/max_d
 
     return regret

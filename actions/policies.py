@@ -388,18 +388,6 @@ def get_matched_policy_type(mech):
     elif mech.mechanism_type == 'Slider':
         return 'Prismatic'
 
-def get_policy_from_params(type, params, mech=None):
-    if type == 'Revolute':
-        return Revolute(params[:3], params[3], params[4], params[5:9], params[9:12])
-    if type == 'Prismatic':
-        pitch = params[7]
-        yaw = params[8]
-        if mech:
-            delta_pitch = pitch + np.arccos(mech.axis[0])
-            delta_yaw = 0.0
-            return Prismatic(params[:3], params[3:7], pitch, yaw, delta_pitch, delta_yaw)
-        return Prismatic(params[:3], params[3:7], pitch, yaw)
-
 def get_policy_from_tuple(policy_params):
     type = policy_params.type
     params = policy_params.params

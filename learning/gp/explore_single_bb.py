@@ -15,18 +15,85 @@ from actions import policies
 import operator
 import pybullet as p
 from actions.gripper import Gripper
-from actions.policies import Prismatic
+from actions.policies import Prismatic, Revolute
 from learning.test_model import get_pred_motions as get_nn_preds
 import torch
 from learning.dataloaders import PolicyDataset, parse_pickle_file
 from gen.generate_policy_data import generate_dataset
 from collections import namedtuple
 import time
-from actions.policies import Policy, generate_policy
+from actions.policies import Policy, generate_policy, Revolute, Prismatic
 import itertools
 from functools import reduce
 
-def process_data(data, n_train, max_dist):
+# takes in an optimization x and returns a policy
+def get_policy_from_x(type, x, mech):
+    if type == 'Revolute':
+        rot_axis_roll = x[0]
+        rot_axis_pitch = 0.0
+        rot_axis_world = util.quaternion_from_euler(rot_axis_roll, rot_axis_pitch, 0.0)
+        radius_x = x[1]
+        radius = [radius_x, 0.0, 0.0]
+        p_handle_base_world = mech.get_pose_handle_base_world().p
+        p_rot_center_world = p_handle_base_world + util.transformation(radius, [0., 0., 0.], rot_axis_world)
+        rot_orn = [0., 0., 0., 1.]
+        return Revolute(p_rot_center_world,
+                        rot_axis_roll,
+                        rot_axis_pitch,
+                        rot_axis_world,
+                        radius_x,
+                        rot_orn)
+                        #delta_roll,
+                        #delta_pitch,
+                        #delta_radius_x)
+    if type == 'Prismatic':
+        pitch = x[0]
+        yaw = 0.0
+        pos = mech.get_pose_handle_base_world().p
+        orn = [0., 0., 0., 1.]
+        return Prismatic(pos, orn, pitch, yaw)
+
+# takes in a result and returns an x
+def get_x_from_result(result):
+    if result.policy_params.type == 'Prismatic':
+        pitch = result.policy_params.params.pitch
+        yaw = result.policy_params.params.yaw
+        q = result.config_goal
+        return [pitch, yaw, q]
+    elif result.policy_params.type == 'Revolute':
+        axis_roll = result.policy_params.params.rot_axis_roll
+        axis_pitch = result.policy_params.params.rot_axis_pitch
+        radius_x = result.policy_params.params.rot_radius_x
+        q = result.config_goal
+        return [axis_roll, axis_pitch, radius_x, q]
+
+# takes in a policy and returns and optimization x and the variable bounds
+def get_reduced_x_and_bounds(policy_type, policy_params, q):
+    if policy_type == 'Prismatic':
+        return np.concatenate([[policy_params.params.pitch], [q]]), \
+                [(-np.pi, 0), (-0.25, 0.25)]
+    elif policy_type == 'Revolute':
+        return np.concatenate([[policy_params.params.rot_axis_roll, \
+                                    policy_params.params.rot_radius_x], [q]]), \
+                [(-np.pi/2, np.pi/2), (0.0, .23), (-np.pi/2, np.pi/2)]
+
+# this takes in an optimization x and returns the tensor of just the policy
+# params
+def get_policy_tensor(policy_type, x):
+    policy_list = [get_policy_list(policy_type, x)[0][:-1]]
+    if policy_type == 'Prismatic':
+        return torch.tensor(policy_list).float()  # hard code yaw to be 0
+    elif policy_type == 'Revolute':
+        return torch.tensor(policy_list).float()
+
+# this takes in an optimization x and returns an x with the policy params
+def get_policy_list(policy_type, x):
+    if policy_type == 'Prismatic':
+        return [[x[0], 0.0, x[-1]]]
+    elif policy_type == 'Revolute':
+        return [[x[0], 0.0, x[1], x[-1]]]
+
+def process_data(data, n_train):
     """
     Takes in a dataset in our typical format and outputs the dataset to fit the GP.
     :param data:
@@ -34,15 +101,13 @@ def process_data(data, n_train, max_dist):
     """
     xs, ys = [], []
     for entry in data[0:n_train]:
-        pitch = entry.policy_params.params.pitch
-        yaw = entry.policy_params.params.yaw
-        q = entry.config_goal
-        xs.append([pitch, yaw, q])
+        x = get_x_from_result(entry)
+        xs.append(x)
         ys.append(entry.net_motion)
 
     X = np.array(xs)
     Y = np.array(ys).reshape(-1, 1)
-
+    '''
     if max_dist:
         x_preds = []
         for theta in np.linspace(-np.pi, 0, num=100):
@@ -50,7 +115,8 @@ def process_data(data, n_train, max_dist):
         X_pred = np.array(x_preds)
         return X, Y, X_pred
     else:
-        return X, Y, []
+    '''
+    return X, Y
 
 
 class GPOptimizer(object):
@@ -84,9 +150,9 @@ class GPOptimizer(object):
                 self.dataset = None
                 self.nn_samples.append(None)
 
-    def _optim_result_to_torch(self, x, image_tensor, use_cuda=False):
-        policy_type_tensor = torch.Tensor([util.name_lookup['Prismatic']])
-        policy_tensor = torch.tensor([[x[0], 0.0]]).float()  # hard code yaw to be 0
+    def _optim_result_to_torch(self, policy_type, x, image_tensor, use_cuda=False):
+        policy_type_tensor = torch.Tensor([util.name_lookup[policy_type]])
+        policy_tensor = get_policy_tensor(policy_type, x)
         config_tensor = torch.tensor([[x[-1]]]).float()
         if use_cuda:
             policy_type_tensor = policy_type_tensor.cuda()
@@ -96,14 +162,14 @@ class GPOptimizer(object):
 
         return [policy_type_tensor, policy_tensor, config_tensor, image_tensor]
 
-    def _objective_func(self, x, gp, ucb, beta=100, image_tensor=None):
+    def _objective_func(self, x, policy_type, gp, ucb, beta=100, image_tensor=None):
         x = x.squeeze()
 
-        X = np.array([[x[0], 0.0, x[-1]]])
+        X = np.array(get_policy_list(policy_type, x))
         Y_pred, Y_std = gp.predict(X, return_std=True)
 
         if not self.nn is None:
-            inputs = self._optim_result_to_torch(x, image_tensor, False)
+            inputs = self._optim_result_to_torch(policy_type, x, image_tensor, False)
             val, _ = self.nn.forward(*inputs)
             val = val.detach().numpy()
             Y_pred += val.squeeze()
@@ -115,9 +181,9 @@ class GPOptimizer(object):
 
         return obj
 
-    def _get_pred_motions(self, data, model, ucb, beta=100, nn_preds=None):
-        X, Y, _ = process_data(data, len(data), self.mech.get_max_dist())
-        y_pred, y_std = model.predict(X, return_std=True)
+    def _get_pred_motions(self, data, gp, ucb, beta=100, nn_preds=None):
+        X, Y = process_data(data, len(data))
+        y_pred, y_std = gp.predict(X, return_std=True)
 
         if not nn_preds is None:
             y_pred += np.array(nn_preds)
@@ -144,33 +210,30 @@ class GPOptimizer(object):
             # Get predictions from the GP.
             sample_disps, dataset = self._get_pred_motions(res, gp, ucb, beta, nn_preds=nn_preds)
 
-            samples.append((('Prismatic',
+            samples.append(((res[0].policy_params.type,
                              res[0].policy_params,
-                             res[0].config_goal,
-                             res[0].policy_params.delta_values.delta_yaw,
-                             res[0].policy_params.delta_values.delta_pitch),
+                             res[0].config_goal),
                              sample_disps[0]))
 
-
         # Find the sample that maximizes the distance.
-        (policy_type_max, params_max, q_max, delta_yaw_max, delta_pitch_max), max_disp = max(samples, key=operator.itemgetter(1))
+        (policy_type_max, params_max, q_max), max_disp = max(samples, key=operator.itemgetter(1))
 
         # Start optimization from here.
         if self.nn is None:
             images = None
         else:
             images = dataset.images[0].unsqueeze(0)
-        x0 = np.concatenate([[params_max.params.pitch], [q_max]]) # only searching space of pitches!
+        x0, bounds = get_reduced_x_and_bounds(policy_type_max, params_max, q_max)
 
-        opt_res = minimize(fun=self._objective_func, x0=x0, args=(gp, ucb, beta, images),
-                       method='L-BFGS-B', options={'eps': 10**-3}, bounds=[(-np.pi, 0), (-0.25, 0.25)])
+        opt_res = minimize(fun=self._objective_func, x0=x0, args=(policy_type_max, gp, ucb, beta, images),
+                       method='L-BFGS-B', options={'eps': 10**-3}, bounds=bounds)
         x_final = opt_res['x']
 
         if policy_type_max == 'Prismatic':
             pos = params_max.params.rigid_position
             orn = params_max.params.rigid_orientation
             policy_list = np.concatenate([pos, orn, [x_final[0], 0.0]])
-        final_policy = policies.get_policy_from_params(policy_type_max, policy_list)
+        final_policy = get_policy_from_x(policy_type_max, x_final, self.mech)
         q = x_final[-1]
         return final_policy, q
 
@@ -180,20 +243,6 @@ class UCB_Interaction(object):
     def __init__(self, bb, image_data, plot, args, nn_fname=''):
         # Pretrained Kernel
         # kernel = ConstantKernel(0.005, constant_value_bounds=(0.005, 0.005)) * RBF(length_scale=(0.247, 0.084, 0.0592), length_scale_bounds=(0.0592, 0.247)) + WhiteKernel(noise_level=1e-5, noise_level_bounds=(1e-5, 1e2))
-        self.variance = 0.005
-        self.noise = 1e-5
-        self.l_yaw = 100
-        self.l_q = 0.1
-        self.l_pitch = 0.10
-        self.kernel = ConstantKernel(self.variance, constant_value_bounds=(self.variance, self.variance)) \
-                        * RBF(length_scale=(self.l_pitch, self.l_yaw, self.l_q),
-                                length_scale_bounds=((self.l_pitch, self.l_pitch),
-                                (self.l_yaw, self.l_yaw), (self.l_q, self.l_q))) \
-                                + WhiteKernel(noise_level=self.noise, noise_level_bounds=(1e-5, 1e2))
-        self.gp = GaussianProcessRegressor(kernel=self.kernel,
-                                      n_restarts_optimizer=10)
-
-
         self.interaction_data = []
         self.xs, self.ys, self.moves = [], [], []
 
@@ -202,15 +251,54 @@ class UCB_Interaction(object):
         self.nn = None
         if nn_fname != '':
             self.nn = util.load_model(nn_fname, args.hdim, use_cuda=False)
+        self.bb = bb
+        self.optim = GPOptimizer(args.urdf_num, self.bb, image_data, args.n_gp_samples, nn=self.nn)
+        self.mech = self.bb._mechanisms[0]
+        self.kernel = self.get_kernel()
+        self.gp = GaussianProcessRegressor(kernel=self.kernel,
+                              n_restarts_optimizer=10)
 
-        self.optim = GPOptimizer(args.urdf_num, bb, image_data, args.n_gp_samples, nn=self.nn)
-        self.mech = bb._mechanisms[0]
-
+    def get_kernel(self):
+        # TODO: in the future will want the GP to take in all types of policy
+        # params, not just the correct type
+        self.variance = 0.005
+        self.noise = 1e-5
+        self.l_yaw = 100
+        self.l_q = 0.1
+        self.l_pitch = 0.10
+        self.l_roll = 0.10
+        self.l_radius = 0.1
+        if self.mech.mechanism_type == 'Slider':
+            return ConstantKernel(self.variance,
+                                    constant_value_bounds=(self.variance,
+                                                            self.variance)) \
+                    * RBF(length_scale=(self.l_pitch,
+                                        self.l_yaw,
+                                        self.l_q),
+                        length_scale_bounds=((self.l_pitch, self.l_pitch),
+                                            (self.l_yaw, self.l_yaw),
+                                            (self.l_q, self.l_q))) \
+                    + WhiteKernel(noise_level=self.noise,
+                                    noise_level_bounds=(1e-5, 1e2))
+        elif self.mech.mechanism_type == 'Door':
+            return ConstantKernel(self.variance,
+                                    constant_value_bounds=(self.variance,
+                                                            self.variance)) \
+                    * RBF(length_scale=(self.l_roll,
+                                        self.l_pitch,
+                                        self.l_radius,
+                                        self.l_q),
+                        length_scale_bounds=((self.l_roll, self.l_roll),
+                                            (self.l_pitch, self.l_pitch),
+                                            (self.l_radius, self.l_radius),
+                                            (self.l_q, self.l_q))) \
+                    + WhiteKernel(noise_level=self.noise,
+                                    noise_level_bounds=(1e-5, 1e2))
     def sample(self):
         # (1) Choose a point to interact with.
         if len(self.xs) < 1 and self.nn is None:
             # (a) Choose policy randomly.
-            policy = generate_policy(bb, self.mech, True, 1.0)
+            policy = generate_policy(self.bb, self.mech, True, 1.0)
             q = policy.generate_config(self.mech, None)
         else:
             # (b) Choose policy using UCB bound.
@@ -218,23 +306,25 @@ class UCB_Interaction(object):
         self.ix += 1
         return policy, q
 
-    def update(self, policy, q, motion):
+    def update(self, result):
         # TODO: Update without the NN.
 
         # (3) Update GP.
-        policy_params = policy.get_policy_tuple()
-        self.xs.append([policy_params.params.pitch,
-                   policy_params.params.yaw,
-                   q])
+        x = get_x_from_result(result)
+        self.xs.append(x)
         if self.nn is None:
-            self.ys.append([motion])
+            self.ys.append([result.net_motion])
         else:
-            inputs = self.optim._optim_result_to_torch(self.xs[-1], self.optim.dataset.images[0].unsqueeze(0), use_cuda=False)
+            policy_type = result.policy_params.type
+            inputs = self.optim._optim_result_to_torch(policy_type,
+                                    self.xs[-1],
+                                    self.optim.dataset.images[0].unsqueeze(0),
+                                    use_cuda=False)
             nn_pred = self.nn.forward(*inputs)[0]
             nn_pred = nn_pred.detach().numpy().squeeze()
-            self.ys.append([motion - nn_pred])
+            self.ys.append([result.net_motion - nn_pred])
 
-        self.moves.append([motion])
+        self.moves.append([result.net_motion])
         self.gp.fit(np.array(self.xs), np.array(self.ys))
 
         # (4) Visualize GP.
@@ -257,8 +347,9 @@ class UCB_Interaction(object):
 
     def calc_avg_regret(self):
         regrets = []
+        max_dist = self.mech.get_max_dist()
         for y in self.moves:
-            regrets.append((self.true_range - y[0])/self.true_range)
+            regrets.append((max_dist - y[0])/max_dist)
             #print(y, true_range)
         if len(regrets) > 0:
             return np.mean(regrets)
@@ -266,15 +357,14 @@ class UCB_Interaction(object):
             return 'n/a'
 
 
-def format_batch(X_pred, image_data):
+def format_batch(type, X_pred, mech, image_data):
     data = []
 
     for ix in range(X_pred.shape[0]):
-        policy_list = [0., 0., 0.] + [0., 0., 0., 1.] + [X_pred[ix, 0], 0.0]
-        policy = policies.get_policy_from_params('Prismatic', policy_list)
-
+        policy = get_policy_from_x(type, X_pred[ix], mech)
+        q = X_pred[ix, -1]
         result = util.Result(policy.get_policy_tuple(), None, 0.0, 0.0,
-                             None, None, X_pred[ix, -1], image_data, None, 1.0)
+                             None, None, q, image_data, None, 1.0)
         data.append(result)
 
     data = parse_pickle_file(data=data)
@@ -283,7 +373,7 @@ def format_batch(X_pred, image_data):
                                                batch_size=len(dataset))
     return train_loader
 
-
+'''
 def viz_gp(gp, result, num, bb, nn=None):
     n_pitch = 10
     # plt.clf()
@@ -298,7 +388,7 @@ def viz_gp(gp, result, num, bb, nn=None):
 
         Y_pred, Y_std = gp.predict(X_pred, return_std=True)
         if not nn is None:
-            loader = format_batch(X_pred, bb)
+            loader = format_batch(X_pred, bb, type)
             k, x, q, im, _, _ = next(iter(loader))
             pol = torch.Tensor([util.name_lookup[k[0]]])
             nn_preds = nn(pol, x, q, im).detach().numpy()
@@ -323,7 +413,7 @@ def viz_gp(gp, result, num, bb, nn=None):
         axes[ix].set_title('pitch=%.2f' % pitch, fontsize=fs)
     plt.show()
     # plt.savefig('gp_estimates_tuned_%d.png' % num)
-
+'''
 
 def viz_circles(image_data, mech, points=[], gp=None, nn=None):
     policy_plot_data = Policy.get_plot_data(mech)
@@ -388,7 +478,6 @@ def viz_circles(image_data, mech, points=[], gp=None, nn=None):
                         X_pred[xpred_rowi, angular_param.param_num] = angular_vals[ix]
                         X_pred[xpred_rowi, linear_param.param_num] = linear_vals[jx]
                         for otheri, other_param_val in enumerate(other_param_vals_and_inds):
-
                             other_param_num = all_other_params[otheri].param_num
                             X_pred[xpred_rowi, other_param_num] = other_param_val[1]
                         xpred_rowi += 1
@@ -398,7 +487,8 @@ def viz_circles(image_data, mech, points=[], gp=None, nn=None):
                 if not gp is None:
                     Y_pred += gp.predict(X_pred)
                 if not nn is None:
-                    loader = format_batch(X_pred, image_data)
+                    type = 'Revolute' if mech.mechanism_type == 'Door' else 'Prismatic'
+                    loader = format_batch(type, X_pred, mech, image_data)
                     k, x, q, im, _, _ = next(iter(loader))
                     pol = torch.Tensor([util.name_lookup[k[0]]])
                     nn_preds = nn(pol, x, q, im)[0].detach().numpy()
@@ -416,32 +506,34 @@ def viz_circles(image_data, mech, points=[], gp=None, nn=None):
                     (plot_i, other_val) in enumerate(other_param_vals_and_inds)]), \
                     fontsize=10)
                 max_dist = mech.get_max_dist()
-                im = polar_plots(ax, mean_colors, vmax=max_dist, points=points, \
-                                colorbar=False)
+                im = polar_plots(ax, mean_colors, max_dist, angular_param.range,
+                                linear_param.range, points=points, colorbar=False)
             add_colorbar(fig, im)
 
     plt.show()
     input('Enter to close plots')
 
-def polar_plots(ax, colors, vmax, points=None, colorbar=False):
+def polar_plots(ax, colors, vmax, angular_range, linear_range, points=None, colorbar=False):
     n_pitch, n_q = colors.shape
-    thp, rp = np.linspace(0, 2*np.pi, n_pitch*2), np.linspace(0, 0.25, n_q//2)
+    thp, rp = np.linspace(0, 2*np.pi, n_pitch*2), np.linspace(0, max(linear_range), n_q//2)
     rp, thp = np.meshgrid(rp, thp)
     cp = np.zeros(rp.shape)
-    thp += np.pi
+    #thp += np.pi
 
     cp[0:n_pitch, :] = colors[:, 0:n_q//2][:, ::-1]
     cp[n_pitch:, :] = np.copy(colors[:, n_q//2:])
 
     cbar = ax.pcolormesh(thp, rp, cp, vmin=0, vmax=vmax, cmap='viridis')
-    ax.tick_params(axis='x', colors='white')
-    ax.set_yticklabels([])
+    #ax.tick_params(axis='x', colors='white')
+    #ax.set_yticklabels([])
+
     if not points is None:
         for x in points:
             if x[2] < 0:
                 ax.scatter(x[0] - np.pi, -1*x[2], c='r', s=10)
             else:
                 ax.scatter(x[0], x[2], c='r', s=10)
+
     return cbar
 
 def add_colorbar(fig, im):
@@ -486,7 +578,7 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
         dataset = []
 
     for ix, bb_result in enumerate(busybox_data):
-        single_dataset, _, _ = create_single_bb_gpucb_dataset(bb_result, n_interactions, args.nn_fname, args.plot, args)
+        single_dataset, _, _ = create_single_bb_gpucb_dataset(bb_result, n_interactions, '', args.plot, args)
         dataset.extend(single_dataset)
         print('Interacted with BusyBox %d.' % ix)
 
@@ -520,13 +612,16 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
         dataset.append(result)
 
         # update GP
-        sampler.update(policy, q, motion)
+        sampler.update(result)
 
     if plot:
         policy_plot_data = Policy.get_plot_data(mech)
         viz_circles(image_data, mech, points=sampler.xs, gp=sampler.gp, nn=sampler.nn)
     return dataset, sampler.calc_avg_regret(), sampler.gp
 
+# this executive is for generating GP-UCB interactions from no search_parent_directories
+# typically used to generate datasets for training, but can also be used in the L=0
+# evaluation case
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -554,10 +649,6 @@ if __name__ == '__main__':
         '--plot',
         action='store_true',
         help='use to generate polar plots durin GP-UCB interactions')
-    parser.add_argument(
-        '--nn-fname',
-        default='',
-        help='path to NN to initialize GP-UCB interactions')
     parser.add_argument(
         '--fname',
         default='',
