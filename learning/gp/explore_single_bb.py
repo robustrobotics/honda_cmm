@@ -26,6 +26,32 @@ from actions.policies import Policy, generate_policy, Revolute, Prismatic
 import itertools
 from functools import reduce
 
+# takes in an x and plot variables and returns the values to be plotted
+def get_point_from_x(x, linear_param, angular_param, policy_type):
+    point = np.zeros(2)
+    linear_name = linear_param.param_name
+    angular_name = angular_param.param_name
+    if policy_type == 'slider':
+        if linear_name == 'config':
+            point[1] = abs(x[-1])
+        if angular_name == 'pitch':
+            if x[-1] < 0:
+                point[0] = x[0] - np.pi
+            else:
+                point[0] = x[0]
+        if angular_name == 'yaw':
+            point[0] = x[1]
+    if policy_type == 'door':
+        if linear_name == 'config':
+            point[1] = x[-1]
+        if linear_name == 'radius':
+            point[1] = x[2]
+        if angular_name == 'pitch':
+            point[0] = x[1]
+        if angular_name == 'roll':
+            point[0] = x[0]
+    return point
+
 # takes in an optimization x and returns a policy
 def get_policy_from_x(type, x, mech):
     if type == 'Revolute':
@@ -68,14 +94,27 @@ def get_x_from_result(result):
         return [axis_roll, axis_pitch, radius_x, q]
 
 # takes in a policy and returns and optimization x and the variable bounds
-def get_reduced_x_and_bounds(policy_type, policy_params, q):
+def get_reduced_x_and_bounds(policy_type, policy_params, q, policy_data):
+    for policy_param in policy_data:
+        if policy_param.param_name == 'pitch':
+            pitch_bounds = policy_param.range
+        #if policy_param.param_name == 'yaw':
+        #    yaw_bounds = policy_param.range
+        if policy_param.param_name == 'config':
+            config_bounds = policy_param.range
+        if policy_param.param_name == 'roll':
+            roll_bounds = policy_param.range
+        #if policy_param.param_name == 'radius':
+        #    radius_bounds = policy_param.range
     if policy_type == 'Prismatic':
         return np.concatenate([[policy_params.params.pitch], [q]]), \
-                [(-np.pi, 0), (-0.25, 0.25)]
+                [pitch_bounds, config_bounds]
     elif policy_type == 'Revolute':
-        return np.concatenate([[policy_params.params.rot_axis_roll, \
-                                    policy_params.params.rot_radius_x], [q]]), \
-                [(-np.pi/2, np.pi/2), (0.0, .23), (-np.pi/2, np.pi/2)]
+        return np.concatenate([[policy_params.params.rot_axis_roll], [q]]), \
+                [roll_bounds, config_bounds]
+        #return np.concatenate([[policy_params.params.rot_axis_roll, \
+        #                            policy_params.params.rot_radius_x], [q]]), \
+        #        [roll_bounds, radius_bounds, config_bounds]
 
 # this takes in an optimization x and returns the tensor of just the policy
 # params
@@ -121,7 +160,7 @@ def process_data(data, n_train):
 
 class GPOptimizer(object):
 
-    def __init__(self, urdf_num, bb, image_data, n_samples, nn=None):
+    def __init__(self, urdf_num, bb, image_data, n_samples, beta, ucb, gp, nn=None):
         """
         Initialize one of these for each BusyBox.
         """
@@ -129,6 +168,9 @@ class GPOptimizer(object):
         self.nn_samples = []
         self.nn = nn
         self.mech = bb._mechanisms[0]
+        self.beta = beta
+        self.ucb = ucb
+        self.gp = gp
 
         # Generate random policies.
         for _ in range(n_samples):
@@ -162,11 +204,11 @@ class GPOptimizer(object):
 
         return [policy_type_tensor, policy_tensor, config_tensor, image_tensor]
 
-    def _objective_func(self, x, policy_type, gp, ucb, beta=100, image_tensor=None):
+    def _objective_func(self, x, policy_type, image_tensor=None):
         x = x.squeeze()
 
         X = np.array(get_policy_list(policy_type, x))
-        Y_pred, Y_std = gp.predict(X, return_std=True)
+        Y_pred, Y_std = self.gp.predict(X, return_std=True)
 
         if not self.nn is None:
             inputs = self._optim_result_to_torch(policy_type, x, image_tensor, False)
@@ -174,32 +216,29 @@ class GPOptimizer(object):
             val = val.detach().numpy()
             Y_pred += val.squeeze()
 
-        if ucb:
-            obj = -Y_pred[0] - np.sqrt(beta) * Y_std[0]
+        if self.ucb:
+            obj = -Y_pred[0] - np.sqrt(self.beta) * Y_std[0]
         else:
             obj = -Y_pred[0]
 
         return obj
 
-    def _get_pred_motions(self, data, gp, ucb, beta=100, nn_preds=None):
+    def _get_pred_motions(self, data, nn_preds=None):
         X, Y = process_data(data, len(data))
-        y_pred, y_std = gp.predict(X, return_std=True)
+        y_pred, y_std = self.gp.predict(X, return_std=True)
 
         if not nn_preds is None:
             y_pred += np.array(nn_preds)
 
-        if ucb:
-            return y_pred + np.sqrt(beta) * y_std, self.dataset
+        if self.ucb:
+            return y_pred + np.sqrt(self.beta) * y_std, self.dataset
         else:
             return y_pred, self.dataset
 
-    def optimize_gp(self, gp, ucb=False, beta=100):
+    def optimize_gp(self):
         """
         Find the input (policy) that maximizes the GP (+ NN) output.
-        :param gp: A GP representing the reward function to optimize.
         :param result: util.Result tuple containing the BusyBox object.
-        :param ucb: If True, optimize the UCB objective instead of just the GP.
-        :param beta: beta paramater for the GP-UCB objective.
         :param nn: If not None, optimize gp(.) + nn(.).
         :return: x_final, the optimal policy according to the current model.
         """
@@ -208,7 +247,7 @@ class GPOptimizer(object):
         # Generate random policies.
         for res, nn_preds in zip(self.sample_policies, self.nn_samples):
             # Get predictions from the GP.
-            sample_disps, dataset = self._get_pred_motions(res, gp, ucb, beta, nn_preds=nn_preds)
+            sample_disps, dataset = self._get_pred_motions(res, nn_preds=nn_preds)
 
             samples.append(((res[0].policy_params.type,
                              res[0].policy_params,
@@ -223,16 +262,11 @@ class GPOptimizer(object):
             images = None
         else:
             images = dataset.images[0].unsqueeze(0)
-        x0, bounds = get_reduced_x_and_bounds(policy_type_max, params_max, q_max)
-
-        opt_res = minimize(fun=self._objective_func, x0=x0, args=(policy_type_max, gp, ucb, beta, images),
+        policy_data = Policy.get_plot_data(self.mech)
+        x0, bounds = get_reduced_x_and_bounds(policy_type_max, params_max, q_max, policy_data)
+        opt_res = minimize(fun=self._objective_func, x0=x0, args=(policy_type_max, images),
                        method='L-BFGS-B', options={'eps': 10**-3}, bounds=bounds)
         x_final = opt_res['x']
-
-        if policy_type_max == 'Prismatic':
-            pos = params_max.params.rigid_position
-            orn = params_max.params.rigid_orientation
-            policy_list = np.concatenate([pos, orn, [x_final[0], 0.0]])
         final_policy = get_policy_from_x(policy_type_max, x_final, self.mech)
         q = x_final[-1]
         return final_policy, q
@@ -241,8 +275,10 @@ class GPOptimizer(object):
 class UCB_Interaction(object):
 
     def __init__(self, bb, image_data, plot, args, nn_fname=''):
-        # Pretrained Kernel
+        # Pretrained Kernel (for Sliders)
         # kernel = ConstantKernel(0.005, constant_value_bounds=(0.005, 0.005)) * RBF(length_scale=(0.247, 0.084, 0.0592), length_scale_bounds=(0.0592, 0.247)) + WhiteKernel(noise_level=1e-5, noise_level_bounds=(1e-5, 1e2))
+        # Pretrained Kernel (for Doors)
+        # 0.0202**2 * RBF(length_scale=[0.0533, 0.000248, 0.0327, 0.0278]) + WhiteKernel(noise_level=1e-05)
         self.interaction_data = []
         self.xs, self.ys, self.moves = [], [], []
 
@@ -252,47 +288,50 @@ class UCB_Interaction(object):
         if nn_fname != '':
             self.nn = util.load_model(nn_fname, args.hdim, use_cuda=False)
         self.bb = bb
-        self.optim = GPOptimizer(args.urdf_num, self.bb, image_data, args.n_gp_samples, nn=self.nn)
         self.mech = self.bb._mechanisms[0]
         self.kernel = self.get_kernel()
         self.gp = GaussianProcessRegressor(kernel=self.kernel,
                               n_restarts_optimizer=10)
+        self.optim = GPOptimizer(args.urdf_num, self.bb, image_data, args.n_gp_samples, 10, True, self.gp, nn=self.nn)
 
     def get_kernel(self):
         # TODO: in the future will want the GP to take in all types of policy
         # params, not just the correct type
-        self.variance = 0.005
-        self.noise = 1e-5
-        self.l_yaw = 100
-        self.l_q = 0.1
-        self.l_pitch = 0.10
-        self.l_roll = 0.10
-        self.l_radius = 0.1
+        noise = 1e-5
         if self.mech.mechanism_type == 'Slider':
-            return ConstantKernel(self.variance,
-                                    constant_value_bounds=(self.variance,
-                                                            self.variance)) \
-                    * RBF(length_scale=(self.l_pitch,
-                                        self.l_yaw,
-                                        self.l_q),
-                        length_scale_bounds=((self.l_pitch, self.l_pitch),
-                                            (self.l_yaw, self.l_yaw),
-                                            (self.l_q, self.l_q))) \
-                    + WhiteKernel(noise_level=self.noise,
+            variance = 0.005
+            l_pitch = 0.10
+            l_yaw = 100
+            l_q = 0.1
+            return ConstantKernel(variance,
+                                    constant_value_bounds=(variance,
+                                                            variance)) \
+                    * RBF(length_scale=(l_pitch,
+                                        l_yaw,
+                                        l_q),
+                        length_scale_bounds=((l_pitch, l_pitch),
+                                            (l_yaw, l_yaw),
+                                            (l_q, l_q))) \
+                    + WhiteKernel(noise_level=noise,
                                     noise_level_bounds=(1e-5, 1e2))
         elif self.mech.mechanism_type == 'Door':
-            return ConstantKernel(self.variance,
-                                    constant_value_bounds=(self.variance,
-                                                            self.variance)) \
-                    * RBF(length_scale=(self.l_roll,
-                                        self.l_pitch,
-                                        self.l_radius,
-                                        self.l_q),
-                        length_scale_bounds=((self.l_roll, self.l_roll),
-                                            (self.l_pitch, self.l_pitch),
-                                            (self.l_radius, self.l_radius),
-                                            (self.l_q, self.l_q))) \
-                    + WhiteKernel(noise_level=self.noise,
+            variance = 0.02
+            l_roll = 0.05
+            l_pitch = 100
+            l_radius = 100
+            l_q = 0.02
+            return ConstantKernel(variance,
+                                    constant_value_bounds=(0.00001,
+                                                            variance+5.)) \
+                    * RBF(length_scale=(l_roll,
+                                        l_pitch,
+                                        l_radius,
+                                        l_q),
+                        length_scale_bounds=((l_roll, l_roll),
+                                            (l_pitch, l_pitch),
+                                            (l_radius, l_radius),
+                                            (l_q, l_q))) \
+                    + WhiteKernel(noise_level=noise,
                                     noise_level_bounds=(1e-5, 1e2))
     def sample(self):
         # (1) Choose a point to interact with.
@@ -302,7 +341,7 @@ class UCB_Interaction(object):
             q = policy.generate_config(self.mech, None)
         else:
             # (b) Choose policy using UCB bound.
-            policy, q = self.optim.optimize_gp(self.gp, ucb=True, beta=10)
+            policy, q = self.optim.optimize_gp()
         self.ix += 1
         return policy, q
 
@@ -326,7 +365,6 @@ class UCB_Interaction(object):
 
         self.moves.append([result.net_motion])
         self.gp.fit(np.array(self.xs), np.array(self.ys))
-
         # (4) Visualize GP.
         #if self.ix % 1 == 0 and self.plot:
             #params = mech.get_mechanism_tuple().params
@@ -469,7 +507,7 @@ def viz_circles(image_data, mech, points=[], gp=None, nn=None):
                 n_rows = len(other_vals_and_inds[1])
 
             # for each other value add a dimension of plots to the figure
-            for other_param_vals_and_inds in itertools.product(*other_vals_and_inds):
+            for other_val_and_ind in itertools.product(*other_vals_and_inds):
                 # make matrix of all values to predict dist for
                 X_pred = np.zeros((n_angular*n_linear, n_params))
                 xpred_rowi = 0
@@ -477,7 +515,7 @@ def viz_circles(image_data, mech, points=[], gp=None, nn=None):
                     for jx in range(0, n_linear):
                         X_pred[xpred_rowi, angular_param.param_num] = angular_vals[ix]
                         X_pred[xpred_rowi, linear_param.param_num] = linear_vals[jx]
-                        for otheri, other_param_val in enumerate(other_param_vals_and_inds):
+                        for otheri, other_param_val in enumerate(other_val_and_ind):
                             other_param_num = all_other_params[otheri].param_num
                             X_pred[xpred_rowi, other_param_num] = other_param_val[1]
                         xpred_rowi += 1
@@ -495,7 +533,7 @@ def viz_circles(image_data, mech, points=[], gp=None, nn=None):
                     Y_pred += nn_preds
                 mean_colors = Y_pred.reshape(n_angular, n_linear)
 
-                row_col = [o[0]+1 for o in other_param_vals_and_inds]
+                row_col = [o[0]+1 for o in other_val_and_ind]
                 if len(row_col) == 1:
                     subplot_num = 1*row_col[0]
                 else:
@@ -503,37 +541,44 @@ def viz_circles(image_data, mech, points=[], gp=None, nn=None):
                 ax = plt.subplot(n_rows, n_cols, subplot_num, projection='polar')
                 ax.set_title('\n'.join([str(all_other_params[other_param_i].param_name) \
                     + ' = ' + str("%.2f" % other_val) for other_param_i, \
-                    (plot_i, other_val) in enumerate(other_param_vals_and_inds)]), \
+                    (plot_i, other_val) in enumerate(other_val_and_ind)]), \
                     fontsize=10)
                 max_dist = mech.get_max_dist()
-                im = polar_plots(ax, mean_colors, max_dist, angular_param.range,
-                                linear_param.range, points=points, colorbar=False)
+                im = polar_plots(ax, mean_colors, max_dist, angular_param,
+                                linear_param, points=points, colorbar=False)
             add_colorbar(fig, im)
 
     plt.show()
     input('Enter to close plots')
 
-def polar_plots(ax, colors, vmax, angular_range, linear_range, points=None, colorbar=False):
-    n_pitch, n_q = colors.shape
-    thp, rp = np.linspace(0, 2*np.pi, n_pitch*2), np.linspace(0, max(linear_range), n_q//2)
-    rp, thp = np.meshgrid(rp, thp)
-    cp = np.zeros(rp.shape)
-    #thp += np.pi
+def polar_plots(ax, colors, vmax, angular_param, linear_param, points=None, colorbar=False):
+    n_ang, n_lin = colors.shape
 
-    cp[0:n_pitch, :] = colors[:, 0:n_q//2][:, ::-1]
-    cp[n_pitch:, :] = np.copy(colors[:, n_q//2:])
+    # for slider policies
+    if (abs(angular_param.range[0]-angular_param.range[1]) == np.pi) and \
+        (linear_param.range[0] == -linear_param.range[1]):
+        thp = np.linspace(0, 2*np.pi, n_ang*2)
+        rp = np.linspace(0, max(linear_param.range), n_lin//2)
+        rp, thp = np.meshgrid(rp, thp)
+        cp = np.zeros(rp.shape)
 
+        cp[0:n_ang, :] = colors[:, 0:n_lin//2][:, ::-1]
+        cp[n_ang:, :] = np.copy(colors[:, n_lin//2:])
+        type = 'slider'
+    # for door policies
+    else:
+        thp = np.linspace(*angular_param.range, n_ang)
+        rp = np.linspace(*linear_param.range, n_lin)
+        rp, thp = np.meshgrid(rp, thp)
+        cp = colors
+        type = 'door'
     cbar = ax.pcolormesh(thp, rp, cp, vmin=0, vmax=vmax, cmap='viridis')
-    #ax.tick_params(axis='x', colors='white')
+    ax.tick_params(axis='x', colors='white')
     #ax.set_yticklabels([])
-
     if not points is None:
         for x in points:
-            if x[2] < 0:
-                ax.scatter(x[0] - np.pi, -1*x[2], c='r', s=10)
-            else:
-                ax.scatter(x[0], x[2], c='r', s=10)
-
+            point = get_point_from_x(x, linear_param, angular_param, type)
+            ax.scatter(*point, c='r', s=3)
     return cbar
 
 def add_colorbar(fig, im):
@@ -550,6 +595,7 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
     # Create a dataset of L busyboxes.
     if args.bb_fname == '':
         bb_dataset_args = Namespace(max_mech=1,
+                                    mech_types=args.mech_types,
                                     urdf_num=args.urdf_num,
                                     debug=False,
                                     n_bbs=n_bbs,
@@ -567,6 +613,7 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
             busybox_data = pickle.load(handle)
         busybox_data = busybox_data[:n_bbs]
 
+    '''
     # Do a GP-UCB interaction and return Result tuples.
     if os.path.exists(args.fname):
         with open(args.fname, 'rb') as handle:
@@ -576,7 +623,8 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
         print('Already Collected: %d\tRemaining: %d' % (n_collected, len(busybox_data)))
     else:
         dataset = []
-
+    '''
+    dataset = []
     for ix, bb_result in enumerate(busybox_data):
         single_dataset, _, _ = create_single_bb_gpucb_dataset(bb_result, n_interactions, '', args.plot, args)
         dataset.extend(single_dataset)
@@ -645,6 +693,11 @@ if __name__ == '__main__':
         '--bb-fname',
         default='',
         help='path to file of BusyBoxes to interact with')
+    parser.add_argument(
+        '--mech-types',
+        nargs='+',
+        default='slider',
+        help='if no bb-file is specified, list the mech types desired')
     parser.add_argument(
         '--plot',
         action='store_true',
