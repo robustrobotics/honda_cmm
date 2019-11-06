@@ -347,7 +347,6 @@ class Revolute(Policy):
 
         # calculate the orientation of the handle frame in the rotational axis frame
         rot_orn = [0., 0., 0., 1.]
-        util.vis_frame(p_rot_center_world, rot_axis_world, length=0.4, lifeTime=10000)
         return Revolute(p_rot_center_world,
                         rot_axis_roll_world,
                         rot_axis_pitch_world,

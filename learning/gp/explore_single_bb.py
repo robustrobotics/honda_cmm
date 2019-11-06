@@ -59,8 +59,7 @@ def get_policy_from_x(type, x, mech):
         rot_axis_pitch = 0.0
         rot_axis_world = util.quaternion_from_euler(rot_axis_roll, rot_axis_pitch, 0.0)
         radius_x = x[1]
-        radius = [radius_x, 0.0, 0.0]
-        p_handle_base_world = mech.get_pose_handle_base_world().p
+        radius = [-radius_x, 0.0, 0.0]
         p_rot_center_world = p_handle_base_world + util.transformation(radius, [0., 0., 0.], rot_axis_world)
         rot_orn = [0., 0., 0., 1.]
         return Revolute(p_rot_center_world,
@@ -388,7 +387,6 @@ class UCB_Interaction(object):
         max_dist = self.mech.get_max_dist()
         for y in self.moves:
             regrets.append((max_dist - y[0])/max_dist)
-            #print(y, true_range)
         if len(regrets) > 0:
             return np.mean(regrets)
         else:
