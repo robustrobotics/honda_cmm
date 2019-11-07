@@ -26,6 +26,7 @@ from actions.policies import Policy, generate_policy, Revolute, Prismatic
 import itertools
 from functools import reduce
 
+BETA = 5.0
 # takes in an x and plot variables and returns the values to be plotted
 def get_point_from_x(x, linear_param, angular_param, policy_type):
     point = np.zeros(2)
@@ -58,7 +59,10 @@ def get_policy_from_x(type, x, mech):
         rot_axis_roll = x[0]
         rot_axis_pitch = 0.0
         rot_axis_world = util.quaternion_from_euler(rot_axis_roll, rot_axis_pitch, 0.0)
-        radius_x = x[1]
+        #radius_x = x[1]
+        p_handle_base_world = mech.get_pose_handle_base_world().p
+        p_rot_center_world_true = mech.get_rot_center()
+        radius_x = abs(np.subtract(p_handle_base_world, p_rot_center_world_true)[0])
         radius = [-radius_x, 0.0, 0.0]
         p_rot_center_world = p_handle_base_world + util.transformation(radius, [0., 0., 0.], rot_axis_world)
         rot_orn = [0., 0., 0., 1.]
@@ -156,6 +160,33 @@ def process_data(data, n_train):
     '''
     return X, Y
 
+def test_model(gp, bb_result, args, nn=None, use_cuda=False, urdf_num=0, viz=False):
+    """
+    Maximize the GP mean function to get the best policy.
+    :param gp: A GP fit to the current BusyBox.
+    :param result: Result representing the current BusyBox.
+    :return: Regret.
+    """
+    # Optimize the GP to get the best result.
+    bb = BusyBox.bb_from_result(bb_result, urdf_num=urdf_num)
+    image_data = setup_env(bb, viz, debug=False)
+    ucb = False
+    optim_gp = GPOptimizer(urdf_num, bb, image_data, args.n_gp_samples, BETA, ucb, gp, nn)
+    policy, q = optim_gp.optimize_gp()
+
+    # Execute the policy and observe the true motion.
+    mech = bb._mechanisms[0]
+    gripper = Gripper()
+    pose_handle_base_world = mech.get_pose_handle_base_world()
+
+    traj = policy.generate_trajectory(pose_handle_base_world, q, debug=True)
+    _, motion, _ = gripper.execute_trajectory(traj, mech, policy.type, debug=False)
+
+    # Calculate the regret.
+    max_d = bb._mechanisms[0].get_max_dist()
+    regret = (max_d - motion)/max_d
+
+    return regret
 
 class GPOptimizer(object):
 
@@ -291,7 +322,7 @@ class UCB_Interaction(object):
         self.kernel = self.get_kernel()
         self.gp = GaussianProcessRegressor(kernel=self.kernel,
                               n_restarts_optimizer=10)
-        self.optim = GPOptimizer(args.urdf_num, self.bb, image_data, args.n_gp_samples, 10, True, self.gp, nn=self.nn)
+        self.optim = GPOptimizer(args.urdf_num, self.bb, image_data, args.n_gp_samples, BETA, True, self.gp, nn=self.nn)
 
     def get_kernel(self):
         # TODO: in the future will want the GP to take in all types of policy
@@ -314,14 +345,14 @@ class UCB_Interaction(object):
                     + WhiteKernel(noise_level=noise,
                                     noise_level_bounds=(1e-5, 1e2))
         elif self.mech.mechanism_type == 'Door':
-            variance = 0.02
-            l_roll = 0.05
+            variance = 0.0007
+            l_roll = 0.02
             l_pitch = 100
             l_radius = 100
-            l_q = 0.02
+            l_q = 1.0
             return ConstantKernel(variance,
-                                    constant_value_bounds=(0.00001,
-                                                            variance+5.)) \
+                                    constant_value_bounds=(variance,
+                                                            variance)) \
                     * RBF(length_scale=(l_roll,
                                         l_pitch,
                                         l_radius,
@@ -573,10 +604,12 @@ def polar_plots(ax, colors, vmax, angular_param, linear_param, points=None, colo
     cbar = ax.pcolormesh(thp, rp, cp, vmin=0, vmax=vmax, cmap='viridis')
     ax.tick_params(axis='x', colors='white')
     #ax.set_yticklabels([])
+
     if not points is None:
         for x in points:
             point = get_point_from_x(x, linear_param, angular_param, type)
             ax.scatter(*point, c='r', s=3)
+
     return cbar
 
 def add_colorbar(fig, im):
@@ -663,6 +696,9 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
     if plot:
         policy_plot_data = Policy.get_plot_data(mech)
         viz_circles(image_data, mech, points=sampler.xs, gp=sampler.gp, nn=sampler.nn)
+
+        # visualize final optimal policy
+        test_model(sampler.gp, bb_result, args, viz=True)
     return dataset, sampler.calc_avg_regret(), sampler.gp
 
 # this executive is for generating GP-UCB interactions from no search_parent_directories
