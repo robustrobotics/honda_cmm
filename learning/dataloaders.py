@@ -108,19 +108,15 @@ class PolicyDataset(Dataset):
         return len(self.items)
 
 
-def parse_pickle_file(fname=None, data=None):
+def parse_pickle_file(results):
     """
-    Can pass in either a file name or a data dictionary to be parsed.
+    Pass in a list of utils.util.Results.
     Extract relevant information into vector format.
-    :param fname: str, name of the pickle file to load.
-    :param data: list of utils.util.Results to load.
+    :param results: list of utils.util.Results to load.
     :return:
     """
-    if data is None:
-        data = util.read_from_file(fname)
-
     parsed_data = []
-    for entry in data:
+    for entry in results:
         if len(entry) == 0:
             continue
         policy_type = entry.policy_params.type
@@ -165,7 +161,7 @@ def create_data_splits(data, val_pct=0.15, test_pct=0.0):
 
 
 def setup_data_loaders(data, batch_size=128, use_cuda=True, small_train=0, single_set=False):
-    #data = parse_pickle_file(fname)
+
     kwargs = {'num_workers': 0,
               'pin_memory': use_cuda}
 

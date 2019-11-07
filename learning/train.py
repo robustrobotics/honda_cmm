@@ -31,12 +31,9 @@ def view_points(img, points):
     return fig
 
 
-def train_eval(args, hdim, batch_size, pviz, fname, writer, n=0):
+def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
     # Load data
-    data = parse_pickle_file(fname=args.data_fname)
-
-    if n > 0:
-        data = data[:n]
+    data = parse_pickle_file(results)
 
     train_set, val_set, _ = setup_data_loaders(data=data,
                                               batch_size=batch_size)
@@ -142,10 +139,10 @@ def get_train_params(args):
             'n_epochs': args.n_epochs,
             'val_freq': args.val_freq,
             'data-fname': args.data_fname,
-            'ntrain-min': args.ntrain_min,
-            'ntrain-max': args.ntrain_max,
-            'step': args.step,
-            'n_runs': args.n_runs}
+            'L_min': args.L_min,
+            'L_max': args.L_max,
+            'L_step': args.L_step,
+            'M': args.M}
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -153,20 +150,19 @@ if __name__ == '__main__':
     parser.add_argument('--hdim', type=int, help='Hidden dimensions for the neural nets.')
     parser.add_argument('--n-epochs', type=int, default=10)
     parser.add_argument('--val-freq', type=int, default=5)
-    parser.add_argument('--mode', choices=['ntrain', 'normal'], default='normal')
     parser.add_argument('--use-cuda', default=False, type=lambda x: (str(x).lower() == 'true'))
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--data-fname', type=str, required=True)
     parser.add_argument('--save-dir', required=True, type=str)
-    # if 0 then use all samples in dataset, else use ntrain number of samples
-    parser.add_argument('--ntrain-min', type=int, default=0)
-    parser.add_argument('--ntrain-max', type=int, default=0)
-    parser.add_argument('--step', type=int, default=200)
+    # if want to just train one model, make L_min == L_max and L_step == 1
+    parser.add_argument('--L-min', required=True, type=int, default=10)
+    parser.add_argument('--L-max', required=True, type=int, default=100)
+    parser.add_argument('--L-step', required=True, type=int, default=10)
+    parser.add_argument('--M', required=True, type=int, default=100)
     parser.add_argument('--image-encoder', type=str, default='spatial', choices=['spatial', 'cnn'])
-    parser.add_argument('--n-runs', type=int, default=1)
     parser.add_argument('--pviz', action='store_true')
     args = parser.parse_args()
-    print(args)
+
     if args.debug:
         import pdb; pdb.set_trace()
     # remake dirs (don't want to overwrite data)
@@ -179,19 +175,14 @@ if __name__ == '__main__':
     # make tensorboard writer
     writer = SummaryWriter(runs_dir)
 
-    if args.mode == 'normal':
-        for n_run in range(args.n_runs):
-            fname = model_dir+'model_nrun_'+str(n_run)
-            train_eval(args, args.hdim, args.batch_size, args.pviz, fname, writer, n=100)
-
-    elif args.mode == 'ntrain':
-        min = args.step
-        if args.ntrain_min:
-            min = args.ntrain_min
-        ns = range(min, args.ntrain_max+1, args.step)
-        for n in ns:
-            fname = model_dir+'model_ntrain_'+str(n)
-            train_eval(args, args.hdim, args.batch_size, args.pviz, fname, writer, n)
+    all_results = util.read_from_file(args.data_fname)
+    for L in range(args.L_min, args.L_max+1, args.L_step):
+        results = []
+        for L_results in all_results[0:L]:
+            results += L_results[0:args.M]
+        model_fname = model_dir+'model_'+str(L)+'L_'+str(args.M)+'M'
+        print(len(results))
+        train_eval(args, args.hdim, args.batch_size, args.pviz, results, model_fname, writer)
 
     writer.close()
 
