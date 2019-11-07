@@ -26,6 +26,7 @@ def generate_dataset(args, git_hash):
 
         image_data = setup_env(bb, args.viz, args.debug)
         gripper = Gripper()
+        bb_results = []
         for j in range(args.n_samples):
             sys.stdout.write("\rProcessing sample %i/%i for busybox %i/%i" % (j+1, args.n_samples, i+1, args.n_bbs))
             for mech in bb._mechanisms:
@@ -44,12 +45,12 @@ def generate_dataset(args, git_hash):
                 # save result data
                 policy_params = policy.get_policy_tuple()
                 mechanism_params = mech.get_mechanism_tuple()
-                results.append(util.Result(policy_params, mechanism_params, net_motion, \
+                bb_results.append(util.Result(policy_params, mechanism_params, net_motion, \
                             cumu_motion, pose_handle_world_init, pose_handle_world_final, \
                             config_goal, image_data, git_hash, args.randomness))
 
                 gripper.reset(mech)
-
+        results.append(bb_results)
         p.disconnect()
     print()
     return results
@@ -61,7 +62,7 @@ if __name__ == '__main__':
     parser.add_argument('--n-samples', type=int, default=1) # number samples per bb
     parser.add_argument('--n-bbs', type=int, default=5) # number bbs to generate
     parser.add_argument('--max-mech', type=int, default=1) # mechanisms per bb
-    parser.add_argument('--mech-types', nargs='+', default='slider')
+    parser.add_argument('--mech-types', nargs='+', default=['slider'], type=list)
     parser.add_argument('--fname', type=str) # give filename if want to save to file
     # if running multiple gens, give then a urdf_num so the correct urdf is read from/written to
     parser.add_argument('--urdf-num', type=int, default=0)
