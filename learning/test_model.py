@@ -73,8 +73,8 @@ def calc_true_error(test_data, model_path, test_name, urdf_tag, hdim, dir):
         print(test_name, test_mse, n)
         writer.close()
 
-def get_pred_motions(data, model, ret_dataset=False, use_cuda=False):
-    data = parse_pickle_file(data=data)
+def get_pred_motions(results, model, ret_dataset=False, use_cuda=False):
+    data = parse_pickle_file(results)
     dataset = PolicyDataset(data)
     pred_motions = []
     for i in range(len(dataset.items)):

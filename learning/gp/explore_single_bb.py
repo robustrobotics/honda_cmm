@@ -425,16 +425,16 @@ class UCB_Interaction(object):
 
 
 def format_batch(type, X_pred, mech, image_data):
-    data = []
+    results = []
 
     for ix in range(X_pred.shape[0]):
         policy = get_policy_from_x(type, X_pred[ix], mech)
         q = X_pred[ix, -1]
         result = util.Result(policy.get_policy_tuple(), None, 0.0, 0.0,
                              None, None, q, image_data, None, 1.0)
-        data.append(result)
+        results.append(result)
 
-    data = parse_pickle_file(data=data)
+    data = parse_pickle_file(results)
     dataset = PolicyDataset(data)
     train_loader = torch.utils.data.DataLoader(dataset=dataset,
                                                batch_size=len(dataset))
