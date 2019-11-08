@@ -181,7 +181,6 @@ if __name__ == '__main__':
         for L_results in all_results[0:L]:
             results += L_results[0:args.M]
         model_fname = model_dir+'model_'+str(L)+'L_'+str(args.M)+'M'
-        print(len(results))
         train_eval(args, args.hdim, args.batch_size, args.pviz, results, model_fname, writer)
 
     writer.close()

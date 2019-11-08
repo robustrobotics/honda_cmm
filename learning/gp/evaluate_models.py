@@ -22,7 +22,7 @@ def evaluate_models(n_interactions, n_bbs, args, use_cuda=False):
         bb_data = pickle.load(handle)
 
     all_results = {}
-    for L in range(1000, 10001, 1000):
+    for L in range(args.Ls[0], args.Ls[1]+1, args.Ls[2]):
         models = get_models(L, args.models_path)
         all_L_results = {}
         for model in models:
@@ -87,11 +87,15 @@ if __name__ == '__main__':
         '--hdim',
         type=int,
         default=16,
-        help='hdim of supplied model(s), used to load model file'
-    )
+        help='hdim of supplied model(s), used to load model file')
     parser.add_argument(
         '--models-path',
         help='path to model files')
+    parser.add_argument(
+        '--Ls',
+        nargs=3,
+        type=int,
+        help='min max step of Ls')
     args = parser.parse_args()
 
     if args.debug:
