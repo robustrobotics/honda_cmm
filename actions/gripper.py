@@ -39,31 +39,36 @@ _thresh - threshold
 _M - matrix form of a pose/transformation
 """
 class Gripper:
-    def __init__(self, k=[2000.0,20.0], d=[0.45,0.45]):
+    def __init__(self, mech, no_gripper, k=[2000.0,20.0], d=[0.45,0.45]):
         """
         This class defines the actions a gripper can take such as grasping a handle
         and executing PD control
+        :param mech: the gen.generator_busybox.Mechanism being actuated
         :param k: a vector of length 2 where the first entry is the linear position
                     (stiffness) gain and the second entry is the angular position gain
         :param d: a vector of length 2 where the first entry is the linear derivative
                     (damping) gain and the second entry is the angular derivative gain
+        :param no_gripper: boolean, if True then apply forces directly to handle,
+                            if False then use grasping and apply force to gripper
         """
-        self.id = p.loadSDF("models/gripper/gripper_high_fric.sdf")[0]
-        self._left_finger_tip_id = 2
-        self._right_finger_tip_id = 5
-        self._left_finger_base_joint_id = 0
-        self._right_finger_base_joint_id = 3
-        self._finger_force = 20
-        self.pose_tip_world_reset = util.Pose([0.0, 0.0, 0.2], \
-                            [0.50019904,  0.50019904, -0.49980088, 0.49980088])
+        self.no_gripper = no_gripper
+        if not self.no_gripper:
+            self.id = p.loadSDF("models/gripper/gripper_high_fric.sdf")[0]
+            self._left_finger_tip_id = 2
+            self._right_finger_tip_id = 5
+            self._left_finger_base_joint_id = 0
+            self._right_finger_base_joint_id = 3
+            self._finger_force = 20
+            self.pose_tip_world_reset = util.Pose([0.0, 0.0, 0.2], \
+                                [0.50019904,  0.50019904, -0.49980088, 0.49980088])
+            # get mass of gripper
+            mass = 0
+            for link in range(p.getNumJoints(self.id)):
+                mass += p.getDynamicsInfo(self.id, link)[0]
+            self._mass = mass
+
         self.errors = []
         self.forces = []
-
-        # get mass of gripper
-        mass = 0
-        for link in range(p.getNumJoints(self.id)):
-            mass += p.getDynamicsInfo(self.id, link)[0]
-        self._mass = mass
 
         # control parameters
         self.k = k
@@ -176,44 +181,76 @@ class Gripper:
         p.setJointMotorControl2(self.id,5,p.POSITION_CONTROL,targetPosition=0,force=self._finger_force)
         p.stepSimulation()
 
-    def _move_PD(self, pose_handle_base_world_des, q_offset, mech, last_traj_p, debug=False, timeout=100):
+    def _move_PD(self, pose_handle_base_world_des, q_offset, mech, last_traj_p, debug=False, stable_timeout=100, unstable_timeout=1000):
         finished = False
         handle_base_ps = []
         for i in itertools.count():
             handle_base_ps.append(mech.get_pose_handle_base_world().p)
-            self._control_fingers('close', debug=debug)
+            if not self.no_gripper:
+                self._control_fingers('close', debug=debug)
             if (not last_traj_p) and self._at_des_handle_base_pose(pose_handle_base_world_des, q_offset, mech, 0.01):
                 return handle_base_ps, False
             elif last_traj_p and self._at_des_handle_base_pose(pose_handle_base_world_des, q_offset, mech, 0.001) and self._stable(handle_base_ps):
                 return handle_base_ps, True
-            elif self._stable(handle_base_ps) and (i > timeout):
+            elif self._stable(handle_base_ps) and (i > stable_timeout):
+                return handle_base_ps, True
+            elif i > unstable_timeout:
                 return handle_base_ps, True
 
-            # get position error of the handle base, but velocity error of the
-            # gripper COM
+            # get position error of the handle base
             p_handle_base_world_err, e_handle_base_world_err = self._get_pose_handle_base_world_error(pose_handle_base_world_des, q_offset, mech)
-            v_tip_world_des = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-            lin_v_com_world_err, omega_com_world_err = self._get_v_com_world_error(v_tip_world_des)
+            # use handle vel or gripper vel to calc velocity error
+            if self.no_gripper:
+                lin_v_com_world_err = p.getLinkState(mech._get_bb_id(), \
+                                                        mech._get_handle_id(),
+                                                        computeLinkVelocity=1)[6]
+            else:
+                v_tip_world_des = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+                lin_v_com_world_err, omega_com_world_err = self._get_v_com_world_error(v_tip_world_des)
 
-            # apply both position and velocity controls at the gripper COM
-            f = np.multiply(self.k[0], p_handle_base_world_err) + np.multiply(self.d[0], lin_v_com_world_err)
-            tau = np.multiply(self.k[1], e_handle_base_world_err) + np.multiply(self.d[1], omega_com_world_err)
+            f = np.multiply(self.k[0], p_handle_base_world_err) + \
+                np.multiply(self.d[0], lin_v_com_world_err)
+            if not mech.flipped and self.no_gripper:
+                f[1] = -f[1]
+
+            # only apply torques if using gripper
+            if not self.no_gripper:
+                tau = np.multiply(self.k[1], e_handle_base_world_err) #+ np.multiply(self.d[1], omega_com_world_err)
+            else:
+                tau = [0, 0, 0]
             self.errors += [(p_handle_base_world_err, lin_v_com_world_err)]
             self.forces += [(f, tau)]
-            p_com_world, q_com_world = self._get_pose_com_('world')
-            p.applyExternalForce(self.id, -1, f, p_com_world, p.WORLD_FRAME)
-            # there is a bug in pyBullet. the link frame and world frame are inverted
-            # this should be executed in the WORLD_FRAME
-            p.applyExternalTorque(self.id, -1, tau, p.LINK_FRAME)
+            if self.no_gripper:
+                bb_id = mech._get_bb_id()
+                handle_id = mech._get_handle_id()
+                handle_pos = mech.get_pose_handle_base_world().p
+                handle_q = mech.get_pose_handle_base_world().q
+                p.applyExternalForce(bb_id, handle_id, f, handle_pos, p.WORLD_FRAME)
+                if debug:
+                    p.addUserDebugLine(handle_pos, np.add(handle_pos, 2*(f/np.linalg.norm(f))), lifeTime=.05)
+            else:
+                p_com_world, q_com_world = self._get_pose_com_('world')
+                p.applyExternalForce(self.id, -1, f, p_com_world, p.WORLD_FRAME)
+                # there is a bug in pyBullet. the link frame and world frame are inverted
+                # this should be executed in the WORLD_FRAME
+                p.applyExternalTorque(self.id, -1, tau, p.LINK_FRAME)
+
             p.stepSimulation()
 
     def set_control_params(self, policy_type):
-        if policy_type == 'Revolute':
+        if policy_type == 'Revolute' and self.no_gripper:
+            # no torque control with no gripper
+            self.k = [500.0, 0.0]
+            self.d = [-15.0, 0.0]
+        elif policy_type == 'Revolute' and not self.no_gripper:
             self.k = [50000.0,20.0]
             self.d = [0.45,0.45]
-        if policy_type == 'Prismatic':
+        elif policy_type == 'Prismatic' and not self.no_gripper:
             self.k = [3000.0,20.0]
             self.d = [250.0,0.45]
+        elif policy_type == 'Prismatic' and self.no_gripper:
+            raise NotImplementedError('Gains for Slider with no_gripper have not \
+                    been tuned as yet.')
 
     def execute_trajectory(self, traj, mech, policy_type, debug):
         pose_handle_base_world = mech.get_pose_handle_base_world()
@@ -221,12 +258,13 @@ class Gripper:
 
         # initial grasp pose
         pose_handle_world_init = mech.get_handle_pose()
-        p_tip_world_init = np.add(pose_handle_world_init.p, [0., .015, 0.]) # back up a little for better grasp
-        pose_tip_world_init = util.Pose(p_tip_world_init, self.pose_tip_world_reset.q)
 
         # offset between the initial trajectory orientation and the initial handle orientation
         q_offset = util.quat_math(traj[0].q, mech.get_pose_handle_base_world().q, True, False)
-        self._grasp_handle(pose_tip_world_init, debug)
+        if not self.no_gripper:
+            p_tip_world_init = np.add(pose_handle_world_init.p, [0., .015, 0.]) # back up a little for better grasp
+            pose_tip_world_init = util.Pose(p_tip_world_init, self.pose_tip_world_reset.q)
+            self._grasp_handle(pose_tip_world_init, debug)
         cumu_motion = 0.0
         for i in range(len(traj)):
             last_traj_p = (i == len(traj)-1)
@@ -235,7 +273,7 @@ class Gripper:
             if finished:
                 break
         pose_handle_world_final = None
-        if self._in_contact(mech):
+        if self.no_gripper or self._in_contact(mech):
             pose_handle_world_final = mech.get_handle_pose()
         net_motion = 0.0
         if pose_handle_world_final is not None:
@@ -247,17 +285,21 @@ class Gripper:
         import matplotlib.pyplot as plt
         plt.ion()
         fig, axes = plt.subplots(3,1)
-        axes[0].plot([err[0] for err in self.errors])
-        axes[1].plot([err[1] for err in self.errors])
-        axes[2].plot([f[1] for f in self.forces])
+        p_errs = [err[0] for err in self.errors]
+        v_errs = [err[1] for err in self.errors]
+        fs = [f[0] for f in self.forces]
+        axes[0].plot(p_errs)
+        axes[0].legend(['x', 'y', 'z'])
+        axes[1].plot(v_errs)
+        axes[2].plot(fs)
 
         axes[0].set_title('position error')
         axes[1].set_title('velocity error')
-        axes[2].set_title('force')
-
+        axes[2].set_title('forces')
         plt.show()
         input()
 
     def reset(self, mech):
         mech.reset()
-        self._set_pose_tip_world(self.pose_tip_world_reset)
+        if not self.no_gripper:
+            self._set_pose_tip_world(self.pose_tip_world_reset)

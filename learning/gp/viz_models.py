@@ -14,7 +14,7 @@ def viz_models(args):
     with open(args.bb_fname, 'rb') as handle:
         bb_data = pickle.load(handle)
 
-    # TODO: model file names use n_interactions*num_bbs and n_interactions is 
+    # TODO: model file names use n_interactions*num_bbs and n_interactions is
     # hard coded to 100 for now, so multipy by 100
     models = get_models(100*args.L, args.models_path)
     for model in models:
@@ -28,10 +28,10 @@ def viz_models(args):
             # get image data
             bb = BusyBox.bb_from_result(bb_result)
             mech = bb._mechanisms[0]
-            image_data = setup_env(bb, False, False)
+            image_data, gripper = setup_env(bb, False, False, args.no_gripper)
 
             # generate plots
-            viz_circles(image_data, mech, nn=nn)
+            viz_circles(image_data, mech, nn=nn, bb_i=ix)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -60,6 +60,9 @@ if __name__ == '__main__':
     parser.add_argument(
         '--models-path',
         help='path to model files')
+    parser.add_argument(
+        '--no-gripper',
+        help='use to apply foce directly to handles')
     args = parser.parse_args()
 
     if args.debug:

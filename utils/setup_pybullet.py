@@ -4,9 +4,9 @@ import numpy as np
 from utils import util
 import numpy as np
 import matplotlib.pyplot as plt
+from actions.gripper import Gripper
 
-
-def setup_env(bb, viz, debug, show_im=False):
+def setup_env(bb, viz, debug, no_gripper, show_im=False):
     # disconnect if already connected (may want to change viz from False to True)
     if p.getConnectionInfo()['isConnected']:
         p.disconnect()
@@ -32,10 +32,13 @@ def setup_env(bb, viz, debug, show_im=False):
     bb.set_mechanism_ids(model)
 
     #p.setGravity(0, 0, -10)
-    maxForce = 10
+    if no_gripper:
+        maxForce = 0
+    else:
+        maxForce = 10
     mode = p.VELOCITY_CONTROL
     bb.set_joint_control_mode(mode, maxForce)
-    
+
     # can change resolution and shadows with this call
     view_matrix = p.computeViewMatrixFromYawPitchRoll(distance=0.4,
                                                       yaw=180,
@@ -66,7 +69,8 @@ def setup_env(bb, viz, debug, show_im=False):
         plt.show()
 
     p.stepSimulation()
-    return image_data
+    gripper = Gripper(bb._mechanisms[0], no_gripper)
+    return image_data, gripper
 
 def custom_bb_door():
     """ Generate a custom BusyBox environment

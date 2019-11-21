@@ -30,7 +30,7 @@ def get_result_file(type_name, results_path):
     for root, subdir, files in all_files:
         for file in files:
             if ('regret_results' in file) and (type_name in file):
-                T_result = re.search('regret_results_(.*)_(.*)T_(.*)N.pickle', file)
+                T_result = re.search('regret_results_(.*)_(.*)T_(.*)N_(.*)M.pickle', file)
                 T, N = T_result.group(2,3)
                 result_files[(T, N)] = root + '/' + file
     return result_files
@@ -49,9 +49,9 @@ if __name__ == '__main__':
         'active': ['k', 'Train-Active'],
         'gpucb': ['r', 'Train-GP-UCB'],
         'systematic': ['b', 'Systematic'],
-        'random': ['c', 'Train-Random']
+        'doors_random': ['c', 'Train-Random']
     }
-
+    plt.ion()
     for name in args.types:
         res_files = get_result_file(name, args.results_path)
         for (T,N), res_file in res_files.items():
@@ -91,3 +91,5 @@ if __name__ == '__main__':
             plt.title('Test Regret after T=%s Interactions on N=%s Mechanisms' % (T, N))
 
             plt.show()
+            input('enter to close')
+            plt.close()

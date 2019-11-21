@@ -14,9 +14,7 @@ from gen.generator_busybox import BusyBox
 from actions import policies
 import operator
 import pybullet as p
-from actions.gripper import Gripper
 from actions.policies import Prismatic, Revolute
-from learning.test_model import get_pred_motions as get_nn_preds
 import torch
 from learning.dataloaders import PolicyDataset, parse_pickle_file
 from gen.generate_policy_data import generate_dataset
@@ -160,7 +158,53 @@ def process_data(data, n_train):
     '''
     return X, Y
 
-def test_model(gp, bb_result, args, nn=None, use_cuda=False, urdf_num=0, viz=False):
+def get_nn_preds(results, model, ret_dataset=False, use_cuda=False):
+    data = parse_pickle_file(results)
+    dataset = PolicyDataset(data)
+    pred_motions = []
+    for i in range(len(dataset.items)):
+        policy_type = dataset.items[i]['type']
+        policy_type_tensor = torch.Tensor([util.name_lookup[policy_type]])
+        policy_tensor = dataset.tensors[i].unsqueeze(0)
+        config_tensor = dataset.configs[i].unsqueeze(0)
+        image_tensor = dataset.images[i].unsqueeze(0)
+        if use_cuda:
+            policy_type_tensor = policy_type_tensor.cuda()
+            policy_tensor = policy_tensor.cuda()
+            config_tensor = config_tensor.cuda()
+            image_tensor = image_tensor.cuda()
+        pred_motion, _ = model.forward(policy_type_tensor,
+                                       policy_tensor,
+                                       config_tensor,
+                                       image_tensor)
+        if use_cuda:
+            pred_motion_float = pred_motion.cpu().detach().numpy()[0][0]
+        else:
+            pred_motion_float = pred_motion.detach().numpy()[0][0]
+        pred_motions += [pred_motion_float]
+    if ret_dataset:
+        return pred_motions, dataset
+    else:
+        return pred_motions
+
+def objective_func(x, policy_type, image_tensor, model, use_cuda):
+    policy_type_tensor = torch.Tensor([util.name_lookup[policy_type]])
+    x = x.squeeze()
+    policy_tensor = torch.tensor([[x[0], 0.0]]).float() # hard code yaw to be 0
+    config_tensor = torch.tensor([[x[-1]]]).float()
+    if use_cuda:
+        policy_type_tensor = policy_type_tensor.cuda()
+        policy_tensor = policy_tensor.cuda()
+        config_tensor = config_tensor.cuda()
+        image_tensor = image_tensor.cuda()
+    val = -model.forward(policy_type_tensor, policy_tensor, config_tensor, image_tensor)
+    if use_cuda:
+        val = val.cpu()
+    val = val.detach().numpy()
+    val = val.squeeze()
+    return val
+
+def test_model(gp, bb_result, args, nn=None, use_cuda=False, urdf_num=0, viz=False, ret_x=False):
     """
     Maximize the GP mean function to get the best policy.
     :param gp: A GP fit to the current BusyBox.
@@ -169,14 +213,13 @@ def test_model(gp, bb_result, args, nn=None, use_cuda=False, urdf_num=0, viz=Fal
     """
     # Optimize the GP to get the best result.
     bb = BusyBox.bb_from_result(bb_result, urdf_num=urdf_num)
-    image_data = setup_env(bb, viz, debug=False)
+    image_data, gripper = setup_env(bb, viz, False, args.no_gripper)
     ucb = False
     optim_gp = GPOptimizer(urdf_num, bb, image_data, args.n_gp_samples, BETA, ucb, gp, nn)
     policy, q = optim_gp.optimize_gp()
 
     # Execute the policy and observe the true motion.
     mech = bb._mechanisms[0]
-    gripper = Gripper()
     pose_handle_base_world = mech.get_pose_handle_base_world()
 
     traj = policy.generate_trajectory(pose_handle_base_world, q, debug=True)
@@ -186,7 +229,13 @@ def test_model(gp, bb_result, args, nn=None, use_cuda=False, urdf_num=0, viz=Fal
     max_d = bb._mechanisms[0].get_max_dist()
     regret = (max_d - motion)/max_d
 
-    return regret
+    if ret_x:
+        result = util.Result(policy.get_policy_tuple(), None, 0.0, 0.0,
+                               None, None, q, image_data, None, 1.0, args.no_gripper)
+        x = get_x_from_result(result)
+        return regret, x
+    else:
+        return regret
 
 class GPOptimizer(object):
 
@@ -212,7 +261,7 @@ class GPOptimizer(object):
             policy_tuple = random_policy.get_policy_tuple()
 
             results = [util.Result(policy_tuple, None, 0.0, 0.0,
-                                   None, None, q, image_data, None, 1.0)]
+                                   None, None, q, image_data, None, 1.0, False)]
             self.sample_policies.append(results)
 
             if not self.nn is None:
@@ -431,7 +480,7 @@ def format_batch(type, X_pred, mech, image_data):
         policy = get_policy_from_x(type, X_pred[ix], mech)
         q = X_pred[ix, -1]
         result = util.Result(policy.get_policy_tuple(), None, 0.0, 0.0,
-                             None, None, q, image_data, None, 1.0)
+                             None, None, q, image_data, None, 1.0, False)
         results.append(result)
 
     data = parse_pickle_file(results)
@@ -482,7 +531,7 @@ def viz_gp(gp, result, num, bb, nn=None):
     # plt.savefig('gp_estimates_tuned_%d.png' % num)
 '''
 
-def viz_circles(image_data, mech, points=[], gp=None, nn=None):
+def viz_circles(image_data, mech, points=[], gp=None, nn=None, bb_i=0):
     policy_plot_data = Policy.get_plot_data(mech)
 
     n_angular = 40
@@ -576,9 +625,17 @@ def viz_circles(image_data, mech, points=[], gp=None, nn=None):
                 im = polar_plots(ax, mean_colors, max_dist, angular_param,
                                 linear_param, points=points, colorbar=False)
             add_colorbar(fig, im)
+            if not os.path.isdir('gp_plots'):
+                os.mkdir('gp_plots')
+            if not os.path.isdir('gp_plots/bb_%i' % (bb_i)):
+                os.mkdir('gp_plots/bb_%i' % (bb_i))
+            if not os.path.isdir('gp_plots/bb_%i/%s' % (bb_i, angular_param.param_name+linear_param.param_name)):
+                os.mkdir('gp_plots/bb_%i/%s' % (bb_i, angular_param.param_name+linear_param.param_name))
+            plt.savefig('gp_plots/bb_%i/%s/%i.png' % (bb_i, angular_param.param_name+linear_param.param_name, len(points)))
 
-    plt.show()
-    input('Enter to close plots')
+    #plt.show()
+    #input('Enter to close plots')
+    plt.close('all')
 
 def polar_plots(ax, colors, vmax, angular_param, linear_param, points=None, colorbar=False):
     n_ang, n_lin = colors.shape
@@ -657,7 +714,7 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
     '''
     dataset = []
     for ix, bb_result in enumerate(busybox_data):
-        single_dataset, _, _ = create_single_bb_gpucb_dataset(bb_result, n_interactions, '', args.plot, args)
+        single_dataset, _, _ = create_single_bb_gpucb_dataset(bb_result, n_interactions, '', args.plot, args, ix)
         dataset.extend(single_dataset)
         print('Interacted with BusyBox %d.' % ix)
 
@@ -666,15 +723,14 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
         with open(args.fname, 'wb') as handle:
             pickle.dump(dataset, handle)
 
-def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, args):
+def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, args, bb_i):
     dataset = []
 
     # interact with BB
     bb = BusyBox.bb_from_result(bb_result, urdf_num=args.urdf_num)
     mech = bb._mechanisms[0]
-    image_data = setup_env(bb, viz=False, debug=False)
+    image_data, gripper = setup_env(bb, False, False, args.no_gripper)
     pose_handle_base_world = mech.get_pose_handle_base_world()
-    gripper = Gripper()
     sampler = UCB_Interaction(bb, image_data, plot, args, nn_fname=nn_fname)
     for _ in range(n_interactions):
         # sample a policy
@@ -687,7 +743,7 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
 
         result = util.Result(policy.get_policy_tuple(), mech.get_mechanism_tuple(), \
                              motion, c_motion, handle_pose_final, handle_pose_final, \
-                             q, image_data, None, -1)
+                             q, image_data, None, 1.0, args.no_gripper)
         dataset.append(result)
 
         # update GP
@@ -695,7 +751,7 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
 
     if plot:
         policy_plot_data = Policy.get_plot_data(mech)
-        viz_circles(image_data, mech, points=sampler.xs, gp=sampler.gp, nn=sampler.nn)
+        viz_circles(image_data, mech, points=sampler.xs, gp=sampler.gp, nn=sampler.nn, bb_i=bb_i)
 
         # visualize final optimal policy
         test_model(sampler.gp, bb_result, args, viz=True)

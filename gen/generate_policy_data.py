@@ -6,7 +6,6 @@ import argparse
 import pybullet as p
 from utils.setup_pybullet import setup_env, custom_bb_door, custom_bb_slider
 from actions import policies
-from actions.gripper import Gripper
 from gen.generator_busybox import Slider, Door, BusyBox
 
 
@@ -24,8 +23,7 @@ def generate_dataset(args, git_hash):
                 if mech_type == 'door': mech_classes.append(Door)
             bb = BusyBox.generate_random_busybox(max_mech=args.max_mech, mech_types=mech_classes, urdf_tag=args.urdf_num, debug=args.debug)
 
-        image_data = setup_env(bb, args.viz, args.debug)
-        gripper = Gripper()
+        image_data, gripper = setup_env(bb, args.viz, args.debug, args.no_gripper)
         bb_results = []
         for j in range(args.n_samples):
             sys.stdout.write("\rProcessing sample %i/%i for busybox %i/%i" % (j+1, args.n_samples, i+1, args.n_bbs))
@@ -47,7 +45,7 @@ def generate_dataset(args, git_hash):
                 mechanism_params = mech.get_mechanism_tuple()
                 bb_results.append(util.Result(policy_params, mechanism_params, net_motion, \
                             cumu_motion, pose_handle_world_init, pose_handle_world_final, \
-                            config_goal, image_data, git_hash, args.randomness))
+                            config_goal, image_data, git_hash, args.randomness, args.no_gripper))
 
                 gripper.reset(mech)
         results.append(bb_results)
@@ -71,6 +69,7 @@ if __name__ == '__main__':
     # desired goal config represented as a percentage of the max config, if unused then random config is generated
     parser.add_argument('--goal-config', type=float)
     parser.add_argument('--bb-file', type=str)
+    parser.add_argument('--no-gripper', action='store_true')
     args = parser.parse_args()
 
     if args.debug:

@@ -24,13 +24,13 @@ Pose represents an SE(3) pose
 
 Result = namedtuple('Result', 'policy_params mechanism_params net_motion cumu_motion \
                         pose_joint_world_init pose_joint_world_final config_goal \
-                        image_data git_hash randomness')
+                        image_data git_hash randomness no_gripper')
 """
 Result contains the performance information after the gripper tries to move a mechanism
 :param policy_params: actions.policies.PolicyParams
 :param mechanism_params: gen.generator_busybox.MechanismParams
 :param net_motion: scalar, the net distance the mechanism handle moved, 0.0 if the gripper lost contact with the mechanism
-:param net_motion: scalar, the cummulative distance the mechanism handle moved
+:param cumu_motion: scalar, the cummulative distance the mechanism handle moved
 :param pose_joint_world_init: utils.Pose object, the initial pose of the mechanism handle
 :param pose_joint_world_final: utils.Pose object or None, the final pose of the mechanism handle if the
                     gripper tip is in contact with the mechanism at completion, else None
@@ -38,6 +38,7 @@ Result contains the performance information after the gripper tries to move a me
 :param image_data: utils.util.ImageData
 :param git_hash: None or str representing the git hash when the data was collected
 :param randomness: float in [0,1] representing how far from the true policy the random samples came from
+:param no_gripper: bool, if True then forces were applied directly to handle
 """
 
 def compare_results(list_a, list_b):
@@ -127,7 +128,7 @@ def viz_train_test_data(train_data, test_data):
             bb = BusyBox.bb_from_result(point)
             if p.getConnectionInfo()['isConnected']:
                 p.disconnect()
-            setup_pybullet.setup_env(bb, False, False)
+            setup_pybullet.setup_env(bb, False, False, False)
             mech = bb._mechanisms[0]
             true_policy = policies.generate_policy(bb, mech, True, 0.0)
             pos = (true_policy.rigid_position[0], true_policy.rigid_position[2])
@@ -147,7 +148,7 @@ def viz_train_test_data(train_data, test_data):
         if p.getConnectionInfo()['isConnected']:
             p.disconnect()
         bb = BusyBox.bb_from_result(point)
-        setup_pybullet.setup_env(bb, False, False)
+        setup_pybullet.setup_env(bb, False, False, False)
         mech = bb._mechanisms[0]
         true_policy = policies.generate_policy(bb, mech, True, 0.0)
         pitches += [true_policy.pitch]
@@ -304,14 +305,12 @@ def merge_files(in_file_names, out_file_name):
 ### PyBullet Helper Functions ###
 
 def replay_result(result):
-    from actions.gripper import Gripper
     from gen.generator_busybox import BusyBox
     from utils.setup_pybullet import setup_env
     from actions.policies import get_policy_from_tuple
 
     bb = BusyBox.bb_from_result(result)
-    image_data = setup_env(bb, True, True)
-    gripper = Gripper()
+    image_data, gripper = setup_env(bb, True, True, result.no_gripper)
     mech = bb._mechanisms[0]
     policy = get_policy_from_tuple(result.policy_params)
     pose_handle_base_world = mech.get_pose_handle_base_world()

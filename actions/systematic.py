@@ -4,7 +4,6 @@ from actions.policies import Prismatic
 from gen.generator_busybox import BusyBox, Slider
 from utils import util
 from utils.setup_pybullet import setup_env
-from actions.gripper import Gripper
 import pybullet as p
 
 # ONLY FOR PRISMATIC
@@ -34,10 +33,9 @@ def execute_systematic(args):
             bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider], urdf_tag=args.urdf_num, debug=args.debug)
         mech = bb._mechanisms[0]
         mech_range = mech.range/2
-        setup_env(bb, args.viz, args.debug)
+        _, gripper = setup_env(bb, args.viz, args.debug, args.no_gripper)
         pos = mech.get_pose_handle_base_world().p
         orn = [0., 0., 0., 1.]
-        gripper = Gripper()
         policies = calc_systematic_policies(pos, orn, args.T)
 
         # try each goal
@@ -76,6 +74,7 @@ if __name__ == '__main__':
     parser.add_argument('--urdf-num', type=int, default=0)
     parser.add_argument('--bb-file', type=str)
     parser.add_argument('--fname', type=str)
+    parser.add_argument('--no-gripper', action='store_true')
     args = parser.parse_args()
 
     if args.debug:
