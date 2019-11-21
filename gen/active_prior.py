@@ -6,14 +6,13 @@ import argparse
 import pybullet as p
 from utils.setup_pybullet import setup_env, custom_bb_door, custom_bb_slider
 from actions import policies
-from actions.gripper import Gripper
 from gen.generator_busybox import Slider, Door, BusyBox
 from collections import namedtuple
 from copy import copy
 import operator
 import matplotlib.pyplot as plt
 import os
-from learning.test_model import get_pred_motions
+from learning.gp.explore_single_bb import get_nn_preds
 
 Point = namedtuple('Point', 'x z')
 Dims = namedtuple('Dims', 'width height')
@@ -31,16 +30,16 @@ discount = False # discount the exploration prob every iteration
 
 class ActivePolicyLearner(object):
 
-    def __init__(self, bb, viz_sim, debug, viz_plot_final, viz_plot_cont, all_random, lite):
+    def __init__(self, bb, viz_sim, debug, viz_plot_final, viz_plot_cont, all_random, lite, no_gripper):
         self.bb = bb
         self.mech = self.bb._mechanisms[0]
         self.debug = debug
         self.viz_sim = viz_sim
         self.viz_plot_final = viz_plot_final
         self.viz_plot_cont = viz_plot_cont
-        self.image_data = setup_env(self.bb, self.viz_sim, self.debug)
+        self.no_gripper = no_gripper
+        self.image_data, self.gripper = setup_env(self.bb, self.viz_sim, self.debug, self.no_gripper)
         self.start_pos = self.mech.get_handle_pose().p
-        self.gripper = Gripper()
         self.max_region = self.get_max_region()
         self.regions = [copy(self.max_region)]
         self.interactions = []
@@ -126,8 +125,9 @@ class ActivePolicyLearner(object):
             mech_tuple = self.mech.get_mechanism_tuple()
             policy_tuple = policy.get_policy_tuple()
             result = util.Result(policy_tuple, mech_tuple, 0.0, 0.0,
-                                    None, None, config_goal, self.image_data, None, 1.0)
-            pred_motion = get_pred_motions([result], model, ret_dataset=False, use_cuda=False)[0]
+                                    None, None, config_goal, self.image_data, None,
+                                    1.0, self.no_gripper)
+            pred_motion = get_nn_preds([result], model, ret_dataset=False, use_cuda=False)[0]
             # can't have negative competence scores
             competence = pred_motion*max(0.0, np.divide(pred_motion, des_dist))
 
@@ -225,7 +225,7 @@ class ActivePolicyLearner(object):
         mechanism_params = self.mech.get_mechanism_tuple()
         return util.Result(policy_params, mechanism_params, net_motion, \
                     cumu_motion, pose_handle_world_init, pose_handle_world_final, \
-                    config_goal, self.image_data, None, 1.0)
+                    config_goal, self.image_data, None, 1.0, self.no_gripper)
 
     def calc_competence(self, goal_pos, result):
         # competence is how much you moved towards the goal over how far you were
@@ -455,7 +455,8 @@ class Region(object):
         return inside
 
 def generate_dataset(n_bbs, n_int_samples, n_prior_samples, viz, debug, urdf_num, \
-        max_mech, viz_plot_final, viz_plot_cont, all_random, bb=None, model_path=None, hdim=16, lite=False):
+        max_mech, viz_plot_final, viz_plot_cont, all_random, bb=None, model_path=None, \
+        hdim=16, lite=False, no_gripper=False):
     results = []
     if not lite:
         prior_figs = []
@@ -463,7 +464,7 @@ def generate_dataset(n_bbs, n_int_samples, n_prior_samples, viz, debug, urdf_num
         interest_figs = []
     for i in range(n_bbs):
         bb = BusyBox.generate_random_busybox(max_mech=max_mech, mech_types=[Slider], urdf_tag=urdf_num, debug=debug)
-        active_learner = ActivePolicyLearner(bb, viz, debug, viz_plot_final, viz_plot_cont, all_random, lite)
+        active_learner = ActivePolicyLearner(bb, viz, debug, viz_plot_final, viz_plot_cont, all_random, lite, no_gripper)
         active_learner.learn(n_int_samples, n_prior_samples, model_path, hdim)
         if not lite:
             prior_figs += [active_learner.prior_fig]
@@ -490,13 +491,23 @@ if __name__ == '__main__':
     parser.add_argument('--match-policies', action='store_true') # if want to only use correct policy class on mechanisms
     parser.add_argument('--viz-plot', action='store_true') # if want to run a matplotlib visualization of sampling and competence
     parser.add_argument('--all-random', action='store_true') # if want to only sample randomly
+    parser.add_argument('--no-gripper', action='store_true')
     args = parser.parse_args()
 
     if args.debug:
         import pdb; pdb.set_trace()
 
     try:
-        results, prior_figs, final_figs = generate_dataset(args.n_bbs, args.n_int_samples, args.n_prior_samples, args.viz, args.debug, args.urdf_num, args.max_mech, args.viz_plot, args.all_random)
+        results, prior_figs, final_figs = generate_dataset(args.n_bbs,
+                                                        args.n_int_samples,
+                                                        args.n_prior_samples,
+                                                        args.viz,
+                                                        args.debug,
+                                                        args.urdf_num,
+                                                        args.max_mech,
+                                                        args.viz_plot,
+                                                        args.all_random,
+                                                        no_gripper=args.no_gripper)
         if args.fname:
             util.write_to_file(args.fname, results)
     except KeyboardInterrupt:

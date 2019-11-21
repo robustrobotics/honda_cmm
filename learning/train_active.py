@@ -92,6 +92,9 @@ if __name__ == '__main__':
             if model_path:
                 max_motion = bb._mechanisms[0].range/2
                 model = util.load_model(model_path, hdim=args.hdim)
+                # TODO: the test_env function is gone. have to do a GPUCB interaction
+                # with 0 interactions to optimize model/nn. (or make better way
+                # to do this)
                 pred_motion = test_env(model, bb=bb, plot=False, viz=False, debug=False, use_cuda=False)
                 test_regret = (max_motion - max(0., pred_motion))/max_motion
                 test_norm_regrets += [test_regret]
