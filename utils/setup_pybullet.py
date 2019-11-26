@@ -39,6 +39,9 @@ def setup_env(bb, viz, debug, no_gripper, show_im=False):
     mode = p.VELOCITY_CONTROL
     bb.set_joint_control_mode(mode, maxForce)
 
+    # enable torque sensor
+    p.enableJointForceTorqueSensor(bb._bb_id, bb._mechanisms[0]._door_base_id, True)
+
     # can change resolution and shadows with this call
     view_matrix = p.computeViewMatrixFromYawPitchRoll(distance=0.4,
                                                       yaw=180,
