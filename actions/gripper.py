@@ -210,8 +210,6 @@ class Gripper:
 
             f = np.multiply(self.k[0], p_handle_base_world_err) + \
                 np.multiply(self.d[0], lin_v_com_world_err)
-            if not mech.flipped and self.no_gripper:
-                f[1] = -f[1]
 
             # only apply torques if using gripper
             if not self.no_gripper:
@@ -225,7 +223,9 @@ class Gripper:
                 handle_id = mech._get_handle_id()
                 handle_pos = mech.get_pose_handle_base_world().p
                 handle_q = mech.get_pose_handle_base_world().q
-                p.applyExternalForce(bb_id, handle_id, f, handle_pos, p.WORLD_FRAME)
+                # transform the force into the LINK_FRAME to apply
+                f = util.transformation(f, [0.,0.,0.], handle_q, inverse=True)
+                p.applyExternalForce(bb_id, handle_id, f, [0.,0.,0.], p.LINK_FRAME)
                 if debug:
                     p.addUserDebugLine(handle_pos, np.add(handle_pos, 2*(f/np.linalg.norm(f))), lifeTime=.05)
             else:
