@@ -15,7 +15,7 @@ def generate_dataset(args, git_hash):
         bb_data = util.read_from_file(args.bb_file)
     for i in range(args.n_bbs):
         if args.bb_file is not None:
-            bb = BusyBox.bb_from_result(bb_data[i])
+            bb = BusyBox.bb_from_result(bb_data[i][0])
         else:
             mech_classes = []
             for mech_type in args.mech_types:
