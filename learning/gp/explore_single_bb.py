@@ -24,7 +24,7 @@ from actions.policies import Policy, generate_policy, Revolute, Prismatic
 import itertools
 from functools import reduce
 
-BETA = 5.0
+BETA = 5 #5.0
 # takes in an x and plot variables and returns the values to be plotted
 def get_point_from_x(x, linear_param, angular_param, policy_type):
     point = np.zeros(2)
@@ -55,7 +55,11 @@ def get_point_from_x(x, linear_param, angular_param, policy_type):
 def get_policy_from_x(type, x, mech):
     if type == 'Revolute':
         rot_axis_roll = x[0]
-        rot_axis_pitch = 0.0
+
+        if not mech.flipped:
+            rot_axis_pitch = np.pi
+        else:
+            rot_axis_pitch = 0.0
         rot_axis_world = util.quaternion_from_euler(rot_axis_roll, rot_axis_pitch, 0.0)
         #radius_x = x[1]
         p_handle_base_world = mech.get_pose_handle_base_world().p
@@ -261,7 +265,7 @@ class GPOptimizer(object):
             policy_tuple = random_policy.get_policy_tuple()
 
             results = [util.Result(policy_tuple, None, 0.0, 0.0,
-                                   None, None, q, image_data, None, 1.0, False)]
+                                   None, None, q, image_data, None, 1.0, True)]
             self.sample_policies.append(results)
 
             if not self.nn is None:
@@ -342,6 +346,7 @@ class GPOptimizer(object):
         else:
             images = dataset.images[0].unsqueeze(0)
         policy_data = Policy.get_plot_data(self.mech)
+        print('MAX', params_max)
         x0, bounds = get_reduced_x_and_bounds(policy_type_max, params_max, q_max, policy_data)
         opt_res = minimize(fun=self._objective_func, x0=x0, args=(policy_type_max, images),
                        method='L-BFGS-B', options={'eps': 10**-3}, bounds=bounds)
@@ -394,11 +399,11 @@ class UCB_Interaction(object):
                     + WhiteKernel(noise_level=noise,
                                     noise_level_bounds=(1e-5, 1e2))
         elif self.mech.mechanism_type == 'Door':
-            variance = 0.0007
-            l_roll = 0.02
+            variance = 0.005
+            l_roll = 0.25
             l_pitch = 100
             l_radius = 100
-            l_q = 1.0
+            l_q = 1.0 # Keep greater than 0.5.
             return ConstantKernel(variance,
                                     constant_value_bounds=(variance,
                                                             variance)) \
@@ -421,6 +426,12 @@ class UCB_Interaction(object):
         else:
             # (b) Choose policy using UCB bound.
             policy, q = self.optim.optimize_gp()
+            print(policy.get_policy_tuple())
+
+        # TEST ALWAYS USING RANDOM POLICIES: REMOVE AFTER DEBUGGING
+        # policy = generate_policy(self.bb, self.mech, True, 1.0)
+        # q = policy.generate_config(self.mech, None)
+
         self.ix += 1
         return policy, q
 
@@ -692,7 +703,8 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
                                     match_policies=True,
                                     randomness=1.0,
                                     goal_config=None,
-                                    bb_file=None)
+                                    bb_file=None,
+                                    no_gripper=args.no_gripper)
         busybox_data = generate_dataset(bb_dataset_args, None)
         print('BusyBoxes created.')
     else:
@@ -713,10 +725,16 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
         dataset = []
     '''
     dataset = []
-    for ix, bb_result in enumerate(busybox_data):
-        single_dataset, _, _ = create_single_bb_gpucb_dataset(bb_result, n_interactions, '', args.plot, args, ix)
+    regrets = []
+    print(len(busybox_data), len(busybox_data[0]))
+    for ix, bb_results in enumerate(busybox_data):
+        bb_result = bb_results[0]
+        single_dataset, r, _ = create_single_bb_gpucb_dataset(bb_result, n_interactions, '', args.plot, args, ix)
         dataset.extend(single_dataset)
+        regrets.append(r)
         print('Interacted with BusyBox %d.' % ix)
+
+    print('Regret:', np.mean(regrets))
 
     # Save the dataset.
     if args.fname != '':
@@ -732,12 +750,12 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
     image_data, gripper = setup_env(bb, False, False, args.no_gripper)
     pose_handle_base_world = mech.get_pose_handle_base_world()
     sampler = UCB_Interaction(bb, image_data, plot, args, nn_fname=nn_fname)
-    for _ in range(n_interactions):
+    for ix in range(n_interactions):
         # sample a policy
         policy, q = sampler.sample()
 
         # execute
-        traj = policy.generate_trajectory(pose_handle_base_world, q)
+        traj = policy.generate_trajectory(pose_handle_base_world, q, debug=False)
         c_motion, motion, handle_pose_final = gripper.execute_trajectory(traj, mech, policy.type, False)
         gripper.reset(mech)
 
@@ -748,14 +766,45 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
 
         # update GP
         sampler.update(result)
+        if ix % 5 == 0:
+            viz_plots(sampler.xs, sampler.ys, sampler.gp)
 
     if plot:
         policy_plot_data = Policy.get_plot_data(mech)
         viz_circles(image_data, mech, points=sampler.xs, gp=sampler.gp, nn=sampler.nn, bb_i=bb_i)
-
+        # viz_plots(sampler.xs, sampler.ys, sampler.gp)
         # visualize final optimal policy
-        test_model(sampler.gp, bb_result, args, viz=True)
-    return dataset, sampler.calc_avg_regret(), sampler.gp
+        test_regret = test_model(sampler.gp, bb_result, args, viz=True)
+    # return dataset, sampler.calc_avg_regret(), sampler.gp
+    return dataset, test_regret, sampler.gp
+
+def viz_plots(xs, ys, gp):
+    print(xs)
+    print(ys)
+    fig, axes = plt.subplots(6, 6, figsize=(22, 22))
+    axes = axes.flatten()
+    # For the first plot, plot the policies we have tried.
+    for x in xs:
+        axes[0].scatter(x[0], x[3])
+
+    # Bin the roll parameter.
+    rolls = np.linspace(0, 2*np.pi, num=35)
+    for ix, r in enumerate(rolls):
+        new_xs = []
+        qs = np.linspace(-np.pi/2.0, 0, num=100)
+        for q in qs:
+            new_xs.append([r, xs[0][1], xs[0][2], q])
+        ys, std = gp.predict(new_xs, return_std=True)
+        ys = ys.flatten()
+        axes[ix+1].plot(qs, ys)
+        axes[ix + 1].plot(qs, ys+std, c='r')
+        axes[ix + 1].plot(qs, ys + np.sqrt(BETA)*std, c='g')
+        axes[ix + 1].plot(qs, ys-std, c='r')
+        axes[ix+1].set_title('roll=%.2f' % np.rad2deg(r))
+        axes[ix+1].set_ylim(0, 0.2)
+    axes[0].set_ylabel('q')
+    axes[0].set_xlabel('roll')
+    plt.show()
 
 # this executive is for generating GP-UCB interactions from no search_parent_directories
 # typically used to generate datasets for training, but can also be used in the L=0
@@ -787,6 +836,7 @@ if __name__ == '__main__':
         '--mech-types',
         nargs='+',
         default='slider',
+        type=str,
         help='if no bb-file is specified, list the mech types desired')
     parser.add_argument(
         '--plot',
@@ -805,8 +855,9 @@ if __name__ == '__main__':
         type=int,
         default=16,
         help='hdim of supplied model(s), used to load model file')
+    parser.add_argument('--no-gripper', action='store_true')
     args = parser.parse_args()
-
+    print(args)
     if args.debug:
         import pdb; pdb.set_trace()
 
