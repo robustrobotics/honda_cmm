@@ -11,10 +11,10 @@ from gen.generator_busybox import Slider, Door, BusyBox
 
 results = []
 def generate_dataset(args, git_hash):
-    if args.bb_file is not None:
-        bb_data = util.read_from_file(args.bb_file)
+    if args.bb_fname is not None:
+        bb_data = util.read_from_file(args.bb_fname)
     for i in range(args.n_bbs):
-        if args.bb_file is not None:
+        if args.bb_fname is not None:
             bb = BusyBox.bb_from_result(bb_data[i][0])
         else:
             mech_classes = []
@@ -30,7 +30,7 @@ def generate_dataset(args, git_hash):
             for mech in bb._mechanisms:
                 # generate either a random or model-based policy and goal configuration
                 pose_handle_base_world = mech.get_pose_handle_base_world()
-                policy = policies.generate_policy(bb, mech, args.match_policies, args.randomness, init_pose=pose_handle_base_world)
+                policy = policies.generate_policy(bb, mech, args.random_policies, args.randomness, init_pose=pose_handle_base_world)
                 config_goal = policy.generate_config(mech, args.goal_config)
                 pose_handle_world_init = mech.get_handle_pose()
 
@@ -64,11 +64,11 @@ if __name__ == '__main__':
     parser.add_argument('--fname', type=str) # give filename if want to save to file
     # if running multiple gens, give then a urdf_num so the correct urdf is read from/written to
     parser.add_argument('--urdf-num', type=int, default=0)
-    parser.add_argument('--match-policies', action='store_true') # if want to only use correct policy class on mechanisms
+    parser.add_argument('--random-policies', action='store_true') # if want to only use random policy class on mechanisms
     parser.add_argument('--randomness', type=float, default=1.0) # how far from true policy parameters to sample (as a fraction)
     # desired goal config represented as a percentage of the max config, if unused then random config is generated
     parser.add_argument('--goal-config', type=float)
-    parser.add_argument('--bb-file', type=str)
+    parser.add_argument('--bb-fname', type=str)
     parser.add_argument('--no-gripper', action='store_true')
     args = parser.parse_args()
 

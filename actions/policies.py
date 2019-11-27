@@ -367,8 +367,8 @@ class Path(Policy):
         super(Path,self).__init__('Path')
 
 # TODO: add other policy_types as they're made
-def generate_policy(bb, mech, match_policies, randomness, policy_types=[Revolute, Prismatic], init_pose=None):
-    if match_policies:
+def generate_policy(bb, mech, random_policies, randomness, policy_types=[Revolute, Prismatic], init_pose=None):
+    if not random_policies:
         policy_type = get_matched_policy_type(mech)
         if policy_type == 'Revolute':
             return Revolute._gen(bb, mech, randomness)

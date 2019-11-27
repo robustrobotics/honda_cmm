@@ -17,8 +17,8 @@ def calc_systematic_policies(pos, orn, T):
     return policies
 
 def execute_systematic(args):
-    if args.bb_file:
-        bb_data = util.read_from_file(args.bb_file)
+    if args.bb_fname:
+        bb_data = util.read_from_file(args.bb_fname)
 
     avg_regrets = []
     min_regrets = []
@@ -27,7 +27,7 @@ def execute_systematic(args):
 
     for n in range(args.N):
         # generate busybox and setup pybullet env
-        if args.bb_file:
+        if args.bb_fname:
             bb = BusyBox.bb_from_result(bb_data[n])
         else:
             bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider], urdf_tag=args.urdf_num, debug=args.debug)
@@ -72,7 +72,7 @@ if __name__ == '__main__':
     parser.add_argument('--T', type=int, default=5) # number directions to try per bb
     # if running multiple gens, give then a urdf_num so the correct urdf is read from/written to
     parser.add_argument('--urdf-num', type=int, default=0)
-    parser.add_argument('--bb-file', type=str)
+    parser.add_argument('--bb-fname', type=str)
     parser.add_argument('--fname', type=str)
     parser.add_argument('--no-gripper', action='store_true')
     args = parser.parse_args()

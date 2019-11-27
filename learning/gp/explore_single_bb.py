@@ -837,7 +837,7 @@ if __name__ == '__main__':
         nargs='+',
         default='slider',
         type=str,
-        help='if no bb-file is specified, list the mech types desired')
+        help='if no bb-fname is specified, list the mech types desired')
     parser.add_argument(
         '--plot',
         action='store_true',
@@ -850,11 +850,6 @@ if __name__ == '__main__':
         '--debug',
         action='store_true',
         help='use to enter debug mode')
-    parser.add_argument(
-        '--hdim',
-        type=int,
-        default=16,
-        help='hdim of supplied model(s), used to load model file')
     parser.add_argument('--no-gripper', action='store_true')
     args = parser.parse_args()
     print(args)
