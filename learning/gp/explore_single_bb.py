@@ -706,10 +706,10 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
                                     n_bbs=n_bbs,
                                     n_samples=1,
                                     viz=False,
-                                    match_policies=True,
+                                    random_policies=False,
                                     randomness=1.0,
                                     goal_config=None,
-                                    bb_file=None,
+                                    bb_fname=None,
                                     no_gripper=args.no_gripper)
         busybox_data = generate_dataset(bb_dataset_args, None)
         print('BusyBoxes created.')
@@ -785,7 +785,10 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
     opt_points = []
     sample_points = []
     if ret_regret:
-        nn = util.load_model(nn_fname, args.hdim, use_cuda=False)
+        if nn_fname is not '':
+            nn = util.load_model(nn_fname, args.hdim, use_cuda=False)
+        else:
+            nn = None
         regret, start_x, stop_x = test_model(sampler.gp,
                                 bb_result,
                                 args,
