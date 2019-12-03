@@ -258,8 +258,8 @@ class GPOptimizer(object):
         # Generate random policies.
         for _ in range(n_samples):
             # Get the mechanism from the dataset.
-            # TODO: change match_policies to False when ready
-            random_policy = generate_policy(bb, self.mech, True, 1.0)
+            # TODO: change random_policies to True when ready
+            random_policy = generate_policy(bb, self.mech, False, 1.0)
             q = random_policy.generate_config(self.mech, None)
             policy_type = random_policy.type
             policy_tuple = random_policy.get_policy_tuple()
@@ -346,7 +346,7 @@ class GPOptimizer(object):
         else:
             images = dataset.images[0].unsqueeze(0)
         policy_data = Policy.get_plot_data(self.mech)
-        print('MAX', params_max)
+        #print('MAX', params_max)
         x0, bounds = get_reduced_x_and_bounds(policy_type_max, params_max, q_max, policy_data)
         opt_res = minimize(fun=self._objective_func, x0=x0, args=(policy_type_max, images),
                        method='L-BFGS-B', options={'eps': 10**-3}, bounds=bounds)
@@ -421,16 +421,12 @@ class UCB_Interaction(object):
         # (1) Choose a point to interact with.
         if len(self.xs) < 1 and self.nn is None:
             # (a) Choose policy randomly.
-            policy = generate_policy(self.bb, self.mech, True, 1.0)
+            policy = generate_policy(self.bb, self.mech, False, 1.0)
             q = policy.generate_config(self.mech, None)
         else:
             # (b) Choose policy using UCB bound.
             policy, q = self.optim.optimize_gp()
             print(policy.get_policy_tuple())
-
-        # TEST ALWAYS USING RANDOM POLICIES: REMOVE AFTER DEBUGGING
-        # policy = generate_policy(self.bb, self.mech, True, 1.0)
-        # q = policy.generate_config(self.mech, None)
 
         self.ix += 1
         return policy, q
@@ -711,7 +707,7 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
         # Load in a file with predetermined BusyBoxes.
         with open(args.bb_fname, 'rb') as handle:
             busybox_data = pickle.load(handle)
-        busybox_data = busybox_data[:n_bbs]
+        busybox_data = [bb_results[0] for bb_results in busybox_data][:n_bbs]
 
     '''
     # Do a GP-UCB interaction and return Result tuples.
@@ -774,7 +770,7 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
         viz_circles(image_data, mech, points=sampler.xs, gp=sampler.gp, nn=sampler.nn, bb_i=bb_i)
         # viz_plots(sampler.xs, sampler.ys, sampler.gp)
         # visualize final optimal policy
-        test_regret = test_model(sampler.gp, bb_result, args, viz=True)
+    test_regret = test_model(sampler.gp, bb_result, args, viz=False)
     # return dataset, sampler.calc_avg_regret(), sampler.gp
     return dataset, test_regret, sampler.gp
 
@@ -850,7 +846,9 @@ if __name__ == '__main__':
         '--debug',
         action='store_true',
         help='use to enter debug mode')
-    parser.add_argument('--no-gripper', action='store_true')
+    parser.add_argument(
+        '--no-gripper',
+        action='store_true')
     args = parser.parse_args()
     print(args)
     if args.debug:

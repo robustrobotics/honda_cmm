@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from utils import util
 import sys
-from learning.test_model import get_pred_motions
+from learning.gp.explore_single_bb import get_nn_preds
 from actions.policies import PrismaticParams, RevoluteParams
 from gen.generator_busybox import BusyBox, Slider, Door
 from learning.dataloaders import parse_pickle_file, PolicyDataset, create_data_splits
@@ -27,9 +27,10 @@ class DoorRadiusMotion(PlotFunc):
 
     def _plot(self, data, model):
         plt.figure()
-        for data_point in data:
-            if data_point.mechanism_params.type == 'Door':
-                plt.plot(data_point.mechanism_params.params.door_size[0], data_point.net_motion, 'b.')
+        for bb_data in data:
+            for data_point in bb_data:
+                if data_point.mechanism_params.type == 'Door':
+                    plt.plot(data_point.mechanism_params.params.door_size[0], data_point.net_motion, 'b.')
         plt.xlabel('Door Radius')
         plt.ylabel('Motion of Handle')
         plt.title('Motion of Doors')
@@ -293,11 +294,11 @@ class ConfigHist(PlotFunc):
         ax.hist(config_ps, 20, edgecolor='black', histtype='bar')
         plt.grid(b=True, which='major', color='#666666', linestyle='-')
 
-class MotionHist(PlotFunc):
+class MotionHistSlider(PlotFunc):
 
     @staticmethod
     def description():
-        return 'Histogram of generated motion as a percentage of the mechanism range'
+        return 'Histogram of generated motion as a percentage of the mechanism range (for sliders)'
 
     def _plot(self, data, model):
         fig, ax = plt.subplots()
@@ -305,6 +306,25 @@ class MotionHist(PlotFunc):
         ax.hist(config_ps, 20, edgecolor='black', histtype='bar')
         plt.grid(b=True, which='major', color='#666666', linestyle='-')
         ax.set_xlabel('Generated Motion as a % of Slider Length')
+
+class MotionHistDoor(PlotFunc):
+
+    @staticmethod
+    def description():
+        return 'Histogram of generated motion as a percentage of the mechanism range (for doors)'
+
+    def _plot(self, data, model):
+        fig, ax = plt.subplots()
+        motion_percs = []
+        for bb_data in data:
+            bb = BusyBox.bb_from_result(bb_data[0])
+            mech = bb._mechanisms[0]
+            max_dist = mech.get_max_dist()
+            for point in bb_data:
+                motion_percs += [point.net_motion/max_dist]
+        ax.hist(motion_percs, 20, edgecolor='black', histtype='bar')
+        plt.grid(b=True, which='major', color='#666666', linestyle='-')
+        ax.set_xlabel('Generated Motion as a % of Door Max Motion')
 
 class TestMechs(PlotFunc):
 
@@ -326,7 +346,7 @@ class TestMechs(PlotFunc):
             limits += [mech.range/2.0]
             mech_tuple = mech.get_mechanism_tuple()
             for j in range(n_samples):
-                random_policy = policies.generate_policy(bb, mech, True, 1.0)
+                random_policy = policies.generate_policy(bb, mech, False, 1.0)
                 policy_type = random_policy.type
                 policy_tuple = random_policy.get_policy_tuple()
                 delta_yaws[i,j] = policy_tuple.delta_values.delta_yaw
@@ -380,7 +400,7 @@ class TestMechPolicies(PlotFunc):
         for i in range(len(d_pitches)):
             for j in range(len(d_yaw)):
                 util.setup_pybullet.setup_env(bb, False, False)
-                random_policy = policies.generate_policy(bb, mech, True, randomness)
+                random_policy = policies.generate_policy(bb, mech, False, randomness)
                 random_policy.pitch = random_policy.pitch - random_policy.delta_pitch + d_pitches[i]
                 random_policy.yaw = random_policy.yaw - random_policy.delta_yaw + d_yaw[j]
                 random_policy.delta_pitch = d_pitches[i]
@@ -467,7 +487,7 @@ class TestMechPoliciesPitchOnly(PlotFunc):
             #print(mech_tuple)
             for i in range(len(d_pitches)):
                 image_data = util.setup_pybullet.setup_env(bb, False, False, show_im=False)
-                random_policy = policies.generate_policy(bb, mech, True, randomness)
+                random_policy = policies.generate_policy(bb, mech, False, randomness)
                 random_policy.pitch = random_policy.pitch - random_policy.delta_pitch + d_pitches[i]
                 random_policy.delta_pitch = d_pitches[i]
                 policy_tuple = random_policy.get_policy_tuple()
@@ -555,7 +575,7 @@ class TestMechsPitch(PlotFunc):
                 gripper = Gripper()
 
                 # random policy
-                random_policy = policies.generate_policy(bb, mech, True, 1.0)
+                random_policy = policies.generate_policy(bb, mech, False, 1.0)
                 config_goal = limits[i]
 
                 # get true motion
@@ -620,14 +640,15 @@ class ValError(PlotFunc):
 
 def print_stats(data):
     stats = {}
-    for data_point in data:
-        mech_type = data_point.mechanism_params.type
-        policy_type = data_point.policy_params.type
-        key = (mech_type, policy_type)
-        if key not in stats:
-            stats[key] = 1
-        else:
-            stats[key] += 1
+    for bb_data in data:
+        for data_point in bb_data:
+            mech_type = data_point.mechanism_params.type
+            policy_type = data_point.policy_params.type
+            key = (mech_type, policy_type)
+            if key not in stats:
+                stats[key] = 1
+            else:
+                stats[key] += 1
     print('Stats on the dataset')
     for (key, val) in stats.items():
         sys.stdout.write('  %s mech, %s policy: %i\n' % (*key, val))

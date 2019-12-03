@@ -20,6 +20,7 @@ def get_models(L, models_path):
 def evaluate_models(n_interactions, n_bbs, args, use_cuda=False):
     with open(args.bb_fname, 'rb') as handle:
         bb_data = pickle.load(handle)
+    bb_data = [bb_results[0] for bb_results in bb_data][:n_bbs]
 
     all_results = {}
     for L in range(args.Ls[0], args.Ls[1]+1, args.Ls[2]):
@@ -30,7 +31,7 @@ def evaluate_models(n_interactions, n_bbs, args, use_cuda=False):
             for ix, bb_result in enumerate(bb_data[:n_bbs]):
                 if args.debug:
                     print('BusyBox', ix)
-                dataset, avg_regret, gp = create_single_bb_gpucb_dataset(bb_result, n_interactions, model, args.plot, args)
+                dataset, avg_regret, gp = create_single_bb_gpucb_dataset(bb_result, n_interactions, model, args.plot, args, ix)
                 nn = util.load_model(model, args.hdim, use_cuda=False)
                 regret = test_model(gp, bb_result, args, nn, use_cuda=use_cuda, urdf_num=args.urdf_num)
                 all_model_test_regrets.append(regret)
@@ -96,6 +97,9 @@ if __name__ == '__main__':
         nargs=3,
         type=int,
         help='min max step of Ls')
+    parser.add_argument(
+        '--no-gripper',
+        action='store_true')
     args = parser.parse_args()
 
     if args.debug:

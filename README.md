@@ -10,7 +10,7 @@ TODO
 
 #### Random Exploration
 
-To generate random datasets use the module ```gen.generate_random_dataset``` with the following arguments:
+To generate random datasets use the module ```gen.generate_policy_data``` with the following arguments:
 
 Argument | Type | Description | Default
 --- | --- | --- | ---
