@@ -77,7 +77,9 @@ if __name__ == '__main__':
                 std_successes += [get_success(all_L_regrets, std=True)]
 
             bot, mid, top = q25_regrets, median_regrets, q75_regrets  # Quantiles
-            # bot, mid, top = rs - s, rs, rs + s  # Standard Deviation
+            #bot, mid, top = np.subtract(mean_regrets, std_dev_regrets), \
+            #                mean_regrets, \
+            #                np.add(mean_regrets, std_dev_regrets)  # Standard Deviation
             # bot, mid, top = p - p_std, p, p + p_std  # Success
 
             plt.figure()

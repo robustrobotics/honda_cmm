@@ -31,7 +31,13 @@ def evaluate_models(n_interactions, n_bbs, args, use_cuda=False):
             for ix, bb_result in enumerate(bb_data[:n_bbs]):
                 if args.debug:
                     print('BusyBox', ix)
-                dataset, avg_regret, gp = create_single_bb_gpucb_dataset(bb_result, n_interactions, model, args.plot, args, ix)
+                dataset, avg_regret, gp = create_single_bb_gpucb_dataset(bb_result,
+                                            n_interactions,
+                                            model,
+                                            args.plot,
+                                            args,
+                                            ix,
+                                            plot_dir_prefix='L'+str(L))
                 nn = util.load_model(model, args.hdim, use_cuda=False)
                 regret = test_model(gp, bb_result, args, nn, use_cuda=use_cuda, urdf_num=args.urdf_num)
                 all_model_test_regrets.append(regret)

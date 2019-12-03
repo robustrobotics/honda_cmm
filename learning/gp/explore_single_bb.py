@@ -538,7 +538,7 @@ def viz_gp(gp, result, num, bb, nn=None):
     # plt.savefig('gp_estimates_tuned_%d.png' % num)
 '''
 
-def viz_circles(image_data, mech, points=[], gp=None, nn=None, bb_i=0):
+def viz_circles(image_data, mech, points=[], gp=None, nn=None, bb_i=0, plot_dir_prefix=''):
     policy_plot_data = Policy.get_plot_data(mech)
 
     n_angular = 40
@@ -606,16 +606,16 @@ def viz_circles(image_data, mech, points=[], gp=None, nn=None, bb_i=0):
                         xpred_rowi += 1
 
 
-                Y_pred = np.zeros((X_pred.shape[0], 1))
+                Y_pred = np.zeros((X_pred.shape[0]))
                 if not gp is None:
-                    Y_pred += gp.predict(X_pred)
+                    Y_pred = np.add(Y_pred, gp.predict(X_pred))
                 if not nn is None:
                     type = 'Revolute' if mech.mechanism_type == 'Door' else 'Prismatic'
                     loader = format_batch(type, X_pred, mech, image_data)
                     k, x, q, im, _, _ = next(iter(loader))
                     pol = torch.Tensor([util.name_lookup[k[0]]])
                     nn_preds = nn(pol, x, q, im)[0].detach().numpy()
-                    Y_pred += nn_preds
+                    Y_pred = np.add(Y_pred, nn_preds.squeeze())
                 mean_colors = Y_pred.reshape(n_angular, n_linear)
 
                 row_col = [o[0]+1 for o in other_val_and_ind]
@@ -632,13 +632,20 @@ def viz_circles(image_data, mech, points=[], gp=None, nn=None, bb_i=0):
                 im = polar_plots(ax, mean_colors, max_dist, angular_param,
                                 linear_param, points=points, colorbar=False)
             add_colorbar(fig, im)
-            if not os.path.isdir('gp_plots'):
-                os.mkdir('gp_plots')
-            if not os.path.isdir('gp_plots/bb_%i' % (bb_i)):
-                os.mkdir('gp_plots/bb_%i' % (bb_i))
-            if not os.path.isdir('gp_plots/bb_%i/%s' % (bb_i, angular_param.param_name+linear_param.param_name)):
-                os.mkdir('gp_plots/bb_%i/%s' % (bb_i, angular_param.param_name+linear_param.param_name))
-            plt.savefig('gp_plots/bb_%i/%s/%i.png' % (bb_i, angular_param.param_name+linear_param.param_name, len(points)))
+            plot_dir = 'gp_plots/'
+            if not os.path.isdir(plot_dir):
+                os.mkdir(plot_dir)
+            if plot_dir_prefix is not '':
+                plot_dir += plot_dir_prefix
+                if not os.path.isdir(plot_dir):
+                    os.mkdir(plot_dir)
+            plot_dir += '/bb_%i' % bb_i
+            if not os.path.isdir(plot_dir):
+                os.mkdir(plot_dir)
+            plot_dir += '/%s' % angular_param.param_name+linear_param.param_name
+            if not os.path.isdir(plot_dir):
+                os.mkdir(plot_dir)
+            plt.savefig(plot_dir+'/%i.png' % (len(points)))
 
     #plt.show()
     #input('Enter to close plots')
@@ -737,7 +744,8 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
         with open(args.fname, 'wb') as handle:
             pickle.dump(dataset, handle)
 
-def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, args, bb_i):
+def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, args, bb_i,
+                                    plot_dir_prefix=''):
     dataset = []
 
     # interact with BB
@@ -767,7 +775,8 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
 
     if plot:
         policy_plot_data = Policy.get_plot_data(mech)
-        viz_circles(image_data, mech, points=sampler.xs, gp=sampler.gp, nn=sampler.nn, bb_i=bb_i)
+        viz_circles(image_data, mech, points=sampler.xs, gp=sampler.gp, nn=sampler.nn, \
+                    bb_i=bb_i, plot_dir_prefix=plot_dir_prefix)
         # viz_plots(sampler.xs, sampler.ys, sampler.gp)
         # visualize final optimal policy
     test_regret = test_model(sampler.gp, bb_result, args, viz=False)
