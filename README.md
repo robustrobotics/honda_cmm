@@ -80,7 +80,7 @@ Argument | Type | Description | Default
 ```---type``` | string | used to identify these results for regret plotting (eg. random, random_doors, gpucb_sliders, gpucb, etc...). **the string must contain a substring in [random, gpucb, systematic, or active] to select the line plotting color later)**| required
 ```--hdim``` | int | number of hidden units and feature points in given model (needed to load pyTorch model) | 16
 ```--bb-fname``` | string | if specified, the file path of the results dataset with the desired Busyboxes for evaluation, else (None) random Busyboxes are generated for this dataset | None
-```--plot``` | bool | if True then visualize GP plots during interaction | False
+```--plot``` | bool | if True then save visualizations of reward function polar plots, GP samples, and optimization results to ```gp_plots/``` during interaction | False
 ```--n-gp-samples``` | int | the number of samples to use when initializing an optimization seed | 500
 
 ### Plotting Regret Results
