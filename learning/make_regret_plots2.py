@@ -19,10 +19,7 @@ def get_success(regrets, std=False):
     p = np.mean(success)
     p_std = np.sqrt(p*(1-p)/len(success))
 
-    if std:
-        return p_std
-    else:
-        return p
+    return p, p_std
 
 def get_result_file(type_name, results_path):
     all_files = os.walk(results_path)
@@ -73,24 +70,30 @@ if __name__ == '__main__':
                 std_dev_regrets += [np.std(all_L_regrets)]
                 q25_regrets += [np.quantile(all_L_regrets, 0.25)]
                 q75_regrets += [np.quantile(all_L_regrets, 0.75)]
-                prob_successes += [get_success(all_L_regrets)]
-                std_successes += [get_success(all_L_regrets, std=True)]
+                prob_success, std_success = get_success(all_L_regrets)
+                prob_successes += [prob_success]
+                std_successes += [std_success]
 
-            bot, mid, top = q25_regrets, median_regrets, q75_regrets  # Quantiles
-            #bot, mid, top = np.subtract(mean_regrets, std_dev_regrets), \
-            #                mean_regrets, \
-            #                np.add(mean_regrets, std_dev_regrets)  # Standard Deviation
-            # bot, mid, top = p - p_std, p, p + p_std  # Success
+            med_bot, med_mid, med_top = q25_regrets, median_regrets, q75_regrets  # Quantiles
+            mean_bot, mean_mid, mean_top = np.subtract(mean_regrets, std_dev_regrets), \
+                            mean_regrets, \
+                            np.add(mean_regrets, std_dev_regrets)  # Standard Deviation
+            succ_bot, succ_mid, succ_top = np.subtract(prob_successes, std_successes), \
+                            prob_successes, \
+                            np.add(prob_successes, std_successes)  # Success
 
-            plt.figure()
-            plt.plot(Ls, mid, c=plot_info[name][0], label=plot_info[name][1])
-            plt.fill_between(Ls, bot, top, facecolor=plot_info[name][0], alpha=0.2)
+            for (bot, mid, top, type) in ((med_bot, med_mid, med_top, 'Median Regret'),\
+                                    (mean_bot, mean_mid, mean_top, 'Mean Regret'),\
+                                    (succ_bot, succ_mid, succ_top, '% Success')):
+                plt.figure()
+                plt.plot(Ls, mid, c=plot_info[name][0], label=plot_info[name][1])
+                plt.fill_between(Ls, bot, top, facecolor=plot_info[name][0], alpha=0.2)
 
-            plt.ylim(0, 1)
-            plt.legend()
-            plt.xlabel('L')
-            plt.ylabel('Regret')
-            plt.title('Test Regret after T=%s Interactions on N=%s Mechanisms' % (T, N))
+                plt.ylim(0, 1)
+                plt.legend()
+                plt.xlabel('L')
+                plt.ylabel(type)
+                plt.title('Evaluated on T=%s Interactions on N=%s Mechanisms' % (T, N))
 
             plt.show()
             input('enter to close')
