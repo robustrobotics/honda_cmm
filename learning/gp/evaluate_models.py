@@ -2,6 +2,7 @@ import pickle
 import argparse
 import os
 import numpy as np
+import re
 from learning.gp.explore_single_bb import create_single_bb_gpucb_dataset, GPOptimizer, test_model
 from utils import util, setup_pybullet
 from gen.generator_busybox import BusyBox
@@ -13,9 +14,11 @@ def get_models(L, models_path):
     for root, subdir, files in all_files:
         for file in files:
             if (file[-3:] == '.pt') and ('_'+str(L)+'L_' in file):
+                M_result = re.search('(.*)/(.*)M/(.*)', root)
+                M = M_result.group(2)
                 full_path = root+'/'+file
                 models.append(full_path)
-    return models
+    return models, M
 
 def evaluate_models(n_interactions, n_bbs, args, use_cuda=False):
     with open(args.bb_fname, 'rb') as handle:
@@ -24,7 +27,7 @@ def evaluate_models(n_interactions, n_bbs, args, use_cuda=False):
 
     all_results = {}
     for L in range(args.Ls[0], args.Ls[1]+1, args.Ls[2]):
-        models = get_models(L, args.models_path)
+        models, M = get_models(L, args.models_path)
         all_L_results = {}
         for model in models:
             all_model_test_regrets = []
@@ -48,9 +51,10 @@ def evaluate_models(n_interactions, n_bbs, args, use_cuda=False):
                 print('Final Regret  :', np.mean(all_model_test_regrets))
             all_L_results[model] = all_model_test_regrets
         if len(models) > 0:
-            # TODO: this shouldn't be hard coded to 100 interactions per BB
-            all_results[L/100] =  all_L_results
-    util.write_to_file('regret_results_%s_%dT_%dN.pickle' % (args.type, n_interactions, n_bbs), all_results, verbose=True)
+            all_results[L] =  all_L_results
+    util.write_to_file('regret_results_%s_%dT_%dN_%sM.pickle' % (args.type, n_interactions, n_bbs, M),
+                        all_results,
+                        verbose=True)
 
 
 if __name__ == '__main__':
