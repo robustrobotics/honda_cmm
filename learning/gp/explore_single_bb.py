@@ -208,35 +208,34 @@ def objective_func(x, policy_type, image_tensor, model, use_cuda):
     val = val.squeeze()
     return val
 
-def test_model(sampler, bb_result, args, nn=None, use_cuda=False, urdf_num=0, viz=False, ret_x=False):
+def test_model(sampler, args):
     """
     Maximize the GP mean function to get the best policy.
-    :param gp: A GP fit to the current BusyBox.
-    :param result: Result representing the current BusyBox.
+    :param sampler: A GP fit to the current BusyBox.
     :return: Regret.
     """
-    # Optimize the GP to get the best result.
-    bb = BusyBox.bb_from_result(bb_result, urdf_num=urdf_num)
-    image_data, gripper = setup_env(bb, viz, False, args.no_gripper)
+    # Optimize the GP to get the best policy.
     ucb = False
     policy, q, start_policy, start_q = sampler.optim.optimize_gp(ucb)
 
     # Execute the policy and observe the true motion.
-    mech = bb._mechanisms[0]
-    pose_handle_base_world = mech.get_pose_handle_base_world()
-
-    traj = policy.generate_trajectory(pose_handle_base_world, q, debug=True)
-    _, motion, _ = gripper.execute_trajectory(traj, mech, policy.type, debug=False)
+    debug = False
+    viz = False
+    _, gripper = setup_env(sampler.bb, viz, debug, args.no_gripper)
+    pose_handle_base_world = sampler.mech.get_pose_handle_base_world()
+    traj = policy.generate_trajectory(pose_handle_base_world, q, debug=debug)
+    _, motion, _ = gripper.execute_trajectory(traj, sampler.mech, policy.type, debug=debug)
 
     # Calculate the regret.
-    max_d = bb._mechanisms[0].get_max_dist()
+    max_d = sampler.mech.get_max_dist()
     regret = (max_d - motion)/max_d
 
+    # Get the initial and final x from the optimization.
     start_result = util.Result(start_policy.get_policy_tuple(), None, 0.0, 0.0,
-                           None, None, start_q, image_data, None, 1.0, args.no_gripper)
+                           None, None, start_q, None, None, 1.0, None)
     start_x = get_x_from_result(start_result)
     stop_result = util.Result(policy.get_policy_tuple(), None, 0.0, 0.0,
-                           None, None, q, image_data, None, 1.0, args.no_gripper)
+                           None, None, q, None, None, 1.0, None)
     stop_x = get_x_from_result(stop_result)
     return regret, start_x, stop_x
 
@@ -371,11 +370,12 @@ class UCB_Interaction(object):
         if nn_fname != '':
             self.nn = util.load_model(nn_fname, args.hdim, use_cuda=False)
         self.bb = bb
+        self.image_data = image_data
         self.mech = self.bb._mechanisms[0]
         self.kernel = self.get_kernel()
         self.gp = GaussianProcessRegressor(kernel=self.kernel,
                               n_restarts_optimizer=10)
-        self.optim = GPOptimizer(args.urdf_num, self.bb, image_data, args.n_gp_samples, BETA, self.gp, nn=self.nn)
+        self.optim = GPOptimizer(args.urdf_num, self.bb, self.image_data, args.n_gp_samples, BETA, self.gp, nn=self.nn)
 
     def get_kernel(self):
         # TODO: in the future will want the GP to take in all types of policy
@@ -783,16 +783,7 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
     opt_points = []
     sample_points = []
     if ret_regret:
-        if nn_fname is not '':
-            nn = util.load_model(nn_fname, args.hdim, use_cuda=False)
-        else:
-            nn = None
-        regret, start_x, stop_x = test_model(sampler,
-                                bb_result,
-                                args,
-                                nn,
-                                use_cuda=False,
-                                urdf_num=args.urdf_num)
+        regret, start_x, stop_x = test_model(sampler, args)
         opt_points = [(start_x, 'g'), (stop_x, 'r')]
 
     if plot:

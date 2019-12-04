@@ -3,7 +3,7 @@ import argparse
 import os
 import numpy as np
 import re
-from learning.gp.explore_single_bb import create_single_bb_gpucb_dataset, GPOptimizer, test_model
+from learning.gp.explore_single_bb import create_single_bb_gpucb_dataset, GPOptimizer
 from utils import util, setup_pybullet
 from gen.generator_busybox import BusyBox
 from actions.gripper import Gripper
