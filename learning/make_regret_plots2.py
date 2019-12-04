@@ -46,7 +46,7 @@ if __name__ == '__main__':
         'active': ['k', 'Train-Active'],
         'gpucb': ['r', 'Train-GP-UCB'],
         'systematic': ['b', 'Systematic'],
-        'doors_random': ['c', 'Train-Random']
+        'random': ['c', 'Train-Random']
     }
     plt.ion()
     for name in args.types:
@@ -86,8 +86,11 @@ if __name__ == '__main__':
                                     (mean_bot, mean_mid, mean_top, 'Mean Regret'),\
                                     (succ_bot, succ_mid, succ_top, '% Success')):
                 plt.figure()
-                plt.plot(Ls, mid, c=plot_info[name][0], label=plot_info[name][1])
-                plt.fill_between(Ls, bot, top, facecolor=plot_info[name][0], alpha=0.2)
+                for plot_type in plot_info:
+                    if plot_type in name:
+                        plot_params = plot_info[plot_type]
+                plt.plot(Ls, mid, c=plot_params[0], label=plot_params[1])
+                plt.fill_between(Ls, bot, top, facecolor=plot_params[0], alpha=0.2)
 
                 plt.ylim(0, 1)
                 plt.legend()
