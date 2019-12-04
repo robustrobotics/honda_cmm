@@ -208,7 +208,7 @@ def objective_func(x, policy_type, image_tensor, model, use_cuda):
     val = val.squeeze()
     return val
 
-def test_model(gp, bb_result, args, nn=None, use_cuda=False, urdf_num=0, viz=False, ret_x=False):
+def test_model(sampler, bb_result, args, nn=None, use_cuda=False, urdf_num=0, viz=False, ret_x=False):
     """
     Maximize the GP mean function to get the best policy.
     :param gp: A GP fit to the current BusyBox.
@@ -219,8 +219,7 @@ def test_model(gp, bb_result, args, nn=None, use_cuda=False, urdf_num=0, viz=Fal
     bb = BusyBox.bb_from_result(bb_result, urdf_num=urdf_num)
     image_data, gripper = setup_env(bb, viz, False, args.no_gripper)
     ucb = False
-    optim_gp = GPOptimizer(urdf_num, bb, image_data, args.n_gp_samples, BETA, ucb, gp, nn)
-    policy, q, start_policy, start_q = optim_gp.optimize_gp()
+    policy, q, start_policy, start_q = sampler.optim.optimize_gp(ucb)
 
     # Execute the policy and observe the true motion.
     mech = bb._mechanisms[0]
@@ -243,7 +242,7 @@ def test_model(gp, bb_result, args, nn=None, use_cuda=False, urdf_num=0, viz=Fal
 
 class GPOptimizer(object):
 
-    def __init__(self, urdf_num, bb, image_data, n_samples, beta, ucb, gp, nn=None):
+    def __init__(self, urdf_num, bb, image_data, n_samples, beta, gp, nn=None):
         """
         Initialize one of these for each BusyBox.
         """
@@ -252,7 +251,6 @@ class GPOptimizer(object):
         self.nn = nn
         self.mech = bb._mechanisms[0]
         self.beta = beta
-        self.ucb = ucb
         self.gp = gp
 
         # Generate random policies.
@@ -287,7 +285,7 @@ class GPOptimizer(object):
 
         return [policy_type_tensor, policy_tensor, config_tensor, image_tensor]
 
-    def _objective_func(self, x, policy_type, image_tensor=None):
+    def _objective_func(self, x, policy_type, ucb, image_tensor=None):
         x = x.squeeze()
 
         X = np.array(get_policy_list(policy_type, x))
@@ -299,30 +297,29 @@ class GPOptimizer(object):
             val = val.detach().numpy()
             Y_pred += val.squeeze()
 
-        if self.ucb:
+        if ucb:
             obj = -Y_pred[0] - np.sqrt(self.beta) * Y_std[0]
         else:
             obj = -Y_pred[0]
 
         return obj
 
-    def _get_pred_motions(self, data, nn_preds=None):
+    def _get_pred_motions(self, data, ucb, nn_preds=None):
         X, Y = process_data(data, len(data))
         y_pred, y_std = self.gp.predict(X, return_std=True)
 
         if not nn_preds is None:
             y_pred += np.array(nn_preds)
 
-        if self.ucb:
+        if ucb:
             return y_pred + np.sqrt(self.beta) * y_std, self.dataset
         else:
             return y_pred, self.dataset
 
-    def optimize_gp(self):
+    def optimize_gp(self, ucb):
         """
         Find the input (policy) that maximizes the GP (+ NN) output.
-        :param result: util.Result tuple containing the BusyBox object.
-        :param nn: If not None, optimize gp(.) + nn(.).
+        :param ucb: If True use the GP-UCB criterion
         :return: x_final, the optimal policy according to the current model.
         """
         samples = []
@@ -330,7 +327,7 @@ class GPOptimizer(object):
         # Generate random policies.
         for res, nn_preds in zip(self.sample_policies, self.nn_samples):
             # Get predictions from the GP.
-            sample_disps, dataset = self._get_pred_motions(res, nn_preds=nn_preds)
+            sample_disps, dataset = self._get_pred_motions(res, ucb, nn_preds=nn_preds)
 
             samples.append(((res[0].policy_params.type,
                              res[0].policy_params,
@@ -350,7 +347,7 @@ class GPOptimizer(object):
         x0, bounds = get_reduced_x_and_bounds(policy_type_max, params_max, q_max, policy_data)
         start_policy = get_policy_from_x(policy_type_max, x0, self.mech)
         start_q = q_max
-        opt_res = minimize(fun=self._objective_func, x0=x0, args=(policy_type_max, images),
+        opt_res = minimize(fun=self._objective_func, x0=x0, args=(policy_type_max, ucb, images),
                        method='L-BFGS-B', options={'eps': 10**-3}, bounds=bounds)
         x_final = opt_res['x']
         stop_policy = get_policy_from_x(policy_type_max, x_final, self.mech)
@@ -378,7 +375,7 @@ class UCB_Interaction(object):
         self.kernel = self.get_kernel()
         self.gp = GaussianProcessRegressor(kernel=self.kernel,
                               n_restarts_optimizer=10)
-        self.optim = GPOptimizer(args.urdf_num, self.bb, image_data, args.n_gp_samples, BETA, True, self.gp, nn=self.nn)
+        self.optim = GPOptimizer(args.urdf_num, self.bb, image_data, args.n_gp_samples, BETA, self.gp, nn=self.nn)
 
     def get_kernel(self):
         # TODO: in the future will want the GP to take in all types of policy
@@ -427,7 +424,8 @@ class UCB_Interaction(object):
             q = policy.generate_config(self.mech, None)
         else:
             # (b) Choose policy using UCB bound.
-            policy, q, _, _ = self.optim.optimize_gp()
+            ucb = True
+            policy, q, _, _ = self.optim.optimize_gp(ucb)
             print(policy.get_policy_tuple())
 
         self.ix += 1
@@ -789,7 +787,7 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
             nn = util.load_model(nn_fname, args.hdim, use_cuda=False)
         else:
             nn = None
-        regret, start_x, stop_x = test_model(sampler.gp,
+        regret, start_x, stop_x = test_model(sampler,
                                 bb_result,
                                 args,
                                 nn,
