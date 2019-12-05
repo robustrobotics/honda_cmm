@@ -274,8 +274,8 @@ class Door(Mechanism):
                              urdf.Geometry(
                                  urdf.Cylinder(radius=handle_radius, length=self.handle_length)
                              ),
-                             urdf.Material('door_{0}_color'.format(name),
-                                           urdf.Color(rgba=(color[0], color[1], color[2], 1.0))
+                             urdf.Material('door_{0}_handle_color'.format(name),
+                                           urdf.Color(rgba=(color[0]*0.5, color[1]*0.5, color[2]*0.5, 1.0))
                              )
                          ))
 
