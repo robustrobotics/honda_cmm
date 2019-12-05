@@ -208,42 +208,40 @@ def objective_func(x, policy_type, image_tensor, model, use_cuda):
     val = val.squeeze()
     return val
 
-def test_model(gp, bb_result, args, nn=None, use_cuda=False, urdf_num=0, viz=False, ret_x=False):
+def test_model(sampler, args):
     """
     Maximize the GP mean function to get the best policy.
-    :param gp: A GP fit to the current BusyBox.
-    :param result: Result representing the current BusyBox.
+    :param sampler: A GP fit to the current BusyBox.
     :return: Regret.
     """
-    # Optimize the GP to get the best result.
-    bb = BusyBox.bb_from_result(bb_result, urdf_num=urdf_num)
-    image_data, gripper = setup_env(bb, viz, False, args.no_gripper)
+    # Optimize the GP to get the best policy.
     ucb = False
-    optim_gp = GPOptimizer(urdf_num, bb, image_data, args.n_gp_samples, BETA, ucb, gp, nn)
-    policy, q = optim_gp.optimize_gp()
+    policy, q, start_policy, start_q = sampler.optim.optimize_gp(ucb)
 
     # Execute the policy and observe the true motion.
-    mech = bb._mechanisms[0]
-    pose_handle_base_world = mech.get_pose_handle_base_world()
-
-    traj = policy.generate_trajectory(pose_handle_base_world, q, debug=True)
-    _, motion, _ = gripper.execute_trajectory(traj, mech, policy.type, debug=False)
+    debug = False
+    viz = False
+    _, gripper = setup_env(sampler.bb, viz, debug, args.no_gripper)
+    pose_handle_base_world = sampler.mech.get_pose_handle_base_world()
+    traj = policy.generate_trajectory(pose_handle_base_world, q, debug=debug)
+    _, motion, _ = gripper.execute_trajectory(traj, sampler.mech, policy.type, debug=debug)
 
     # Calculate the regret.
-    max_d = bb._mechanisms[0].get_max_dist()
+    max_d = sampler.mech.get_max_dist()
     regret = (max_d - motion)/max_d
 
-    if ret_x:
-        result = util.Result(policy.get_policy_tuple(), None, 0.0, 0.0,
-                               None, None, q, image_data, None, 1.0, args.no_gripper)
-        x = get_x_from_result(result)
-        return regret, x
-    else:
-        return regret
+    # Get the initial and final x from the optimization.
+    start_result = util.Result(start_policy.get_policy_tuple(), None, 0.0, 0.0,
+                           None, None, start_q, None, None, 1.0, None)
+    start_x = get_x_from_result(start_result)
+    stop_result = util.Result(policy.get_policy_tuple(), None, 0.0, 0.0,
+                           None, None, q, None, None, 1.0, None)
+    stop_x = get_x_from_result(stop_result)
+    return regret, start_x, stop_x
 
 class GPOptimizer(object):
 
-    def __init__(self, urdf_num, bb, image_data, n_samples, beta, ucb, gp, nn=None):
+    def __init__(self, urdf_num, bb, image_data, n_samples, beta, gp, nn=None):
         """
         Initialize one of these for each BusyBox.
         """
@@ -252,7 +250,6 @@ class GPOptimizer(object):
         self.nn = nn
         self.mech = bb._mechanisms[0]
         self.beta = beta
-        self.ucb = ucb
         self.gp = gp
 
         # Generate random policies.
@@ -287,7 +284,7 @@ class GPOptimizer(object):
 
         return [policy_type_tensor, policy_tensor, config_tensor, image_tensor]
 
-    def _objective_func(self, x, policy_type, image_tensor=None):
+    def _objective_func(self, x, policy_type, ucb, image_tensor=None):
         x = x.squeeze()
 
         X = np.array(get_policy_list(policy_type, x))
@@ -299,30 +296,29 @@ class GPOptimizer(object):
             val = val.detach().numpy()
             Y_pred += val.squeeze()
 
-        if self.ucb:
+        if ucb:
             obj = -Y_pred[0] - np.sqrt(self.beta) * Y_std[0]
         else:
             obj = -Y_pred[0]
 
         return obj
 
-    def _get_pred_motions(self, data, nn_preds=None):
+    def _get_pred_motions(self, data, ucb, nn_preds=None):
         X, Y = process_data(data, len(data))
         y_pred, y_std = self.gp.predict(X, return_std=True)
 
         if not nn_preds is None:
             y_pred += np.array(nn_preds)
 
-        if self.ucb:
+        if ucb:
             return y_pred + np.sqrt(self.beta) * y_std, self.dataset
         else:
             return y_pred, self.dataset
 
-    def optimize_gp(self):
+    def optimize_gp(self, ucb):
         """
         Find the input (policy) that maximizes the GP (+ NN) output.
-        :param result: util.Result tuple containing the BusyBox object.
-        :param nn: If not None, optimize gp(.) + nn(.).
+        :param ucb: If True use the GP-UCB criterion
         :return: x_final, the optimal policy according to the current model.
         """
         samples = []
@@ -330,7 +326,7 @@ class GPOptimizer(object):
         # Generate random policies.
         for res, nn_preds in zip(self.sample_policies, self.nn_samples):
             # Get predictions from the GP.
-            sample_disps, dataset = self._get_pred_motions(res, nn_preds=nn_preds)
+            sample_disps, dataset = self._get_pred_motions(res, ucb, nn_preds=nn_preds)
 
             samples.append(((res[0].policy_params.type,
                              res[0].policy_params,
@@ -348,12 +344,14 @@ class GPOptimizer(object):
         policy_data = Policy.get_plot_data(self.mech)
         #print('MAX', params_max)
         x0, bounds = get_reduced_x_and_bounds(policy_type_max, params_max, q_max, policy_data)
-        opt_res = minimize(fun=self._objective_func, x0=x0, args=(policy_type_max, images),
+        start_policy = get_policy_from_x(policy_type_max, x0, self.mech)
+        start_q = q_max
+        opt_res = minimize(fun=self._objective_func, x0=x0, args=(policy_type_max, ucb, images),
                        method='L-BFGS-B', options={'eps': 10**-3}, bounds=bounds)
         x_final = opt_res['x']
-        final_policy = get_policy_from_x(policy_type_max, x_final, self.mech)
-        q = x_final[-1]
-        return final_policy, q
+        stop_policy = get_policy_from_x(policy_type_max, x_final, self.mech)
+        stop_q = x_final[-1]
+        return stop_policy, stop_q, start_policy, start_q
 
 
 class UCB_Interaction(object):
@@ -372,11 +370,12 @@ class UCB_Interaction(object):
         if nn_fname != '':
             self.nn = util.load_model(nn_fname, args.hdim, use_cuda=False)
         self.bb = bb
+        self.image_data = image_data
         self.mech = self.bb._mechanisms[0]
         self.kernel = self.get_kernel()
         self.gp = GaussianProcessRegressor(kernel=self.kernel,
                               n_restarts_optimizer=10)
-        self.optim = GPOptimizer(args.urdf_num, self.bb, image_data, args.n_gp_samples, BETA, True, self.gp, nn=self.nn)
+        self.optim = GPOptimizer(args.urdf_num, self.bb, self.image_data, args.n_gp_samples, BETA, self.gp, nn=self.nn)
 
     def get_kernel(self):
         # TODO: in the future will want the GP to take in all types of policy
@@ -425,7 +424,8 @@ class UCB_Interaction(object):
             q = policy.generate_config(self.mech, None)
         else:
             # (b) Choose policy using UCB bound.
-            policy, q = self.optim.optimize_gp()
+            ucb = True
+            policy, q, _, _ = self.optim.optimize_gp(ucb)
             print(policy.get_policy_tuple())
 
         self.ix += 1
@@ -538,7 +538,7 @@ def viz_gp(gp, result, num, bb, nn=None):
     # plt.savefig('gp_estimates_tuned_%d.png' % num)
 '''
 
-def viz_circles(image_data, mech, points=[], gp=None, nn=None, bb_i=0, plot_dir_prefix=''):
+def viz_circles(image_data, mech, sample_points=[], opt_points=[], gp=None, nn=None, bb_i=0, plot_dir_prefix=''):
     policy_plot_data = Policy.get_plot_data(mech)
 
     n_angular = 40
@@ -630,7 +630,8 @@ def viz_circles(image_data, mech, points=[], gp=None, nn=None, bb_i=0, plot_dir_
                     fontsize=10)
                 max_dist = mech.get_max_dist()
                 im = polar_plots(ax, mean_colors, max_dist, angular_param,
-                                linear_param, points=points, colorbar=False)
+                                linear_param, points=sample_points+opt_points,
+                                colorbar=False)
             add_colorbar(fig, im)
             plot_dir = 'gp_plots/'
             if not os.path.isdir(plot_dir):
@@ -645,7 +646,7 @@ def viz_circles(image_data, mech, points=[], gp=None, nn=None, bb_i=0, plot_dir_
             plot_dir += '/%s' % angular_param.param_name+linear_param.param_name
             if not os.path.isdir(plot_dir):
                 os.mkdir(plot_dir)
-            plt.savefig(plot_dir+'/%i.png' % (len(points)))
+            plt.savefig(plot_dir+'/%i.png' % (len(sample_points)))
 
     #plt.show()
     #input('Enter to close plots')
@@ -677,9 +678,9 @@ def polar_plots(ax, colors, vmax, angular_param, linear_param, points=None, colo
     #ax.set_yticklabels([])
 
     if not points is None:
-        for x in points:
+        for (x, c) in points:
             point = get_point_from_x(x, linear_param, angular_param, type)
-            ax.scatter(*point, c='r', s=3)
+            ax.scatter(*point, c=c, s=3)
 
     return cbar
 
@@ -703,10 +704,10 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
                                     n_bbs=n_bbs,
                                     n_samples=1,
                                     viz=False,
-                                    match_policies=True,
+                                    random_policies=False,
                                     randomness=1.0,
                                     goal_config=None,
-                                    bb_file=None,
+                                    bb_fname=None,
                                     no_gripper=args.no_gripper)
         busybox_data = generate_dataset(bb_dataset_args, None)
         print('BusyBoxes created.')
@@ -732,7 +733,13 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
     print(len(busybox_data), len(busybox_data[0]))
     for ix, bb_results in enumerate(busybox_data):
         bb_result = bb_results[0]
-        single_dataset, r, _ = create_single_bb_gpucb_dataset(bb_result, n_interactions, '', args.plot, args, ix)
+        single_dataset, _, r = create_single_bb_gpucb_dataset(bb_result,
+                                n_interactions,
+                                '',
+                                args.plot,
+                                args,
+                                ix,
+                                ret_regret=True)
         dataset.extend(single_dataset)
         regrets.append(r)
         print('Interacted with BusyBox %d.' % ix)
@@ -745,7 +752,7 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
             pickle.dump(dataset, handle)
 
 def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, args, bb_i,
-                                    plot_dir_prefix=''):
+                                    plot_dir_prefix='', ret_regret=False):
     dataset = []
 
     # interact with BB
@@ -773,15 +780,24 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
         if ix % 5 == 0:
             viz_plots(sampler.xs, sampler.ys, sampler.gp)
 
+    opt_points = []
+    sample_points = []
+    if ret_regret:
+        regret, start_x, stop_x = test_model(sampler, args)
+        opt_points = [(start_x, 'g'), (stop_x, 'r')]
+
     if plot:
         policy_plot_data = Policy.get_plot_data(mech)
-        viz_circles(image_data, mech, points=sampler.xs, gp=sampler.gp, nn=sampler.nn, \
+        sample_points = [(sample, 'r') for sample in sampler.xs]
+        viz_circles(image_data, mech, sample_points=sample_points, opt_points=opt_points,
+                    gp=sampler.gp, nn=sampler.nn, \
                     bb_i=bb_i, plot_dir_prefix=plot_dir_prefix)
         # viz_plots(sampler.xs, sampler.ys, sampler.gp)
-        # visualize final optimal policy
-    test_regret = test_model(sampler.gp, bb_result, args, viz=False)
-    # return dataset, sampler.calc_avg_regret(), sampler.gp
-    return dataset, test_regret, sampler.gp
+
+    if ret_regret:
+        return dataset, sampler.gp, regret
+    else:
+        return dataset, sampler.gp
 
 def viz_plots(xs, ys, gp):
     print(xs)

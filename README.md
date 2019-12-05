@@ -69,23 +69,23 @@ Argument | Type | Description | Default
 
 ### Evaluation using GP-UCB (generating regret results files)
 
-To evaluate models use the module learning.gp.evaluate_models with the following arguments:
+To evaluate models use the module ```learning.gp.evaluate_models``` with the following arguments:
 
 Argument | Type | Description | Default
 --- | --- | --- | ---
 ```--T``` | int | number of Busyboxes to average over when calculating regrets | required
 ```--N``` | int | number of interactions per Busybox to learn residual reward function | required
 ```--models-path``` | string | path to model files. **ALL files ending .pt in this directory will be evaluated** | required
-```--Ls``` | list of 3 ints | [min, step, max] of Ls to evaluate (used when searching for correct model files in models-path) | required
+```--Ls``` | list of 3 ints | [min, max, step] of Ls to evaluate (used when searching for correct model files in models-path) | required
 ```---type``` | string | used to identify these results for regret plotting (eg. random, random_doors, gpucb_sliders, gpucb, etc...). **the string must contain a substring in [random, gpucb, systematic, or active] to select the line plotting color later)**| required
 ```--hdim``` | int | number of hidden units and feature points in given model (needed to load pyTorch model) | 16
 ```--bb-fname``` | string | if specified, the file path of the results dataset with the desired Busyboxes for evaluation, else (None) random Busyboxes are generated for this dataset | None
-```--plot``` | bool | if True then visualize GP plots during interaction | False
+```--plot``` | bool | if True then save visualizations of reward function polar plots, GP samples, and optimization results to ```gp_plots/``` during interaction **(WARNING: this slows down the evaluation quite a bit)**| False
 ```--n-gp-samples``` | int | the number of samples to use when initializing an optimization seed | 500
 
 ### Plotting Regret Results
 
-To generate regret plots use the module learning.make_regret_plots2 with the following arguments:
+To generate regret plots use the module ```learning.make_regret_plots2``` with the following arguments:
 
 Argument | Type | Description | Default
 --- | --- | --- | ---
