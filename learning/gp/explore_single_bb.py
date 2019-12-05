@@ -62,10 +62,9 @@ def get_policy_from_x(type, x, mech):
             rot_axis_pitch = 0.0
         rot_axis_world = util.quaternion_from_euler(rot_axis_roll, rot_axis_pitch, 0.0)
         #radius_x = x[1]
-        p_handle_base_world = mech.get_pose_handle_base_world().p
-        p_rot_center_world_true = mech.get_rot_center()
-        radius_x = abs(np.subtract(p_handle_base_world, p_rot_center_world_true)[0])
+        radius_x = mech.get_radius_x()
         radius = [-radius_x, 0.0, 0.0]
+        p_handle_base_world = mech.get_pose_handle_base_world().p
         p_rot_center_world = p_handle_base_world + util.transformation(radius, [0., 0., 0.], rot_axis_world)
         rot_orn = [0., 0., 0., 1.]
         return Revolute(p_rot_center_world,
@@ -123,19 +122,24 @@ def get_reduced_x_and_bounds(policy_type, policy_params, q, policy_data):
 
 # this takes in an optimization x and returns the tensor of just the policy
 # params
-def get_policy_tensor(policy_type, x):
-    policy_list = [get_policy_list(policy_type, x)[0][:-1]]
+def get_policy_tensor(policy_type, x, mech):
+    policy_list = [get_policy_list(policy_type, x, mech)[0][:-1]]
     if policy_type == 'Prismatic':
         return torch.tensor(policy_list).float()  # hard code yaw to be 0
     elif policy_type == 'Revolute':
         return torch.tensor(policy_list).float()
 
 # this takes in an optimization x and returns an x with the policy params
-def get_policy_list(policy_type, x):
+def get_policy_list(policy_type, x, mech):
     if policy_type == 'Prismatic':
         return [[x[0], 0.0, x[-1]]]
     elif policy_type == 'Revolute':
-        return [[x[0], 0.0, x[1], x[-1]]]
+        if not mech.flipped:
+            pitch = np.pi
+        else:
+            pitch = 0.0
+        radius = mech.get_radius_x()
+        return [[x[0], pitch, radius, x[-1]]]
 
 def process_data(data, n_train):
     """
@@ -274,7 +278,7 @@ class GPOptimizer(object):
 
     def _optim_result_to_torch(self, policy_type, x, image_tensor, use_cuda=False):
         policy_type_tensor = torch.Tensor([util.name_lookup[policy_type]])
-        policy_tensor = get_policy_tensor(policy_type, x)
+        policy_tensor = get_policy_tensor(policy_type, x, self.mech)
         config_tensor = torch.tensor([[x[-1]]]).float()
         if use_cuda:
             policy_type_tensor = policy_type_tensor.cuda()
@@ -287,7 +291,7 @@ class GPOptimizer(object):
     def _objective_func(self, x, policy_type, ucb, image_tensor=None):
         x = x.squeeze()
 
-        X = np.array(get_policy_list(policy_type, x))
+        X = np.array(get_policy_list(policy_type, x, self.mech))
         Y_pred, Y_std = self.gp.predict(X, return_std=True)
 
         if not self.nn is None:

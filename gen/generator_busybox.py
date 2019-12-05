@@ -350,6 +350,12 @@ class Door(Mechanism):
         motion_radius = self.door_size[0] - 0.025
         return 2*np.pi*motion_radius/4
 
+    def get_radius_x(self):
+        p_handle_base_world = self.get_pose_handle_base_world().p
+        p_rot_center_world_true = self.get_rot_center()
+        radius_x = abs(np.subtract(p_handle_base_world, p_rot_center_world_true)[0])
+        return radius_x
+
     def reset(self):
         door_base_id = self._get_door_base_id()
         bb_id = self._get_bb_id()

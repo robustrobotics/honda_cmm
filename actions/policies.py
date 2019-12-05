@@ -324,16 +324,13 @@ class Revolute(Policy):
         """ This function generates a Revolute policy. The ranges are
         based on the data.generator range revolute joints
         """
-        p_handle_base_world = mech.get_pose_handle_base_world().p
         if randomness > 0:
             rot_axis_roll_world = np.random.uniform(0.0, 2*np.pi)
             #radius_x = np.random.uniform(0.08, 0.15)
-            p_rot_center_world_true = mech.get_rot_center()
-            radius_x = abs(np.subtract(p_handle_base_world, p_rot_center_world_true)[0])
+            radius_x = mech.get_radius_x()
         else:
             rot_axis_roll_world = 0.0
-            p_rot_center_world_true = mech.get_rot_center()
-            radius_x = abs(np.subtract(p_handle_base_world, p_rot_center_world_true)[0])
+            radius_x = mech.get_radius_x()
 
         if not mech.flipped:
             rot_axis_pitch_world = np.pi
@@ -343,6 +340,7 @@ class Revolute(Policy):
 
         # calculate the center of rotation in the world frame
         radius = [-radius_x, 0.0, 0.0]
+        p_handle_base_world = mech.get_pose_handle_base_world().p
         p_rot_center_world = p_handle_base_world + util.transformation(radius, [0., 0., 0.], rot_axis_world)
 
         # calculate the orientation of the handle frame in the rotational axis frame
