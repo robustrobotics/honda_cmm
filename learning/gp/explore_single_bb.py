@@ -225,7 +225,8 @@ def test_model(sampler, args):
     # Execute the policy and observe the true motion.
     debug = False
     viz = False
-    _, gripper = setup_env(sampler.bb, viz, debug, args.no_gripper)
+    no_gripper = True
+    _, gripper = setup_env(sampler.bb, viz, debug, no_gripper)
     pose_handle_base_world = sampler.mech.get_pose_handle_base_world()
     traj = policy.generate_trajectory(pose_handle_base_world, q, debug=debug)
     _, motion, _ = gripper.execute_trajectory(traj, sampler.mech, policy.type, debug=debug)
@@ -430,7 +431,7 @@ class UCB_Interaction(object):
             # (b) Choose policy using UCB bound.
             ucb = True
             policy, q, _, _ = self.optim.optimize_gp(ucb)
-            print(policy.get_policy_tuple())
+            #print(policy.get_policy_tuple())
 
         self.ix += 1
         return policy, q
@@ -712,7 +713,7 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
                                     randomness=1.0,
                                     goal_config=None,
                                     bb_fname=None,
-                                    no_gripper=args.no_gripper)
+                                    no_gripper=True)
         busybox_data = generate_dataset(bb_dataset_args, None)
         print('BusyBoxes created.')
     else:
@@ -762,7 +763,8 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
     # interact with BB
     bb = BusyBox.bb_from_result(bb_result, urdf_num=args.urdf_num)
     mech = bb._mechanisms[0]
-    image_data, gripper = setup_env(bb, False, False, args.no_gripper)
+    no_gripper = True
+    image_data, gripper = setup_env(bb, False, False, no_gripper)
     pose_handle_base_world = mech.get_pose_handle_base_world()
     sampler = UCB_Interaction(bb, image_data, plot, args, nn_fname=nn_fname)
     for ix in range(n_interactions):
@@ -776,12 +778,12 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
 
         result = util.Result(policy.get_policy_tuple(), mech.get_mechanism_tuple(), \
                              motion, c_motion, handle_pose_final, handle_pose_final, \
-                             q, image_data, None, 1.0, args.no_gripper)
+                             q, image_data, None, 1.0, no_gripper)
         dataset.append(result)
 
         # update GP
         sampler.update(result)
-        if ix % 5 == 0:
+        if ix % 5 == 0 and args.debug:
             viz_plots(sampler.xs, sampler.ys, sampler.gp)
 
     opt_points = []
@@ -875,9 +877,6 @@ if __name__ == '__main__':
         '--debug',
         action='store_true',
         help='use to enter debug mode')
-    parser.add_argument(
-        '--no-gripper',
-        action='store_true')
     args = parser.parse_args()
     print(args)
     if args.debug:
