@@ -83,9 +83,9 @@ def custom_bb_door():
     bb_height = 0.4
     door_offset = (0.0, 0.0)
     door_size = (0.15, 0.15)
-    handle_offset = 0.0
+    handle_offset_z = 0.0
     flipped = True
-    door = Door(door_offset, door_size, handle_offset, flipped, color=[1,0,0])
+    door = Door(door_offset, door_size, handle_offset_z, flipped, color=[1,0,0])
     return BusyBox.get_busybox(bb_width, bb_height, [door])
 
 def custom_bb_slider():

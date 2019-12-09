@@ -11,7 +11,7 @@ from collections import namedtuple
 
 MechanismParams = namedtuple('MechanismParams', 'type params')
 SliderParams = namedtuple('SliderParams', 'x_offset z_offset range axis')
-DoorParams = namedtuple('DoorParams', 'door_offset door_size handle_offset flipped')
+DoorParams = namedtuple('DoorParams', 'door_offset door_size handle_offset_z flipped')
 
 class Mechanism(object):
     def __init__(self, p_type):
@@ -223,7 +223,7 @@ class Slider(Mechanism):
 class Door(Mechanism):
     n_doors = 0
 
-    def __init__(self, door_offset, door_size, handle_offset, flipped, color, bb_thickness=0.05):
+    def __init__(self, door_offset, door_size, handle_offset_z, flipped, color, bb_thickness=0.05):
         super(Door, self).__init__('Door')
         name = Door.n_doors
         Door.n_doors += 1
@@ -233,6 +233,7 @@ class Door(Mechanism):
 
         thickness = 0.01
         handle_radius = 0.015
+        handle_offset_x = 0.005
         door_base_name = 'door_{0}_base'.format(name)
         door = urdf.Link(door_base_name,
                          urdf.Inertial(
@@ -293,9 +294,9 @@ class Door(Mechanism):
         door_handle_joint = urdf.Joint('door_{0}_handle_joint'.format(name),
                                        urdf.Parent('door_{0}_base'.format(name)),
                                        urdf.Child('door_{0}_handle'.format(name)),
-                                       urdf.Origin(xyz=(dir*(-door_size[0]+handle_radius+0.005), \
+                                       urdf.Origin(xyz=(dir*(-door_size[0]+handle_radius+handle_offset_x), \
                                                         self.handle_length/2,
-                                                        handle_offset),
+                                                        handle_offset_z),
                                                     rpy=(1.57, 0, 0)),
                                        type='fixed')
 
@@ -309,7 +310,9 @@ class Door(Mechanism):
         self.door_base_name = door_base_name
         self.origin = door_offset
         self.door_size = door_size
-        self.handle_offset = handle_offset
+        self.handle_offset_z = handle_offset_z
+        self.handle_offset_x = handle_offset_x
+        self.handle_radius = handle_radius
         self.flipped = flipped
 
     def get_bounding_box(self):
@@ -333,7 +336,7 @@ class Door(Mechanism):
         return MechanismParams(self.mechanism_type,
                 DoorParams(self.origin,
                             self.door_size,
-                            self.handle_offset,
+                            self.handle_offset_z,
                             self.flipped))
 
     def _get_door_base_id(self):
@@ -346,8 +349,7 @@ class Door(Mechanism):
         return p.getLinkState(bb_id, door_base_id)[0]
 
     def get_max_dist(self):
-        # .025 is the distance from the edge of the door to the handle center
-        motion_radius = self.door_size[0] - 0.025
+        motion_radius = self.door_size[0] - (self.handle_radius/2 + self.handle_offset_x)
         return 2*np.pi*motion_radius/4
 
     def get_radius_x(self):
@@ -369,14 +371,14 @@ class Door(Mechanism):
                      np.random.uniform(0.05, 0.15))
         # 0.015 is the handle radius.
         # offset in the z (up/down) direction
-        handle_offset = np.random.uniform(-door_size[1]/2+0.015, door_size[1]/2-0.015)
+        handle_offset_z = np.random.uniform(-door_size[1]/2+0.015, door_size[1]/2-0.015)
 
         flipped = np.random.binomial(n=1, p=0.5)
         color = (np.random.uniform(0, 1),
                  np.random.uniform(0, 1),
                  np.random.uniform(0, 1))
 
-        return Door(door_offset, door_size, handle_offset, flipped, color, bb_thickness)
+        return Door(door_offset, door_size, handle_offset_z, flipped, color, bb_thickness)
 
 class BusyBox(object):
     def __init__(self, width, height, mechanisms, bb_thickness=0.05, file_name=None):
