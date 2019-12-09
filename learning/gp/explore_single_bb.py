@@ -3,6 +3,8 @@ from sklearn.gaussian_process.kernels import RBF, WhiteKernel, Sum, ConstantKern
 import numpy as np
 from gen.generator_busybox import create_simulated_baxter_slider
 import matplotlib.pyplot as plt
+from matplotlib import cm
+from mpl_toolkits.mplot3d import Axes3D
 import pickle
 import os
 import argparse
@@ -24,7 +26,7 @@ from actions.policies import Policy, generate_policy, Revolute, Prismatic
 import itertools
 from functools import reduce
 
-BETA = 5 #5.0
+BETA = 16 #5.0
 # takes in an x and plot variables and returns the values to be plotted
 def get_point_from_x(x, linear_param, angular_param, policy_type):
     point = np.zeros(2)
@@ -61,8 +63,8 @@ def get_policy_from_x(type, x, mech):
         else:
             rot_axis_pitch = 0.0
         rot_axis_world = util.quaternion_from_euler(rot_axis_roll, rot_axis_pitch, 0.0)
-        #radius_x = x[1]
-        radius_x = mech.get_radius_x()
+        radius_x = x[1]
+        # true_radius_x = mech.get_radius_x()
         radius = [-radius_x, 0.0, 0.0]
         p_handle_base_world = mech.get_pose_handle_base_world().p
         p_rot_center_world = p_handle_base_world + util.transformation(radius, [0., 0., 0.], rot_axis_world)
@@ -108,17 +110,17 @@ def get_reduced_x_and_bounds(policy_type, policy_params, q, policy_data):
             config_bounds = policy_param.range
         if policy_param.param_name == 'roll':
             roll_bounds = policy_param.range
-        #if policy_param.param_name == 'radius':
-        #    radius_bounds = policy_param.range
+        if policy_param.param_name == 'radius':
+            radius_bounds = policy_param.range
     if policy_type == 'Prismatic':
         return np.concatenate([[policy_params.params.pitch], [q]]), \
                 [pitch_bounds, config_bounds]
     elif policy_type == 'Revolute':
-        return np.concatenate([[policy_params.params.rot_axis_roll], [q]]), \
-                [roll_bounds, config_bounds]
-        #return np.concatenate([[policy_params.params.rot_axis_roll, \
-        #                            policy_params.params.rot_radius_x], [q]]), \
-        #        [roll_bounds, radius_bounds, config_bounds]
+        # return np.concatenate([[policy_params.params.rot_axis_roll], [q]]), \
+        #         [roll_bounds, config_bounds]
+        return np.concatenate([[policy_params.params.rot_axis_roll, \
+                                   policy_params.params.rot_radius_x], [q]]), \
+               [roll_bounds, radius_bounds, config_bounds]
 
 # this takes in an optimization x and returns the tensor of just the policy
 # params
@@ -405,8 +407,8 @@ class UCB_Interaction(object):
             variance = 0.005
             l_roll = 0.25
             l_pitch = 100
-            l_radius = 100
-            l_q = 1.0 # Keep greater than 0.5.
+            l_radius = 0.09 # 0.05
+            l_q = 1. # Keep greater than 0.5.
             return ConstantKernel(variance,
                                     constant_value_bounds=(variance,
                                                             variance)) \
@@ -430,8 +432,10 @@ class UCB_Interaction(object):
             # (b) Choose policy using UCB bound.
             ucb = True
             policy, q, _, _ = self.optim.optimize_gp(ucb)
-            print(policy.get_policy_tuple())
-
+            # FIX THISD!!!!
+            # policy = generate_policy(self.bb, self.mech, False, 1.0)
+            # q = policy.generate_config(self.mech, None)
+        # print(policy.get_policy_tuple(), q)
         self.ix += 1
         return policy, q
 
@@ -744,10 +748,10 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
                                 args,
                                 ix,
                                 ret_regret=True)
-        dataset.extend(single_dataset)
+        dataset.append(single_dataset)
         regrets.append(r)
         print('Interacted with BusyBox %d.' % ix)
-
+        print(r)
     print('Regret:', np.mean(regrets))
 
     # Save the dataset.
@@ -763,6 +767,7 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
     bb = BusyBox.bb_from_result(bb_result, urdf_num=args.urdf_num)
     mech = bb._mechanisms[0]
     image_data, gripper = setup_env(bb, False, False, args.no_gripper)
+    true_rad = mech.get_radius_x()
     pose_handle_base_world = mech.get_pose_handle_base_world()
     sampler = UCB_Interaction(bb, image_data, plot, args, nn_fname=nn_fname)
     for ix in range(n_interactions):
@@ -781,14 +786,17 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
 
         # update GP
         sampler.update(result)
-        if ix % 5 == 0:
-            viz_plots(sampler.xs, sampler.ys, sampler.gp)
+        # if ix % 10 == 0:
+        #     viz_3d_plots(sampler.xs, sampler.ys, sampler.gp)
+            # viz_radius_plots(sampler.xs, sampler.ys, sampler.gp)
+            # viz_plots(sampler.xs, sampler.ys, sampler.gp)
 
     opt_points = []
     sample_points = []
     if ret_regret:
         regret, start_x, stop_x = test_model(sampler, args)
         opt_points = [(start_x, 'g'), (stop_x, 'r')]
+        print(stop_x, true_rad)
 
     if plot:
         policy_plot_data = Policy.get_plot_data(mech)
@@ -803,9 +811,95 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
     else:
         return dataset, sampler.gp
 
+def viz_3d_plots(xs, ys, gp):
+    fig = plt.figure()
+
+    n_rows = 4
+
+    # For the first plot, plot the policies we have tried.
+    ax0 = fig.add_subplot(n_rows, n_rows, 1, projection='3d')
+    for x in xs:
+        ax0.scatter(x[0], x[2], x[3], s=2)
+
+    ax0.set_xlim(0, 2*np.pi)
+    ax0.set_ylim(0.08, 0.15)
+    ax0.set_zlim(-np.pi/2.0, 0)
+    ax0.set_xlabel('roll')
+    ax0.set_ylabel('radius')
+    ax0.set_zlabel('q')
+
+    # Bin the config parameter.
+    configs = np.linspace(-np.pi/2.0, 0, num=n_rows**2-1)
+
+    for ix, q in enumerate(configs):
+        new_xs = []
+        radii = np.linspace(0.08, 0.15, num=30)
+        rolls = np.linspace(0, 2*np.pi, num=30)
+        for ra in radii:
+            for ro in rolls:
+                new_xs.append([ro, xs[0][1], ra, q])
+        ys, std = gp.predict(new_xs, return_std=True)
+        ys = ys.flatten()
+        lookup = {}
+        for x, y, s in zip(new_xs, ys, std):
+            ro, _, ra, _ = x
+            if ro not in lookup:
+                lookup[ro] = {}
+            lookup[ro][ra] = (y, y+s, y+np.sqrt(BETA)*s)
+
+        X = np.array(new_xs)
+
+        X, Y = np.meshgrid(rolls, radii)
+        Z = np.zeros(X.shape)
+        Z_std = np.zeros(X.shape)
+        Z_aq = np.zeros(X.shape)
+        for i in range(X.shape[0]):
+            for j in range(X.shape[1]):
+                Z[i, j] = lookup[X[i, j]][Y[i, j]][0]
+                Z_std[i, j] = lookup[X[i, j]][Y[i, j]][1]
+                Z_aq[i, j] = lookup[X[i, j]][Y[i, j]][2]
+
+        ax = fig.add_subplot(n_rows, n_rows, ix+2, projection='3d')
+        ax.plot_surface(X, Y, Z, cmap=cm.coolwarm, vmax=0.2)
+        ax.plot_surface(X, Y, Z_std, color='r', alpha=0.5)
+        ax.plot_surface(X, Y, Z_aq, color='g', alpha=0.5)
+        # ax.plot(X[:, 0], X[:, 2], ys+std, c='r', alpha=0.5)
+        # ax.plot(qs, ys + np.sqrt(BETA)*std, c='g')
+        # ax.plot(qs, ys-std, c='r')
+        ax.set_xlim(0, 2*np.pi)
+        ax.set_ylim(0.08, 0.15)
+        ax.set_title('q=%.2f' % q)
+        ax.set_zlim(0, 0.2)
+    plt.show()
+
+
+def viz_radius_plots(xs, ys, gp):
+    fig, axes = plt.subplots(6, 6, figsize=(22, 22))
+    axes = axes.flatten()
+    # For the first plot, plot the policies we have tried.
+    for x in xs:
+        axes[0].scatter(x[2], x[3])
+
+    # Bin the roll parameter.
+    radii = np.linspace(0.08, 0.15, num=35)
+    for ix, r in enumerate(radii):
+        new_xs = []
+        qs = np.linspace(-np.pi/2.0, 0, num=100)
+        for q in qs:
+            new_xs.append([0, xs[0][1], r, q])
+        ys, std = gp.predict(new_xs, return_std=True)
+        ys = ys.flatten()
+        axes[ix+1].plot(qs, ys)
+        axes[ix + 1].plot(qs, ys+std, c='r')
+        axes[ix + 1].plot(qs, ys + np.sqrt(BETA)*std, c='g')
+        axes[ix + 1].plot(qs, ys-std, c='r')
+        axes[ix+1].set_title('radius=%.2f' % r)
+        axes[ix+1].set_ylim(0, 0.2)
+    axes[0].set_ylabel('q')
+    axes[0].set_xlabel('roll')
+    plt.show()
+
 def viz_plots(xs, ys, gp):
-    print(xs)
-    print(ys)
     fig, axes = plt.subplots(6, 6, figsize=(22, 22))
     axes = axes.flatten()
     # For the first plot, plot the policies we have tried.

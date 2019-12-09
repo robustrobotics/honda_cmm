@@ -74,7 +74,7 @@ class Policy(object):
 
     @staticmethod
     def generate_config(mech, goal_config):
-        raise NotImplementedError('generate_config not implemented for policy type '+self.type)
+        raise NotImplementedError('generate_config not implemented for policy type ')
 
     def get_policy_tuple(self):
         raise NotImplementedError('get_policy_tuple not implemented for policy type '+self.type)
@@ -93,7 +93,7 @@ class Policy(object):
 
     @staticmethod
     def _gen(bb, mech, randomness):
-        raise NotImplementedError('_gen not implemented for policy type '+self.type)
+        raise NotImplementedError('_gen not implemented for policy type ')
 
     @staticmethod
     def get_plot_data(mech):
@@ -109,7 +109,7 @@ class Policy(object):
         elif mech.mechanism_type == 'Door':
             return [PolicyPlotData('roll', 0, [0, 2*np.pi], 'angular'),
                     PolicyPlotData('pitch', 1, [0, 0], 'angular'),
-                    PolicyPlotData('radius', 2, [.08-.025, 0.15-.025], 'linear'),
+                    PolicyPlotData('radius', 2, [.08, 0.15], 'linear'),
                     PolicyPlotData('config', 3, [-np.pi/2, 0.0], 'linear')]
 
     def _draw_traj(self, poses, color):
@@ -326,8 +326,10 @@ class Revolute(Policy):
         """
         if randomness > 0:
             rot_axis_roll_world = np.random.uniform(0.0, 2*np.pi)
-            #radius_x = np.random.uniform(0.08, 0.15)
-            radius_x = mech.get_radius_x()
+            radius_x = np.random.uniform(0.08, 0.15)
+            # FIX THIS!@
+            # rot_axis_roll_world = 0.
+            # radius_x = mech.get_radius_x()
         else:
             rot_axis_roll_world = 0.0
             radius_x = mech.get_radius_x()
