@@ -1,7 +1,6 @@
 from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import RBF, WhiteKernel, Sum, ConstantKernel, ExpSineSquared
+from sklearn.gaussian_process.kernels import RBF, WhiteKernel, ConstantKernel
 import numpy as np
-from gen.generator_busybox import create_simulated_baxter_slider
 import matplotlib.pyplot as plt
 from matplotlib import cm
 from mpl_toolkits.mplot3d import Axes3D
@@ -13,20 +12,18 @@ from scipy.optimize import minimize
 from utils import util
 from utils.setup_pybullet import setup_env
 from gen.generator_busybox import BusyBox
-from actions import policies
 import operator
-import pybullet as p
-from actions.policies import Prismatic, Revolute
 import torch
 from learning.dataloaders import PolicyDataset, parse_pickle_file
 from gen.generate_policy_data import generate_dataset
-from collections import namedtuple
-import time
 from actions.policies import Policy, generate_policy, Revolute, Prismatic
 import itertools
 from functools import reduce
+from learning.gp.viz_doors import viz_3d_plots
 
-BETA = 16 #5.0
+BETA = 1000  # 5.0
+
+
 # takes in an x and plot variables and returns the values to be plotted
 def get_point_from_x(x, linear_param, angular_param, policy_type):
     point = np.zeros(2)
@@ -53,9 +50,10 @@ def get_point_from_x(x, linear_param, angular_param, policy_type):
             point[0] = x[0]
     return point
 
+
 # takes in an optimization x and returns a policy
-def get_policy_from_x(type, x, mech):
-    if type == 'Revolute':
+def get_policy_from_x(p_type, x, mech):
+    if p_type == 'Revolute':
         rot_axis_roll = x[0]
 
         if not mech.flipped:
@@ -75,15 +73,13 @@ def get_policy_from_x(type, x, mech):
                         rot_axis_world,
                         radius_x,
                         rot_orn)
-                        #delta_roll,
-                        #delta_pitch,
-                        #delta_radius_x)
-    if type == 'Prismatic':
+    if p_type == 'Prismatic':
         pitch = x[0]
         yaw = 0.0
         pos = mech.get_pose_handle_base_world().p
         orn = [0., 0., 0., 1.]
         return Prismatic(pos, orn, pitch, yaw)
+
 
 # takes in a result and returns an x
 def get_x_from_result(result):
@@ -99,28 +95,32 @@ def get_x_from_result(result):
         q = result.config_goal
         return [axis_roll, axis_pitch, radius_x, q]
 
+
 # takes in a policy and returns and optimization x and the variable bounds
 def get_reduced_x_and_bounds(policy_type, policy_params, q, policy_data):
+    bounds = []
     for policy_param in policy_data:
         if policy_param.param_name == 'pitch':
             pitch_bounds = policy_param.range
-        #if policy_param.param_name == 'yaw':
-        #    yaw_bounds = policy_param.range
-        if policy_param.param_name == 'config':
-            config_bounds = policy_param.range
+            # TODO: Currently commented out as it is not used for doors.
+            # bounds.append(pitch_bounds)
+        # if policy_param.param_name == 'yaw':
+        #     yaw_bounds = policy_param.range
         if policy_param.param_name == 'roll':
             roll_bounds = policy_param.range
+            bounds.append(roll_bounds)
         if policy_param.param_name == 'radius':
             radius_bounds = policy_param.range
+            bounds.append(radius_bounds)
+        if policy_param.param_name == 'config':
+            config_bounds = policy_param.range
+            bounds.append(config_bounds)
     if policy_type == 'Prismatic':
-        return np.concatenate([[policy_params.params.pitch], [q]]), \
-                [pitch_bounds, config_bounds]
+        return np.concatenate([[policy_params.params.pitch], [q]]), bounds
     elif policy_type == 'Revolute':
-        # return np.concatenate([[policy_params.params.rot_axis_roll], [q]]), \
-        #         [roll_bounds, config_bounds]
-        return np.concatenate([[policy_params.params.rot_axis_roll, \
-                                   policy_params.params.rot_radius_x], [q]]), \
-               [roll_bounds, radius_bounds, config_bounds]
+        return np.concatenate([[policy_params.params.rot_axis_roll,
+                                policy_params.params.rot_radius_x], [q]]), bounds
+
 
 # this takes in an optimization x and returns the tensor of just the policy
 # params
@@ -130,6 +130,7 @@ def get_policy_tensor(policy_type, x, mech):
         return torch.tensor(policy_list).float()  # hard code yaw to be 0
     elif policy_type == 'Revolute':
         return torch.tensor(policy_list).float()
+
 
 # this takes in an optimization x and returns an x with the policy params
 def get_policy_list(policy_type, x, mech):
@@ -143,10 +144,12 @@ def get_policy_list(policy_type, x, mech):
         radius = mech.get_radius_x()
         return [[x[0], pitch, radius, x[-1]]]
 
+
 def process_data(data, n_train):
     """
     Takes in a dataset in our typical format and outputs the dataset to fit the GP.
     :param data:
+    :param n_train:
     :return:
     """
     xs, ys = [], []
@@ -167,6 +170,7 @@ def process_data(data, n_train):
     else:
     '''
     return X, Y
+
 
 def get_nn_preds(results, model, ret_dataset=False, use_cuda=False):
     data = parse_pickle_file(results)
@@ -197,6 +201,7 @@ def get_nn_preds(results, model, ret_dataset=False, use_cuda=False):
     else:
         return pred_motions
 
+
 def objective_func(x, policy_type, image_tensor, model, use_cuda):
     policy_type_tensor = torch.Tensor([util.name_lookup[policy_type]])
     x = x.squeeze()
@@ -213,6 +218,7 @@ def objective_func(x, policy_type, image_tensor, model, use_cuda):
     val = val.detach().numpy()
     val = val.squeeze()
     return val
+
 
 def test_model(sampler, args):
     """
@@ -246,6 +252,7 @@ def test_model(sampler, args):
     stop_x = get_x_from_result(stop_result)
     return regret, start_x, stop_x
 
+
 class GPOptimizer(object):
 
     def __init__(self, urdf_num, bb, image_data, n_samples, beta, gp, nn=None):
@@ -272,12 +279,13 @@ class GPOptimizer(object):
                                    None, None, q, image_data, None, 1.0, True)]
             self.sample_policies.append(results)
 
-            if not self.nn is None:
+            if self.nn is not None:
                 nn_preds, self.dataset = get_nn_preds(results, nn, ret_dataset=True, use_cuda=False)
                 self.nn_samples.append(nn_preds)
             else:
                 self.dataset = None
                 self.nn_samples.append(None)
+        # print('Max:', np.max(self.nn_samples))
 
     def _optim_result_to_torch(self, policy_type, x, image_tensor, use_cuda=False):
         policy_type_tensor = torch.Tensor([util.name_lookup[policy_type]])
@@ -349,7 +357,6 @@ class GPOptimizer(object):
         else:
             images = dataset.images[0].unsqueeze(0)
         policy_data = Policy.get_plot_data(self.mech)
-        #print('MAX', params_max)
         x0, bounds = get_reduced_x_and_bounds(policy_type_max, params_max, q_max, policy_data)
         start_policy = get_policy_from_x(policy_type_max, x0, self.mech)
         start_q = q_max
@@ -394,35 +401,29 @@ class UCB_Interaction(object):
             l_yaw = 100
             l_q = 0.1
             return ConstantKernel(variance,
-                                    constant_value_bounds=(variance,
-                                                            variance)) \
-                    * RBF(length_scale=(l_pitch,
-                                        l_yaw,
-                                        l_q),
-                        length_scale_bounds=((l_pitch, l_pitch),
-                                            (l_yaw, l_yaw),
-                                            (l_q, l_q))) \
-                    + WhiteKernel(noise_level=noise,
-                                    noise_level_bounds=(1e-5, 1e2))
+                                  constant_value_bounds=(variance, variance)) * \
+                RBF(length_scale=(l_pitch, l_yaw, l_q),
+                    length_scale_bounds=((l_pitch, l_pitch),
+                                         (l_yaw, l_yaw),
+                                         (l_q, l_q))) + \
+                WhiteKernel(noise_level=noise,
+                            noise_level_bounds=(1e-5, 1e2))
         elif self.mech.mechanism_type == 'Door':
             variance = 0.005
             l_roll = 0.25
             l_pitch = 100
-            l_radius = 0.09 # 0.05
-            l_q = 1. # Keep greater than 0.5.
+            l_radius = 0.01  # 0.09  # 0.05
+            l_q = 1.  # Keep greater than 0.5.
             return ConstantKernel(variance,
-                                    constant_value_bounds=(variance,
-                                                            variance)) \
-                    * RBF(length_scale=(l_roll,
-                                        l_pitch,
-                                        l_radius,
-                                        l_q),
-                        length_scale_bounds=((l_roll, l_roll),
-                                            (l_pitch, l_pitch),
-                                            (l_radius, l_radius),
-                                            (l_q, l_q))) \
-                    + WhiteKernel(noise_level=noise,
-                                    noise_level_bounds=(1e-5, 1e2))
+                                  constant_value_bounds=(variance, variance)) \
+                * RBF(length_scale=(l_roll, l_pitch, l_radius, l_q),
+                      length_scale_bounds=((l_roll, l_roll),
+                                           (l_pitch, l_pitch),
+                                           (l_radius, l_radius),
+                                           (l_q, l_q))) \
+                + WhiteKernel(noise_level=noise,
+                              noise_level_bounds=(1e-5, 1e2))
+
     def sample(self):
         # (1) Choose a point to interact with.
         if len(self.xs) < 1 and self.nn is None:
@@ -433,10 +434,6 @@ class UCB_Interaction(object):
             # (b) Choose policy using UCB bound.
             ucb = True
             policy, q, _, _ = self.optim.optimize_gp(ucb)
-            # FIX THISD!!!!
-            # policy = generate_policy(self.bb, self.mech, False, 1.0)
-            # q = policy.generate_config(self.mech, None)
-        # print(policy.get_policy_tuple(), q)
 
         self.ix += 1
         return policy, q
@@ -452,9 +449,9 @@ class UCB_Interaction(object):
         else:
             policy_type = result.policy_params.type
             inputs = self.optim._optim_result_to_torch(policy_type,
-                                    self.xs[-1],
-                                    self.optim.dataset.images[0].unsqueeze(0),
-                                    use_cuda=False)
+                                                       self.xs[-1],
+                                                       self.optim.dataset.images[0].unsqueeze(0),
+                                                       use_cuda=False)
             nn_pred = self.nn.forward(*inputs)[0]
             nn_pred = nn_pred.detach().numpy().squeeze()
             self.ys.append([result.net_motion - nn_pred])
@@ -462,22 +459,22 @@ class UCB_Interaction(object):
         self.moves.append([result.net_motion])
         self.gp.fit(np.array(self.xs), np.array(self.ys))
         # (4) Visualize GP.
-        #if self.ix % 1 == 0 and self.plot:
-            #params = mech.get_mechanism_tuple().params
-            #print('Range:', params.range/2.0)
-            #print('Angle:', np.arctan2(params.axis[1], params.axis[0]))
-            #print('GP:', gp.kernel_)
-
-            # #plt.clf()
-            # plt.figure(figsize=(15, 15))
-            # for x, y in zip(xs, ys):
-            #     plt.scatter(x[0], x[2], s=200)
-            # plt.title('policy samples')
-            # plt.xlabel('pitch')
-            # plt.ylabel('q')
-            # #plt.savefig('gp_samples_%d.png' % ix)
-            # plt.show()
-            # viz_gp(gp, result, ix, bb, nn=nn)
+        # if self.ix % 1 == 0 and self.plot:
+        #     params = mech.get_mechanism_tuple().params
+        #     print('Range:', params.range/2.0)
+        #     print('Angle:', np.arctan2(params.axis[1], params.axis[0]))
+        #     print('GP:', gp.kernel_)
+        #
+        #     #plt.clf()
+        #     plt.figure(figsize=(15, 15))
+        #     for x, y in zip(xs, ys):
+        #         plt.scatter(x[0], x[2], s=200)
+        #     plt.title('policy samples')
+        #     plt.xlabel('pitch')
+        #     plt.ylabel('q')
+        #     #plt.savefig('gp_samples_%d.png' % ix)
+        #     plt.show()
+        #     viz_gp(gp, result, ix, bb, nn=nn)
 
     def calc_avg_regret(self):
         regrets = []
@@ -490,12 +487,12 @@ class UCB_Interaction(object):
             return 'n/a'
 
 
-def format_batch(type, X_pred, mech, image_data):
+def format_batch(ptype, x_pred, mech, image_data):
     results = []
 
-    for ix in range(X_pred.shape[0]):
-        policy = get_policy_from_x(type, X_pred[ix], mech)
-        q = X_pred[ix, -1]
+    for ix in range(x_pred.shape[0]):
+        policy = get_policy_from_x(ptype, x_pred[ix], mech)
+        q = x_pred[ix, -1]
         result = util.Result(policy.get_policy_tuple(), None, 0.0, 0.0,
                              None, None, q, image_data, None, 1.0, False)
         results.append(result)
@@ -505,6 +502,7 @@ def format_batch(type, X_pred, mech, image_data):
     train_loader = torch.utils.data.DataLoader(dataset=dataset,
                                                batch_size=len(dataset))
     return train_loader
+
 
 '''
 def viz_gp(gp, result, num, bb, nn=None):
@@ -548,6 +546,7 @@ def viz_gp(gp, result, num, bb, nn=None):
     # plt.savefig('gp_estimates_tuned_%d.png' % num)
 '''
 
+
 def viz_circles(image_data, mech, sample_points=[], opt_points=[], gp=None, nn=None, bb_i=0, plot_dir_prefix=''):
     policy_plot_data = Policy.get_plot_data(mech)
 
@@ -579,9 +578,9 @@ def viz_circles(image_data, mech, sample_points=[], opt_points=[], gp=None, nn=N
             mean_colors = np.zeros(l.shape)
 
             # bin the other param values
-            all_other_params = list(filter(lambda x: (x!=angular_param)
-                                                    and (x!=linear_param),
-                                            policy_plot_data))
+            all_other_params = list(filter(lambda x: (x != angular_param)
+                                           and (x != linear_param),
+                                    policy_plot_data))
             other_vals_and_inds = []
             for other_params in all_other_params:
                 if other_params.range[0] == other_params.range[1]:
@@ -615,11 +614,10 @@ def viz_circles(image_data, mech, sample_points=[], opt_points=[], gp=None, nn=N
                             X_pred[xpred_rowi, other_param_num] = other_param_val[1]
                         xpred_rowi += 1
 
-
                 Y_pred = np.zeros((X_pred.shape[0]))
-                if not gp is None:
+                if gp is not None:
                     Y_pred = np.add(Y_pred, gp.predict(X_pred))
-                if not nn is None:
+                if nn is not None:
                     type = 'Revolute' if mech.mechanism_type == 'Door' else 'Prismatic'
                     loader = format_batch(type, X_pred, mech, image_data)
                     k, x, q, im, _, _ = next(iter(loader))
@@ -632,16 +630,16 @@ def viz_circles(image_data, mech, sample_points=[], opt_points=[], gp=None, nn=N
                 if len(row_col) == 1:
                     subplot_num = 1*row_col[0]
                 else:
-                    subplot_num = reduce(lambda x,y: n_cols*(x-1)+y, row_col)
+                    subplot_num = reduce(lambda x, y: n_cols*(x-1)+y, row_col)
                 ax = plt.subplot(n_rows, n_cols, subplot_num, projection='polar')
-                ax.set_title('\n'.join([str(all_other_params[other_param_i].param_name) \
-                    + ' = ' + str("%.2f" % other_val) for other_param_i, \
-                    (plot_i, other_val) in enumerate(other_val_and_ind)]), \
+                ax.set_title('\n'.join([str(all_other_params[other_param_i].param_name)
+                    + ' = ' + str("%.2f" % other_val) for other_param_i,
+                    (plot_i, other_val) in enumerate(other_val_and_ind)]),
                     fontsize=10)
                 max_dist = mech.get_max_dist()
                 im = polar_plots(ax, mean_colors, max_dist, angular_param,
-                                linear_param, points=sample_points+opt_points,
-                                colorbar=False)
+                                 linear_param, points=sample_points+opt_points,
+                                 colorbar=False)
             add_colorbar(fig, im)
             plot_dir = 'gp_plots/'
             if not os.path.isdir(plot_dir):
@@ -658,16 +656,17 @@ def viz_circles(image_data, mech, sample_points=[], opt_points=[], gp=None, nn=N
                 os.mkdir(plot_dir)
             plt.savefig(plot_dir+'/%i.png' % (len(sample_points)))
 
-    #plt.show()
-    #input('Enter to close plots')
+    # plt.show()
+    # input('Enter to close plots')
     plt.close('all')
+
 
 def polar_plots(ax, colors, vmax, angular_param, linear_param, points=None, colorbar=False):
     n_ang, n_lin = colors.shape
 
     # for slider policies
     if (abs(angular_param.range[0]-angular_param.range[1]) == np.pi) and \
-        (linear_param.range[0] == -linear_param.range[1]):
+       (linear_param.range[0] == -linear_param.range[1]):
         thp = np.linspace(0, 2*np.pi, n_ang*2)
         rp = np.linspace(0, max(linear_param.range), n_lin//2)
         rp, thp = np.meshgrid(rp, thp)
@@ -685,7 +684,7 @@ def polar_plots(ax, colors, vmax, angular_param, linear_param, points=None, colo
         type = 'door'
     cbar = ax.pcolormesh(thp, rp, cp, vmin=0, vmax=vmax, cmap='viridis')
     ax.tick_params(axis='x', colors='white')
-    #ax.set_yticklabels([])
+    # ax.set_yticklabels([])
 
     if not points is None:
         for (x, c) in points:
@@ -694,15 +693,18 @@ def polar_plots(ax, colors, vmax, angular_param, linear_param, points=None, colo
 
     return cbar
 
+
 def add_colorbar(fig, im):
     fig.subplots_adjust(right=0.8)
     cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
     fig.colorbar(im, cax=cbar_ax)
 
+
 def create_gpucb_dataset(n_interactions, n_bbs, args):
     """
-    :param L: The number of BusyBoxes to include in the dataset.
-    :param M: The number of interactions per BusyBox.
+    :param n_bbs: The number of BusyBoxes to include in the dataset.
+    :param n_interactions: The number of interactions per BusyBox.
+    :param args:
     :return:
     """
     # Create a dataset of L busyboxes.
@@ -742,14 +744,13 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
     regrets = []
     print(len(busybox_data), len(busybox_data[0]))
     for ix, bb_results in enumerate(busybox_data):
-        bb_result = bb_results[0]
-        single_dataset, _, r = create_single_bb_gpucb_dataset(bb_result,
-                                n_interactions,
-                                '',
-                                args.plot,
-                                args,
-                                ix,
-                                ret_regret=True)
+        single_dataset, _, r = create_single_bb_gpucb_dataset(bb_results,
+                                                              n_interactions,
+                                                              '',
+                                                              args.plot,
+                                                              args,
+                                                              ix,
+                                                              ret_regret=True)
         dataset.append(single_dataset)
         regrets.append(r)
         print('Interacted with BusyBox %d.' % ix)
@@ -761,14 +762,15 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
         with open(args.fname, 'wb') as handle:
             pickle.dump(dataset, handle)
 
+
 def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, args, bb_i,
-                                    plot_dir_prefix='', ret_regret=False):
+                                   plot_dir_prefix='', ret_regret=False):
     dataset = []
 
     # interact with BB
     bb = BusyBox.bb_from_result(bb_result, urdf_num=args.urdf_num)
     mech = bb._mechanisms[0]
-    image_data, gripper = setup_env(bb, False, False, args.no_gripper)
+    image_data, gripper = setup_env(bb, False, False, True)
     true_rad = mech.get_radius_x()
 
     pose_handle_base_world = mech.get_pose_handle_base_world()
@@ -776,23 +778,69 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
     for ix in range(n_interactions):
         # sample a policy
         policy, q = sampler.sample()
+        print(policy.get_policy_tuple(), q)
 
         # execute
         traj = policy.generate_trajectory(pose_handle_base_world, q, debug=False)
         c_motion, motion, handle_pose_final = gripper.execute_trajectory(traj, mech, policy.type, False)
         gripper.reset(mech)
 
-        result = util.Result(policy.get_policy_tuple(), mech.get_mechanism_tuple(), \
-                             motion, c_motion, handle_pose_final, handle_pose_final, \
-                             q, image_data, None, 1.0, no_gripper)
+        result = util.Result(policy.get_policy_tuple(), mech.get_mechanism_tuple(),
+                             motion, c_motion, handle_pose_final, handle_pose_final,
+                             q, image_data, None, 1.0, True)
         dataset.append(result)
 
         # update GP
         sampler.update(result)
-        # if ix % 10 == 0:
-        #     viz_3d_plots(sampler.xs, sampler.ys, sampler.gp)
-            # viz_radius_plots(sampler.xs, sampler.ys, sampler.gp)
-            # viz_plots(sampler.xs, sampler.ys, sampler.gp)
+        if False:  # ix % 10 == 0:
+            model = util.load_model(nn_fname, args.hdim, use_cuda=True)
+            def _gp_callback(new_xs, bb_result):
+                ys, std = sampler.gp.predict(new_xs, return_std=True)
+                ys = ys.flatten()
+
+                if len(nn_fname) > 0:
+                    data = []
+                    for roll, pitch, radius, q in new_xs:
+                        data.append({
+                            'type': 'Revolute',
+                            'params': [roll, pitch, radius],
+                            'config': q,
+                            'image': bb_result.image_data,
+                            'y': 0.,
+                            # 'mech': mech_params,
+                            'delta_vals': [0, 0, 0]
+                        })
+
+                    dataset = PolicyDataset(data)
+                    nn_ys = []
+                    for i in range(len(dataset.items)):
+                        policy_type = dataset.items[i]['type']
+                        policy_type_tensor = torch.Tensor([util.name_lookup[policy_type]])
+                        policy_tensor = dataset.tensors[i].unsqueeze(0)
+                        config_tensor = dataset.configs[i].unsqueeze(0)
+                        image_tensor = dataset.images[i].unsqueeze(0)
+                        if True:
+                            policy_type_tensor = policy_type_tensor.cuda()
+                            policy_tensor = policy_tensor.cuda()
+                            config_tensor = config_tensor.cuda()
+                            image_tensor = image_tensor.cuda()
+                        pred_motion, _ = model.forward(policy_type_tensor,
+                                                       policy_tensor,
+                                                       config_tensor,
+                                                       image_tensor)
+                        if True:
+                            pred_motion_float = pred_motion.cpu().detach().numpy()[0][0]
+                        else:
+                            pred_motion_float = pred_motion.detach().numpy()[0][0]
+                        nn_ys += [pred_motion_float]
+                    ys += np.array(nn_ys)
+                return ys, std, ys + np.sqrt(BETA)*std
+
+            # viz_3d_plots(xs=sampler.xs,
+            #              callback=_gp_callback,
+            #              bb_result=bb_result)
+        #     viz_radius_plots(sampler.xs, sampler.gp)
+        #     viz_plots(sampler.xs, sampler.gp)
 
 
     opt_points = []
@@ -805,9 +853,14 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
     if plot:
         policy_plot_data = Policy.get_plot_data(mech)
         sample_points = [(sample, 'r') for sample in sampler.xs]
-        viz_circles(image_data, mech, sample_points=sample_points, opt_points=opt_points,
-                    gp=sampler.gp, nn=sampler.nn, \
-                    bb_i=bb_i, plot_dir_prefix=plot_dir_prefix)
+        viz_circles(image_data,
+                    mech,
+                    sample_points=sample_points,
+                    opt_points=opt_points,
+                    gp=sampler.gp,
+                    nn=sampler.nn,
+                    bb_i=bb_i,
+                    plot_dir_prefix=plot_dir_prefix)
         # viz_plots(sampler.xs, sampler.ys, sampler.gp)
 
     if ret_regret:
@@ -815,69 +868,8 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
     else:
         return dataset, sampler.gp
 
-def viz_3d_plots(xs, ys, gp):
-    fig = plt.figure()
 
-    n_rows = 4
-
-    # For the first plot, plot the policies we have tried.
-    ax0 = fig.add_subplot(n_rows, n_rows, 1, projection='3d')
-    for x in xs:
-        ax0.scatter(x[0], x[2], x[3], s=2)
-
-    ax0.set_xlim(0, 2*np.pi)
-    ax0.set_ylim(0.08, 0.15)
-    ax0.set_zlim(-np.pi/2.0, 0)
-    ax0.set_xlabel('roll')
-    ax0.set_ylabel('radius')
-    ax0.set_zlabel('q')
-
-    # Bin the config parameter.
-    configs = np.linspace(-np.pi/2.0, 0, num=n_rows**2-1)
-
-    for ix, q in enumerate(configs):
-        new_xs = []
-        radii = np.linspace(0.08, 0.15, num=30)
-        rolls = np.linspace(0, 2*np.pi, num=30)
-        for ra in radii:
-            for ro in rolls:
-                new_xs.append([ro, xs[0][1], ra, q])
-        ys, std = gp.predict(new_xs, return_std=True)
-        ys = ys.flatten()
-        lookup = {}
-        for x, y, s in zip(new_xs, ys, std):
-            ro, _, ra, _ = x
-            if ro not in lookup:
-                lookup[ro] = {}
-            lookup[ro][ra] = (y, y+s, y+np.sqrt(BETA)*s)
-
-        X = np.array(new_xs)
-
-        X, Y = np.meshgrid(rolls, radii)
-        Z = np.zeros(X.shape)
-        Z_std = np.zeros(X.shape)
-        Z_aq = np.zeros(X.shape)
-        for i in range(X.shape[0]):
-            for j in range(X.shape[1]):
-                Z[i, j] = lookup[X[i, j]][Y[i, j]][0]
-                Z_std[i, j] = lookup[X[i, j]][Y[i, j]][1]
-                Z_aq[i, j] = lookup[X[i, j]][Y[i, j]][2]
-
-        ax = fig.add_subplot(n_rows, n_rows, ix+2, projection='3d')
-        ax.plot_surface(X, Y, Z, cmap=cm.coolwarm, vmax=0.2)
-        ax.plot_surface(X, Y, Z_std, color='r', alpha=0.5)
-        ax.plot_surface(X, Y, Z_aq, color='g', alpha=0.5)
-        # ax.plot(X[:, 0], X[:, 2], ys+std, c='r', alpha=0.5)
-        # ax.plot(qs, ys + np.sqrt(BETA)*std, c='g')
-        # ax.plot(qs, ys-std, c='r')
-        ax.set_xlim(0, 2*np.pi)
-        ax.set_ylim(0.08, 0.15)
-        ax.set_title('q=%.2f' % q)
-        ax.set_zlim(0, 0.2)
-    plt.show()
-
-
-def viz_radius_plots(xs, ys, gp):
+def viz_radius_plots(xs, gp):
     fig, axes = plt.subplots(6, 6, figsize=(22, 22))
     axes = axes.flatten()
     # For the first plot, plot the policies we have tried.
@@ -903,7 +895,8 @@ def viz_radius_plots(xs, ys, gp):
     axes[0].set_xlabel('roll')
     plt.show()
 
-def viz_plots(xs, ys, gp):
+
+def viz_plots(xs, gp):
     fig, axes = plt.subplots(6, 6, figsize=(22, 22))
     axes = axes.flatten()
     # For the first plot, plot the policies we have tried.
@@ -928,6 +921,7 @@ def viz_plots(xs, ys, gp):
     axes[0].set_ylabel('q')
     axes[0].set_xlabel('roll')
     plt.show()
+
 
 # this executive is for generating GP-UCB interactions from no search_parent_directories
 # typically used to generate datasets for training, but can also be used in the L=0
@@ -970,12 +964,18 @@ if __name__ == '__main__':
         default='',
         help='path to save resulting dataset to')
     parser.add_argument(
+        '--nn-fname',
+        default='',
+        help='path to save resulting dataset to')
+    parser.add_argument(
         '--debug',
         action='store_true',
         help='use to enter debug mode')
     args = parser.parse_args()
     print(args)
+
     if args.debug:
-        import pdb; pdb.set_trace()
+        import pdb
+        pdb.set_trace()
 
     create_gpucb_dataset(args.M, args.L, args)

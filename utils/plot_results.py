@@ -11,6 +11,8 @@ from learning.dataloaders import parse_pickle_file, PolicyDataset, create_data_s
 import actions.policies as policies
 import pybullet as p
 from actions.gripper import Gripper
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib import cm
 
 
 class PlotFunc(object):
@@ -43,15 +45,54 @@ class DoorRadiusPerf(PlotFunc):
 
     def _plot(self, data, model):
         plt.figure()
-        for data_point in data:
-            motion_radius = data_point.mechanism_params.params.door_size[0] - 0.025
-            des_motion = 2*np.pi*motion_radius/4
-            if data_point.mechanism_params.type == 'Door':
-                performance = data_point.net_motion/des_motion
-                plt.plot(data_point.mechanism_params.params.door_size[0], performance, 'b.')
+        for mech_results in data:
+            for data_point in mech_results:
+                motion_radius = data_point.mechanism_params.params.door_size[0] - 0.025
+                bb = BusyBox.bb_from_result(data_point)
+                mech = bb._mechanisms[0]
+                des_motion = mech.get_max_dist()
+                if data_point.mechanism_params.type == 'Door':
+                    performance = data_point.net_motion/des_motion
+                    plt.plot(data_point.mechanism_params.params.door_size[0], performance, 'b.')
         plt.xlabel('Door Radius')
         plt.ylabel('Door Performance')
         plt.title('Door Performance versus Radius')
+
+
+class PlotDoorData(PlotFunc):
+
+    @staticmethod
+    def description():
+        return 'Plot of the door data for each BusyBox'
+
+    def _plot(self, data, model):
+        fig = plt.figure()
+
+        for ix, mech_results in enumerate(data[0:16]):
+            ax0 = fig.add_subplot(4, 4, ix+1, projection='3d')
+            for data_point in mech_results:
+                params = data_point.policy_params.params
+
+                motion_radius = data_point.mechanism_params.params.door_size[0] - 0.025
+                des_motion = 2 * np.pi * motion_radius / 4
+
+                viridis = cm.get_cmap('viridis', 100)
+
+                c = viridis(data_point.cumu_motion/des_motion)
+
+                ax0.scatter(params.rot_axis_roll, params.rot_radius_x, data_point.config_goal, c=c, s=2)
+
+            ax0.set_xlim(0, 2 * np.pi)
+            ax0.set_ylim(0.08 - 0.025, 0.15)
+            ax0.set_zlim(-np.pi / 2.0, 0)
+            ax0.set_xlabel('roll')
+            ax0.set_ylabel('radius')
+            ax0.set_zlabel('q')
+        for ix, mech_results in enumerate(data[0:16]):
+            print(len(mech_results))
+
+
+
 
 class DoorConfigMotion(PlotFunc):
 

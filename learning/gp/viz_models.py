@@ -33,6 +33,7 @@ def viz_models(args):
             # generate plots
             viz_circles(image_data, mech, nn=nn, bb_i=ix)
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument(

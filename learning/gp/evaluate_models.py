@@ -5,8 +5,7 @@ import numpy as np
 import re
 from learning.gp.explore_single_bb import create_single_bb_gpucb_dataset, GPOptimizer
 from utils import util, setup_pybullet
-from gen.generator_busybox import BusyBox
-from actions.gripper import Gripper
+
 
 def get_models(L, models_path):
     all_files = os.walk(models_path)
@@ -14,11 +13,13 @@ def get_models(L, models_path):
     for root, subdir, files in all_files:
         for file in files:
             if (file[-3:] == '.pt') and ('_'+str(L)+'L_' in file):
-                M_result = re.search('(.*)/(.*)M/(.*)', root)
-                M = M_result.group(2)
+                # M_result = re.search('(.*)/(.*)M/(.*)', root)\
+                M = '100'
+                # M = M_result.group(2)
                 full_path = root+'/'+file
                 models.append(full_path)
     return models, M
+
 
 def evaluate_models(n_interactions, n_bbs, args, use_cuda=False):
     with open(args.bb_fname, 'rb') as handle:
@@ -35,26 +36,26 @@ def evaluate_models(n_interactions, n_bbs, args, use_cuda=False):
                 if args.debug:
                     print('BusyBox', ix)
                 dataset, gp, regret = create_single_bb_gpucb_dataset(bb_result,
-                                            n_interactions,
-                                            model,
-                                            args.plot,
-                                            args,
-                                            ix,
-                                            plot_dir_prefix='L'+str(L),
-                                            ret_regret=True)
+                                                                     n_interactions,
+                                                                     model,
+                                                                     args.plot,
+                                                                     args,
+                                                                     ix,
+                                                                     plot_dir_prefix='L'+str(L),
+                                                                     ret_regret=True)
                 all_model_test_regrets.append(regret)
                 if args.debug:
                     print('Test Regret   :', regret)
             if args.debug:
                 print('Results')
-                #print('Average Regret:', np.mean(avg_regrets))
+                # print('Average Regret:', np.mean(avg_regrets))
                 print('Final Regret  :', np.mean(all_model_test_regrets))
             all_L_results[model] = all_model_test_regrets
         if len(models) > 0:
-            all_results[L] =  all_L_results
+            all_results[L] = all_L_results
     util.write_to_file('regret_results_%s_%dT_%dN_%sM.pickle' % (args.type, n_interactions, n_bbs, M),
-                        all_results,
-                        verbose=True)
+                       all_results,
+                       verbose=True)
 
 
 if __name__ == '__main__':

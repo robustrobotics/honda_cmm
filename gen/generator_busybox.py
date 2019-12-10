@@ -378,6 +378,8 @@ class Door(Mechanism):
                  np.random.uniform(0, 1),
                  np.random.uniform(0, 1))
 
+        color = (1, 0, 0)
+
         return Door(door_offset, door_size, handle_offset_z, flipped, color, bb_thickness)
 
 class BusyBox(object):

@@ -107,7 +107,6 @@ class PolicyDataset(Dataset):
     def __len__(self):
         return len(self.items)
 
-
 def parse_pickle_file(results):
     """
     Pass in a list of utils.util.Results.

@@ -35,7 +35,7 @@ def generate_dataset(args, git_hash):
                 pose_handle_world_init = mech.get_handle_pose()
 
                 # calculate trajectory
-                traj = policy.generate_trajectory(pose_handle_base_world, config_goal, args.debug, color=[0,0,1])
+                traj = policy.generate_trajectory(pose_handle_base_world, config_goal, args.debug, color=[0, 0, 1])
 
                 # execute trajectory
                 cumu_motion, net_motion, pose_handle_world_final = \
