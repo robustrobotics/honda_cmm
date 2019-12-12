@@ -109,7 +109,7 @@ class Policy(object):
         elif mech.mechanism_type == 'Door':
             return [PolicyPlotData('roll', 0, [0, 2*np.pi], 'angular'),
                     PolicyPlotData('pitch', 1, [0, 0], 'angular'),
-                    PolicyPlotData('radius', 2, [.08, 0.15], 'linear'),
+                    PolicyPlotData('radius', 2, [.08-0.025, 0.15], 'linear'),
                     PolicyPlotData('config', 3, [-np.pi/2, 0.0], 'linear')]
 
     def _draw_traj(self, poses, color):
@@ -301,7 +301,11 @@ class Revolute(Policy):
     @staticmethod
     def generate_config(mech, goal_config):
         if goal_config is None:
-            return -np.random.uniform(0.0,np.pi/2)
+            # if np.random.uniform() > 0.75:
+            #     return -np.random.uniform(0.0, np.pi/4)
+            # else:
+            #     return -np.random.uniform(np.pi/4, np.pi/2)
+            return -np.random.uniform(0.0, np.pi/2)
         else:
             return -goal_config*np.pi/2.0
 
@@ -325,8 +329,20 @@ class Revolute(Policy):
         based on the data.generator range revolute joints
         """
         if randomness > 0:
-            rot_axis_roll_world = np.random.uniform(0.0, 2*np.pi)
-            radius_x = np.random.uniform(0.08, 0.15)
+            rot_axis_roll_world = np.random.uniform(0.0, 2 * np.pi)
+            radius_x = np.random.uniform(0.08-0.025, 0.15)
+            # toss = np.random.uniform()
+
+            # if toss > 0.80:
+            #     rot_axis_roll_world = np.random.uniform(np.pi/16.0, 31*np.pi/16.0)
+            # elif toss > 0.40:
+            #     rot_axis_roll_world = np.random.uniform(0, np.pi/16.0)
+            # else:
+            #     rot_axis_roll_world = np.random.uniform(31*np.pi/16.0, 2*np.pi)
+            #
+            # true_radius = mech.get_radius_x()
+            # radius_x = np.random.normal()*0.0125 + true_radius
+
             # FIX THIS!@
             # rot_axis_roll_world = 0.
             # radius_x = mech.get_radius_x()

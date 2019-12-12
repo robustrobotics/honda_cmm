@@ -10,6 +10,8 @@ from gen.generator_busybox import Slider, Door, BusyBox
 
 
 results = []
+
+
 def generate_dataset(args, git_hash):
     if args.bb_fname is not None:
         bb_data = util.read_from_file(args.bb_fname)
@@ -52,6 +54,7 @@ def generate_dataset(args, git_hash):
         p.disconnect()
     print()
     return results
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

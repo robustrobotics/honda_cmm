@@ -21,7 +21,7 @@ import itertools
 from functools import reduce
 from learning.gp.viz_doors import viz_3d_plots
 
-BETA = 1000  # 5.0
+BETA = 5 #5  # 5.0
 
 
 # takes in an x and plot variables and returns the values to be plotted
@@ -141,8 +141,7 @@ def get_policy_list(policy_type, x, mech):
             pitch = np.pi
         else:
             pitch = 0.0
-        radius = mech.get_radius_x()
-        return [[x[0], pitch, radius, x[-1]]]
+        return [[x[0], pitch, x[-2], x[-1]]]
 
 
 def process_data(data, n_train):
@@ -237,7 +236,7 @@ def test_model(sampler, args):
     _, gripper = setup_env(sampler.bb, viz, debug, no_gripper)
     pose_handle_base_world = sampler.mech.get_pose_handle_base_world()
     traj = policy.generate_trajectory(pose_handle_base_world, q, debug=debug)
-    _, motion, _ = gripper.execute_trajectory(traj, sampler.mech, policy.type, debug=debug)
+    motion, _, _ = gripper.execute_trajectory(traj, sampler.mech, policy.type, debug=debug)
 
     # Calculate the regret.
     max_d = sampler.mech.get_max_dist()
@@ -265,6 +264,7 @@ class GPOptimizer(object):
         self.mech = bb._mechanisms[0]
         self.beta = beta
         self.gp = gp
+        self.n_samples = n_samples
 
         # Generate random policies.
         for _ in range(n_samples):
@@ -286,6 +286,8 @@ class GPOptimizer(object):
                 self.dataset = None
                 self.nn_samples.append(None)
         # print('Max:', np.max(self.nn_samples))
+
+        self.log = []
 
     def _optim_result_to_torch(self, policy_type, x, image_tensor, use_cuda=False):
         policy_type_tensor = torch.Tensor([util.name_lookup[policy_type]])
@@ -312,10 +314,10 @@ class GPOptimizer(object):
             Y_pred += val.squeeze()
 
         if ucb:
-            obj = -Y_pred[0] - np.sqrt(self.beta) * Y_std[0]
+            obj = -Y_pred[0][0] - np.sqrt(self.beta) * Y_std[0]
         else:
             obj = -Y_pred[0]
-
+        # print(Y_pred[0][0], Y_std[0], obj)
         return obj
 
     def _get_pred_motions(self, data, ucb, nn_preds=None):
@@ -329,6 +331,38 @@ class GPOptimizer(object):
             return y_pred + np.sqrt(self.beta) * y_std, self.dataset
         else:
             return y_pred, self.dataset
+
+    def stochastic_gp(self, ucb, temp=0.005):
+        policies = []
+        scores = []
+
+        # Generate random policies.
+        for res in self.sample_policies:
+            # Get predictions from the GP.
+            sample_disps, dataset = self._get_pred_motions(res, ucb, nn_preds=None)
+
+            policies.append((res[0].policy_params.type,
+                             res[0].policy_params,
+                             res[0].config_goal))
+            scores.append(sample_disps[0])
+
+        # Sample a policy based on its score value.
+        scores = np.exp(np.array(scores)/temp)[:, 0]
+        scores /= np.sum(scores)
+
+        index = np.random.choice(np.arange(scores.shape[0]),
+                                 p=scores)
+
+        self.log.append([scores, index])
+        policy_type_max, params_max, q_max = policies[index]
+
+
+        # TODO: Make sure the policy appears correctly here.
+        policy_data = Policy.get_plot_data(self.mech)
+        x0, bounds = get_reduced_x_and_bounds(policy_type_max, params_max, q_max, policy_data)
+        start_policy = get_policy_from_x(policy_type_max, x0, self.mech)
+        start_q = q_max
+        return start_policy, start_q
 
     def optimize_gp(self, ucb):
         """
@@ -358,6 +392,7 @@ class GPOptimizer(object):
             images = dataset.images[0].unsqueeze(0)
         policy_data = Policy.get_plot_data(self.mech)
         x0, bounds = get_reduced_x_and_bounds(policy_type_max, params_max, q_max, policy_data)
+
         start_policy = get_policy_from_x(policy_type_max, x0, self.mech)
         start_q = q_max
         opt_res = minimize(fun=self._objective_func, x0=x0, args=(policy_type_max, ucb, images),
@@ -365,6 +400,11 @@ class GPOptimizer(object):
         x_final = opt_res['x']
         stop_policy = get_policy_from_x(policy_type_max, x_final, self.mech)
         stop_q = x_final[-1]
+        # print('------ Start')
+        # print(x0)
+        # print(x_final)
+        # print(bounds)
+        # print('------')
         return stop_policy, stop_q, start_policy, start_q
 
 
@@ -410,7 +450,7 @@ class UCB_Interaction(object):
                             noise_level_bounds=(1e-5, 1e2))
         elif self.mech.mechanism_type == 'Door':
             variance = 0.005
-            l_roll = 0.25
+            l_roll = 1.
             l_pitch = 100
             l_radius = 0.01  # 0.09  # 0.05
             l_q = 1.  # Keep greater than 0.5.
@@ -424,7 +464,7 @@ class UCB_Interaction(object):
                 + WhiteKernel(noise_level=noise,
                               noise_level_bounds=(1e-5, 1e2))
 
-    def sample(self):
+    def sample(self, stochastic=False):
         # (1) Choose a point to interact with.
         if len(self.xs) < 1 and self.nn is None:
             # (a) Choose policy randomly.
@@ -433,7 +473,10 @@ class UCB_Interaction(object):
         else:
             # (b) Choose policy using UCB bound.
             ucb = True
-            policy, q, _, _ = self.optim.optimize_gp(ucb)
+            if not stochastic:
+                policy, q, _, _ = self.optim.optimize_gp(ucb)
+            else:
+                policy, q = self.optim.stochastic_gp(ucb)
 
         self.ix += 1
         return policy, q
@@ -777,8 +820,8 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
     sampler = UCB_Interaction(bb, image_data, plot, args, nn_fname=nn_fname)
     for ix in range(n_interactions):
         # sample a policy
-        policy, q = sampler.sample()
-        print(policy.get_policy_tuple(), q)
+        policy, q = sampler.sample(stochastic=True)
+        # print(policy.get_policy_tuple(), q)
 
         # execute
         traj = policy.generate_trajectory(pose_handle_base_world, q, debug=False)
@@ -790,10 +833,13 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
                              q, image_data, None, 1.0, True)
         dataset.append(result)
 
+        # print(c_motion, get_x_from_result(result))
+
         # update GP
         sampler.update(result)
-        if False:  # ix % 10 == 0:
-            model = util.load_model(nn_fname, args.hdim, use_cuda=True)
+        if ix % 10 == 0:
+            if len(nn_fname) > 0:
+                model = util.load_model(nn_fname, args.hdim, use_cuda=True)
             def _gp_callback(new_xs, bb_result):
                 ys, std = sampler.gp.predict(new_xs, return_std=True)
                 ys = ys.flatten()
@@ -842,13 +888,15 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
         #     viz_radius_plots(sampler.xs, sampler.gp)
         #     viz_plots(sampler.xs, sampler.gp)
 
+    with open('log_%d.pickle' % bb_i, 'wb') as handle:
+        pickle.dump(sampler.optim.log, handle)
 
     opt_points = []
     sample_points = []
     if ret_regret:
         regret, start_x, stop_x = test_model(sampler, args)
         opt_points = [(start_x, 'g'), (stop_x, 'r')]
-        print(stop_x, true_rad)
+        # print(stop_x, true_rad)
 
     if plot:
         policy_plot_data = Policy.get_plot_data(mech)
@@ -931,7 +979,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--n-gp-samples',
         type=int,
-        default=500,
+        default=900,# 500,
         help='number of samples to use when fitting a GP to data')
     parser.add_argument(
         '--M',
