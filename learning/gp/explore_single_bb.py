@@ -314,7 +314,7 @@ class GPOptimizer(object):
             Y_pred += val.squeeze()
 
         if ucb:
-            obj = -Y_pred[0][0] - np.sqrt(self.beta) * Y_std[0]
+            obj = -Y_pred[0] - np.sqrt(self.beta) * Y_std[0]
         else:
             obj = -Y_pred[0]
         # print(Y_pred[0][0], Y_std[0], obj)
@@ -332,7 +332,7 @@ class GPOptimizer(object):
         else:
             return y_pred, self.dataset
 
-    def stochastic_gp(self, ucb, temp=0.005):
+    def stochastic_gp(self, ucb, temp=0.0075):
         policies = []
         scores = []
 
@@ -428,7 +428,7 @@ class UCB_Interaction(object):
         self.mech = self.bb._mechanisms[0]
         self.kernel = self.get_kernel()
         self.gp = GaussianProcessRegressor(kernel=self.kernel,
-                              n_restarts_optimizer=10)
+                                           n_restarts_optimizer=10)
         self.optim = GPOptimizer(args.urdf_num, self.bb, self.image_data, args.n_gp_samples, BETA, self.gp, nn=self.nn)
 
     def get_kernel(self):
@@ -452,7 +452,7 @@ class UCB_Interaction(object):
             variance = 0.005
             l_roll = 1.
             l_pitch = 100
-            l_radius = 0.01  # 0.09  # 0.05
+            l_radius = 0.04  # 0.09  # 0.05
             l_q = 1.  # Keep greater than 0.5.
             return ConstantKernel(variance,
                                   constant_value_bounds=(variance, variance)) \
@@ -979,7 +979,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--n-gp-samples',
         type=int,
-        default=900,# 500,
+        default=4000,# 500,
         help='number of samples to use when fitting a GP to data')
     parser.add_argument(
         '--M',
