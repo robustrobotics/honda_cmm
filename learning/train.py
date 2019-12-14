@@ -36,18 +36,16 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
     data = parse_pickle_file(results)
 
     train_set, val_set, _ = setup_data_loaders(data=data,
-                                              batch_size=batch_size)
+                                               batch_size=batch_size)
 
     # Setup Model
     net = NNPolVis(policy_names=['Prismatic', 'Revolute'],
                    policy_dims=[2, 3],
                    hdim=hdim,
-                   im_h=53,  # 154,
+                   im_h=53,  # 154, Note thiese aren't important for the SpatialAutoencoder
                    im_w=115,  # 205,
-                   kernel_size=3,
                    image_encoder=args.image_encoder)
 
-    #print(sum(p.numel() for p in net.parameters() if p.requires_grad))
     if args.use_cuda:
         net = net.cuda()
 

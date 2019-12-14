@@ -396,10 +396,13 @@ class GPOptimizer(object):
         start_policy = get_policy_from_x(policy_type_max, x0, self.mech)
         start_q = q_max
         opt_res = minimize(fun=self._objective_func, x0=x0, args=(policy_type_max, ucb, images),
-                       method='L-BFGS-B', options={'eps': 10**-3}, bounds=bounds)
+                       method='L-BFGS-B', options={'eps': 1e-3, 'maxiter': 100000, 'gtol': 1e-8}, bounds=bounds)
+
+
         x_final = opt_res['x']
         stop_policy = get_policy_from_x(policy_type_max, x_final, self.mech)
         stop_q = x_final[-1]
+        print('OPT:', opt_res['success'], opt_res['nit'], opt_res['message'])
         # print('------ Start')
         # print(x0)
         # print(x_final)
@@ -820,7 +823,7 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
     sampler = UCB_Interaction(bb, image_data, plot, args, nn_fname=nn_fname)
     for ix in range(n_interactions):
         # sample a policy
-        policy, q = sampler.sample(stochastic=True)
+        policy, q = sampler.sample(stochastic=False)
         # print(policy.get_policy_tuple(), q)
 
         # execute
@@ -896,7 +899,9 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
     if ret_regret:
         regret, start_x, stop_x = test_model(sampler, args)
         opt_points = [(start_x, 'g'), (stop_x, 'r')]
-        # print(stop_x, true_rad)
+        print('----------')
+        print(start_x)
+        print(stop_x, true_rad)
 
     if plot:
         policy_plot_data = Policy.get_plot_data(mech)
