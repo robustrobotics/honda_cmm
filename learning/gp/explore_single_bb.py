@@ -823,7 +823,7 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
     sampler = UCB_Interaction(bb, image_data, plot, args, nn_fname=nn_fname)
     for ix in range(n_interactions):
         # sample a policy
-        policy, q = sampler.sample(stochastic=False)
+        policy, q = sampler.sample(stochastic=args.stochastic)
         # print(policy.get_policy_tuple(), q)
 
         # execute
@@ -1024,6 +1024,10 @@ if __name__ == '__main__':
         '--debug',
         action='store_true',
         help='use to enter debug mode')
+    parser.add_argument(
+        '--stochastic',
+        action='store_true',
+        help='use to sample from the acquistion function instead of optimizing')
     args = parser.parse_args()
     print(args)
 
