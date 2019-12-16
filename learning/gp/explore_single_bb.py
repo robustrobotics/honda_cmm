@@ -402,7 +402,7 @@ class GPOptimizer(object):
         x_final = opt_res['x']
         stop_policy = get_policy_from_x(policy_type_max, x_final, self.mech)
         stop_q = x_final[-1]
-        print('OPT:', opt_res['success'], opt_res['nit'], opt_res['message'])
+        # print('OPT:', opt_res['success'], opt_res['nit'], opt_res['message'])
         # print('------ Start')
         # print(x0)
         # print(x_final)
