@@ -243,14 +243,14 @@ class Gripper:
             self.k = [500.0, 0.0]
             self.d = [-15.0, 0.0]
         elif policy_type == 'Revolute' and not self.no_gripper:
-            self.k = [50000.0,20.0]
-            self.d = [0.45,0.45]
+            self.k = [50000.0, 20.0]
+            self.d = [0.45, 0.45]
         elif policy_type == 'Prismatic' and not self.no_gripper:
-            self.k = [3000.0,20.0]
-            self.d = [250.0,0.45]
+            self.k = [3000.0, 20.0]
+            self.d = [250.0, 0.45]
         elif policy_type == 'Prismatic' and self.no_gripper:
-            raise NotImplementedError('Gains for Slider with no_gripper have not \
-                    been tuned as yet.')
+            self.k = [30.0, 0.0]
+            self.d = [0.0, 0.0]
 
     def execute_trajectory(self, traj, mech, policy_type, debug):
         pose_handle_base_world = mech.get_pose_handle_base_world()
