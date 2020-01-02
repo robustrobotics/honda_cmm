@@ -104,7 +104,7 @@ class Policy(object):
         # these values are the mins and maxes generated in the _gen() functions
         if mech.mechanism_type == 'Slider':
             return [PolicyPlotData('pitch', 0, [-np.pi, 0], 'angular'),
-                    PolicyPlotData('yaw', 1, [-np.pi, 0], 'angular'),
+                    PolicyPlotData('yaw', 1, [-np.pi/2, np.pi/2], 'angular'),
                     PolicyPlotData('config', 2, [-0.25, 0.25], 'linear')]
         elif mech.mechanism_type == 'Door':
             return [PolicyPlotData('roll', 0, [0, 2*np.pi], 'angular'),
@@ -183,7 +183,7 @@ class Prismatic(Policy):
         self.traj_lines = lines
 
     @staticmethod
-    def _gen(bb, mech, randomness, pitch=None, init_pose=None):
+    def _gen(bb, mech, randomness, init_pose=None):
         """ This function generates a Prismatic policy. The ranges are
         based on the data.generator range prismatic joints
         """
@@ -197,22 +197,19 @@ class Prismatic(Policy):
             true_yaw = 0.0
         else:
             raise NotImplementedError('Still need to implement random Prismatic for Door')
-        if pitch is not None:
-            return Prismatic(rigid_position, rigid_orientation, pitch, 0.0, None, None)
-        else:
-            delta_pitch = randomness*np.random.uniform(-np.pi/2, np.pi/2)
-            delta_yaw = 0.0#randomness*np.random.uniform(-np.pi/2, np.pi/2)
+        delta_pitch = randomness*np.random.uniform(-np.pi/2, np.pi/2)
+        delta_yaw = randomness*np.random.uniform(-np.pi/2, np.pi/2)
 
-            pitch = true_pitch + delta_pitch
-            yaw = true_yaw + delta_yaw
+        pitch = true_pitch + delta_pitch
+        yaw = true_yaw + delta_yaw
 
-            if pitch < -np.pi:
-                pitch += np.pi
-            elif pitch > 0:
-                pitch -= np.pi
-            # TODO: same for yaw if have mech with yaw != 0
-            return Prismatic(rigid_position, rigid_orientation, pitch, yaw, \
-                    delta_pitch, delta_yaw)
+        if pitch < -np.pi:
+            pitch += np.pi
+        elif pitch > 0:
+            pitch -= np.pi
+        # TODO: same for yaw if have mech with yaw != 0
+        return Prismatic(rigid_position, rigid_orientation, pitch, yaw, \
+                delta_pitch, delta_yaw)
 
 
     def get_goal_from_policy(self, goal_config):#, bb, mech, handle_pose, goal_pos):
