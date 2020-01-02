@@ -38,7 +38,10 @@ def get_point_from_x(x, linear_param, angular_param, policy_type):
             else:
                 point[0] = x[0]
         if angular_name == 'yaw':
-            point[0] = x[1]
+            if x[-1] < 0:
+                point[0] = x[1] + np.pi
+            else:
+                point[0] = x[1]
     if policy_type == 'door':
         if linear_name == 'config':
             point[1] = x[-1]
@@ -62,7 +65,6 @@ def get_policy_from_x(p_type, x, mech):
             rot_axis_pitch = 0.0
         rot_axis_world = util.quaternion_from_euler(rot_axis_roll, rot_axis_pitch, 0.0)
         radius_x = x[1]
-        # true_radius_x = mech.get_radius_x()
         radius = [-radius_x, 0.0, 0.0]
         p_handle_base_world = mech.get_pose_handle_base_world().p
         p_rot_center_world = p_handle_base_world + util.transformation(radius, [0., 0., 0.], rot_axis_world)
@@ -75,7 +77,7 @@ def get_policy_from_x(p_type, x, mech):
                         rot_orn)
     if p_type == 'Prismatic':
         pitch = x[0]
-        yaw = 0.0
+        yaw = x[1]
         pos = mech.get_pose_handle_base_world().p
         orn = [0., 0., 0., 1.]
         return Prismatic(pos, orn, pitch, yaw)
@@ -98,26 +100,22 @@ def get_x_from_result(result):
 
 # takes in a policy and returns and optimization x and the variable bounds
 def get_reduced_x_and_bounds(policy_type, policy_params, q, policy_data):
-    bounds = []
     for policy_param in policy_data:
         if policy_param.param_name == 'pitch':
             pitch_bounds = policy_param.range
-            # TODO: Currently commented out as it is not used for doors.
-            # bounds.append(pitch_bounds)
-        # if policy_param.param_name == 'yaw':
-        #     yaw_bounds = policy_param.range
+        if policy_param.param_name == 'yaw':
+            yaw_bounds = policy_param.range
         if policy_param.param_name == 'roll':
             roll_bounds = policy_param.range
-            bounds.append(roll_bounds)
         if policy_param.param_name == 'radius':
             radius_bounds = policy_param.range
-            bounds.append(radius_bounds)
         if policy_param.param_name == 'config':
             config_bounds = policy_param.range
-            bounds.append(config_bounds)
     if policy_type == 'Prismatic':
-        return np.concatenate([[policy_params.params.pitch], [q]]), bounds
+        bounds = [pitch_bounds, yaw_bounds, config_bounds]
+        return np.concatenate([[policy_params.params.pitch, policy_params.params.yaw], [q]]), bounds
     elif policy_type == 'Revolute':
+        bounds = [roll_bounds, radius_bounds, config_bounds]
         return np.concatenate([[policy_params.params.rot_axis_roll,
                                 policy_params.params.rot_radius_x], [q]]), bounds
 
@@ -135,7 +133,7 @@ def get_policy_tensor(policy_type, x, mech):
 # this takes in an optimization x and returns an x with the policy params
 def get_policy_list(policy_type, x, mech):
     if policy_type == 'Prismatic':
-        return [[x[0], 0.0, x[-1]]]
+        return [[x[0], x[1], x[-1]]]
     elif policy_type == 'Revolute':
         if not mech.flipped:
             pitch = np.pi
@@ -317,7 +315,6 @@ class GPOptimizer(object):
             obj = -Y_pred[0] - np.sqrt(self.beta) * Y_std[0]
         else:
             obj = -Y_pred[0]
-        # print(Y_pred[0][0], Y_std[0], obj)
         return obj
 
     def _get_pred_motions(self, data, ucb, nn_preds=None):
@@ -441,7 +438,7 @@ class UCB_Interaction(object):
         if self.mech.mechanism_type == 'Slider':
             variance = 0.005
             l_pitch = 0.10
-            l_yaw = 100
+            l_yaw = 0.10
             l_q = 0.1
             return ConstantKernel(variance,
                                   constant_value_bounds=(variance, variance)) * \
@@ -627,27 +624,31 @@ def viz_circles(image_data, mech, sample_points=[], opt_points=[], gp=None, nn=N
             all_other_params = list(filter(lambda x: (x != angular_param)
                                            and (x != linear_param),
                                     policy_plot_data))
-            other_vals_and_inds = []
+
+            subplot_inds_and_vals = []
             for other_params in all_other_params:
                 if other_params.range[0] == other_params.range[1]:
                     n_bins = 1
                 else:
                     n_bins = N_BINS
-                other_vals_and_inds += [list(enumerate(np.linspace(*other_params.range, n_bins)))]
+                subplot_inds_and_vals += [list(enumerate(np.linspace(*other_params.range, n_bins)))]
 
             # TODO: only works for up to 2 other_params (will have to figure out new
             # visualization past that)
-            fig = plt.figure()
-            plt.suptitle(angular_param.param_name + ' vs ' + linear_param.param_name)
-            if len(other_vals_and_inds) == 1:
+            mean_fig = plt.figure()
+            plt.suptitle('mean fn:' + angular_param.param_name + ' vs ' + linear_param.param_name)
+
+            std_fig = plt.figure()
+            plt.suptitle('std:' + angular_param.param_name + ' vs ' + linear_param.param_name)
+            if len(subplot_inds_and_vals) == 1:
                 n_rows = 1
-                n_cols = len(other_vals_and_inds[0])
-            elif len(other_vals_and_inds) == 2:
-                n_cols = len(other_vals_and_inds[0])
-                n_rows = len(other_vals_and_inds[1])
+                n_cols = len(subplot_inds_and_vals[0])
+            elif len(subplot_inds_and_vals) == 2:
+                n_cols = len(subplot_inds_and_vals[0])
+                n_rows = len(subplot_inds_and_vals[1])
 
             # for each other value add a dimension of plots to the figure
-            for other_val_and_ind in itertools.product(*other_vals_and_inds):
+            for single_subplot_inds_and_vals in itertools.product(*subplot_inds_and_vals):
                 # make matrix of all values to predict dist for
                 X_pred = np.zeros((n_angular*n_linear, n_params))
                 xpred_rowi = 0
@@ -655,14 +656,16 @@ def viz_circles(image_data, mech, sample_points=[], opt_points=[], gp=None, nn=N
                     for jx in range(0, n_linear):
                         X_pred[xpred_rowi, angular_param.param_num] = angular_vals[ix]
                         X_pred[xpred_rowi, linear_param.param_num] = linear_vals[jx]
-                        for otheri, other_param_val in enumerate(other_val_and_ind):
-                            other_param_num = all_other_params[otheri].param_num
-                            X_pred[xpred_rowi, other_param_num] = other_param_val[1]
+                        for other_param_ind, single_subplot_ind_and_val in enumerate(single_subplot_inds_and_vals):
+                            other_param_num = all_other_params[other_param_ind].param_num
+                            X_pred[xpred_rowi, other_param_num] = single_subplot_ind_and_val[1]
                         xpred_rowi += 1
 
                 Y_pred = np.zeros((X_pred.shape[0]))
                 if gp is not None:
-                    Y_pred = np.add(Y_pred, gp.predict(X_pred))
+                    Y_pred_gp, Y_std = gp.predict(X_pred, return_std=True)
+                    Y_pred = np.add(Y_pred, Y_pred_gp.squeeze())
+                    Y_std = Y_std.squeeze()
                 if nn is not None:
                     type = 'Revolute' if mech.mechanism_type == 'Door' else 'Prismatic'
                     loader = format_batch(type, X_pred, mech, image_data)
@@ -671,22 +674,53 @@ def viz_circles(image_data, mech, sample_points=[], opt_points=[], gp=None, nn=N
                     nn_preds = nn(pol, x, q, im)[0].detach().numpy()
                     Y_pred = np.add(Y_pred, nn_preds.squeeze())
                 mean_colors = Y_pred.reshape(n_angular, n_linear)
+                std_colors = Y_std.reshape(n_angular, n_linear)
 
-                row_col = [o[0]+1 for o in other_val_and_ind]
+                row_col = [o[0]+1 for o in single_subplot_inds_and_vals]
                 if len(row_col) == 1:
                     subplot_num = 1*row_col[0]
                 else:
                     subplot_num = reduce(lambda x, y: n_cols*(x-1)+y, row_col)
-                ax = plt.subplot(n_rows, n_cols, subplot_num, projection='polar')
+
+                # make polar subplot of mean function
+                ax = mean_fig.add_subplot(n_rows, n_cols, subplot_num, projection='polar')
                 ax.set_title('\n'.join([str(all_other_params[other_param_i].param_name)
                     + ' = ' + str("%.2f" % other_val) for other_param_i,
-                    (plot_i, other_val) in enumerate(other_val_and_ind)]),
+                    (subplot_i, other_val) in enumerate(single_subplot_inds_and_vals)]),
                     fontsize=10)
                 max_dist = mech.get_max_dist()
+
+                # only add points to subplot that are close to this subplot "bin"
+                plot_points = []
+                for pt, color in sample_points+opt_points:
+                    keep_point = True
+                    for other_param_list_num, (subplot_dim, subplot_val) in enumerate(single_subplot_inds_and_vals):
+                        all_subplot_vals = np.array([inds_and_vals[1] for
+                                inds_and_vals in subplot_inds_and_vals[other_param_list_num]])
+                        param_num = all_other_params[other_param_list_num].param_num
+                        point_param_val = pt[param_num]
+                        closest_index = (np.abs(all_subplot_vals - point_param_val)).argmin()
+                        if all_subplot_vals[closest_index] == subplot_val:
+                            keep_point = keep_point and True
+                        else:
+                            keep_point = keep_point and False
+                    if keep_point: plot_points += [(pt, color)]
+
                 im = polar_plots(ax, mean_colors, max_dist, angular_param,
-                                 linear_param, points=sample_points+opt_points,
-                                 colorbar=False)
-            add_colorbar(fig, im)
+                                 linear_param, points=plot_points)
+
+                # make polar subplot of std dev
+                ax = std_fig.add_subplot(n_rows, n_cols, subplot_num, projection='polar')
+                ax.set_title('\n'.join([str(all_other_params[other_param_i].param_name)
+                    + ' = ' + str("%.2f" % other_val) for other_param_i,
+                    (subplot_i, other_val) in enumerate(single_subplot_inds_and_vals)]),
+                    fontsize=10)
+                max_dist = mech.get_max_dist()
+                im = polar_plots(ax, std_colors, max_dist, angular_param,
+                                 linear_param, points=plot_points)
+
+            add_colorbar(mean_fig, im)
+            add_colorbar(std_fig, im)
             plot_dir = 'gp_plots/'
             if not os.path.isdir(plot_dir):
                 os.mkdir(plot_dir)
@@ -702,12 +736,8 @@ def viz_circles(image_data, mech, sample_points=[], opt_points=[], gp=None, nn=N
                 os.mkdir(plot_dir)
             plt.savefig(plot_dir+'/%i.png' % (len(sample_points)))
 
-    # plt.show()
-    # input('Enter to close plots')
-    plt.close('all')
 
-
-def polar_plots(ax, colors, vmax, angular_param, linear_param, points=None, colorbar=False):
+def polar_plots(ax, colors, vmax, angular_param, linear_param, points=None):
     n_ang, n_lin = colors.shape
 
     # for slider policies
@@ -718,8 +748,14 @@ def polar_plots(ax, colors, vmax, angular_param, linear_param, points=None, colo
         rp, thp = np.meshgrid(rp, thp)
         cp = np.zeros(rp.shape)
 
-        cp[0:n_ang, :] = colors[:, 0:n_lin//2][:, ::-1]
-        cp[n_ang:, :] = np.copy(colors[:, n_lin//2:])
+        if abs(angular_param.range[0]) == 0 or abs(angular_param.range[0]) == np.pi:
+            cp[0:n_ang, :] = colors[:, 0:n_lin//2][:, ::-1]
+            cp[n_ang:, :] = np.copy(colors[:, n_lin//2:])
+        elif abs(angular_param.range[0]) == np.pi/2:
+            cp[0:n_ang//2, :] = np.copy(colors[n_ang//2:, n_lin//2:])
+            cp[n_ang//2:n_ang, :] = colors[:n_ang//2, :n_lin//2][:, ::-1]
+            cp[n_ang:3*n_ang//2, :] = colors[n_ang//2:, :n_lin//2][:, ::-1]
+            cp[3*n_ang//2:2*n_ang, :] = np.copy(colors[:n_ang//2, n_lin//2:])
         type = 'slider'
     # for door policies
     else:
@@ -788,7 +824,6 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
     '''
     dataset = []
     regrets = []
-    print(len(busybox_data), len(busybox_data[0]))
     for ix, bb_results in enumerate(busybox_data):
         single_dataset, _, r = create_single_bb_gpucb_dataset(bb_results,
                                                               n_interactions,
@@ -800,7 +835,6 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
         dataset.append(single_dataset)
         regrets.append(r)
         print('Interacted with BusyBox %d.' % ix)
-        print(r)
     print('Regret:', np.mean(regrets))
 
     # Save the dataset.
@@ -812,22 +846,21 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
 def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, args, bb_i,
                                    plot_dir_prefix='', ret_regret=False):
     dataset = []
-
+    viz = False
+    debug = False
     # interact with BB
     bb = BusyBox.bb_from_result(bb_result, urdf_num=args.urdf_num)
     mech = bb._mechanisms[0]
-    image_data, gripper = setup_env(bb, False, False, True)
-    true_rad = mech.get_radius_x()
+    image_data, gripper = setup_env(bb, viz, False, True)
 
     pose_handle_base_world = mech.get_pose_handle_base_world()
     sampler = UCB_Interaction(bb, image_data, plot, args, nn_fname=nn_fname)
     for ix in range(n_interactions):
         # sample a policy
         policy, q = sampler.sample(stochastic=args.stochastic)
-        # print(policy.get_policy_tuple(), q)
 
         # execute
-        traj = policy.generate_trajectory(pose_handle_base_world, q, debug=False)
+        traj = policy.generate_trajectory(pose_handle_base_world, q, debug=debug)
         c_motion, motion, handle_pose_final = gripper.execute_trajectory(traj, mech, policy.type, False)
         gripper.reset(mech)
 
@@ -836,10 +869,24 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
                              q, image_data, None, 1.0, True)
         dataset.append(result)
 
-        # print(c_motion, get_x_from_result(result))
-
         # update GP
         sampler.update(result)
+
+        # uncomment to generate a plot after each sample
+        '''
+        if plot:
+            policy_plot_data = Policy.get_plot_data(mech)
+            sample_points = [(sample, 'r') for sample in sampler.xs]
+            opt_points = []
+            viz_circles(image_data,
+                        mech,
+                        sample_points=sample_points,
+                        opt_points=opt_points,
+                        gp=sampler.gp,
+                        nn=sampler.nn,
+                        bb_i=bb_i,
+                        plot_dir_prefix=plot_dir_prefix)
+        '''
         if ix % 10 == 0:
             if len(nn_fname) > 0:
                 model = util.load_model(nn_fname, args.hdim, use_cuda=True)
@@ -899,13 +946,10 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
     if ret_regret:
         regret, start_x, stop_x = test_model(sampler, args)
         opt_points = [(start_x, 'g'), (stop_x, 'r')]
-        print('----------')
-        print(start_x)
-        print(stop_x, true_rad)
 
     if plot:
         policy_plot_data = Policy.get_plot_data(mech)
-        sample_points = [(sample, 'r') for sample in sampler.xs]
+        sample_points = [(sample, 'k') for sample in sampler.xs]
         viz_circles(image_data,
                     mech,
                     sample_points=sample_points,
@@ -914,7 +958,12 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
                     nn=sampler.nn,
                     bb_i=bb_i,
                     plot_dir_prefix=plot_dir_prefix)
+        #viz_gp(sampler.gp, bb, sampler.nn)
         # viz_plots(sampler.xs, sampler.ys, sampler.gp)
+
+        plt.show()
+        input('Enter to close plots')
+        plt.close('all')
 
     if ret_regret:
         return dataset, sampler.gp, regret
@@ -1029,7 +1078,6 @@ if __name__ == '__main__':
         action='store_true',
         help='use to sample from the acquistion function instead of optimizing')
     args = parser.parse_args()
-    print(args)
 
     if args.debug:
         import pdb
