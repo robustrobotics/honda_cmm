@@ -706,7 +706,7 @@ def viz_circles(image_data, mech, sample_points=[], opt_points=[], gp=None, nn=N
                             keep_point = keep_point and False
                     if keep_point: plot_points += [(pt, color)]
 
-                im = polar_plots(ax, mean_colors, max_dist, angular_param,
+                mean_im = polar_plots(ax, mean_colors, max_dist, angular_param,
                                  linear_param, points=plot_points)
 
                 # make polar subplot of std dev
@@ -716,26 +716,30 @@ def viz_circles(image_data, mech, sample_points=[], opt_points=[], gp=None, nn=N
                     (subplot_i, other_val) in enumerate(single_subplot_inds_and_vals)]),
                     fontsize=10)
                 max_dist = mech.get_max_dist()
-                im = polar_plots(ax, std_colors, max_dist, angular_param,
+                std_im = polar_plots(ax, std_colors, max_dist, angular_param,
                                  linear_param, points=plot_points)
 
-            add_colorbar(mean_fig, im)
-            add_colorbar(std_fig, im)
-            plot_dir = 'gp_plots/'
-            if not os.path.isdir(plot_dir):
-                os.mkdir(plot_dir)
-            if plot_dir_prefix is not '':
-                plot_dir += plot_dir_prefix
+            add_colorbar(mean_fig, mean_im)
+            add_colorbar(std_fig, std_im)
+
+            for plot_type, fig in zip(['mean', 'std_dev'], [mean_fig, std_fig]):
+                plot_dir = 'gp_plots/'
                 if not os.path.isdir(plot_dir):
                     os.mkdir(plot_dir)
-            plot_dir += '/bb_%i' % bb_i
-            if not os.path.isdir(plot_dir):
-                os.mkdir(plot_dir)
-            plot_dir += '/%s' % angular_param.param_name+linear_param.param_name
-            if not os.path.isdir(plot_dir):
-                os.mkdir(plot_dir)
-            plt.savefig(plot_dir+'/%i.png' % (len(sample_points)))
-
+                if plot_dir_prefix is not '':
+                    plot_dir += plot_dir_prefix
+                    if not os.path.isdir(plot_dir):
+                        os.mkdir(plot_dir)
+                plot_dir += '/bb_%i' % bb_i
+                if not os.path.isdir(plot_dir):
+                    os.mkdir(plot_dir)
+                plot_dir += '/%s' % angular_param.param_name+linear_param.param_name
+                if not os.path.isdir(plot_dir):
+                    os.mkdir(plot_dir)
+                plot_dir += '/%s' % plot_type
+                if not os.path.isdir(plot_dir):
+                    os.mkdir(plot_dir)
+                fig.savefig(plot_dir+'/%i.png' % (len(sample_points)))
 
 def polar_plots(ax, colors, vmax, angular_param, linear_param, points=None):
     n_ang, n_lin = colors.shape
@@ -835,7 +839,7 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
         dataset.append(single_dataset)
         regrets.append(r)
         print('Interacted with BusyBox %d.' % ix)
-    print('Regret:', np.mean(regrets))
+        print('Regret:', np.mean(regrets))
 
     # Save the dataset.
     if args.fname != '':
@@ -938,8 +942,8 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
         #     viz_radius_plots(sampler.xs, sampler.gp)
         #     viz_plots(sampler.xs, sampler.gp)
 
-    with open('log_%d.pickle' % bb_i, 'wb') as handle:
-        pickle.dump(sampler.optim.log, handle)
+    #with open('log_%d.pickle' % bb_i, 'wb') as handle:
+    #    pickle.dump(sampler.optim.log, handle)
 
     opt_points = []
     sample_points = []
