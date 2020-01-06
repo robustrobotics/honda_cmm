@@ -13,7 +13,7 @@ def get_models(L, models_path):
     for root, subdir, files in all_files:
         for file in files:
             if (file[-3:] == '.pt') and ('_'+str(L)+'L_' in file):
-                M_result = re.search('(.*)/(.*)M/(.*)', root)\
+                M_result = re.search('(.*)/(.*)M/(.*)', root)
                 M = M_result.group(2)
                 full_path = root+'/'+file
                 models.append(full_path)
@@ -62,7 +62,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--n-gp-samples',
         type=int,
-        default=8000,
+        default=500,
         help='number of samples to use when fitting a GP to data')
     parser.add_argument(
         '--T',
