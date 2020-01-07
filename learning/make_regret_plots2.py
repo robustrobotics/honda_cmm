@@ -49,6 +49,9 @@ if __name__ == '__main__':
         'random': ['c', 'Train-Random']
     }
     plt.ion()
+    _, median_ax = plt.subplots()
+    _, mean_ax = plt.subplots()
+    _, succ_ax = plt.subplots()
     for name in args.types:
         res_files = get_result_file(name, args.results_path)
         for (T,N), res_file in res_files.items():
@@ -82,22 +85,22 @@ if __name__ == '__main__':
                             prob_successes, \
                             np.add(prob_successes, std_successes)  # Success
 
-            for (bot, mid, top, type) in ((med_bot, med_mid, med_top, 'Median Regret'),\
-                                    (mean_bot, mean_mid, mean_top, 'Mean Regret'),\
-                                    (succ_bot, succ_mid, succ_top, '% Success')):
-                plt.figure()
+            for (bot, mid, top, type, ax) in ((med_bot, med_mid, med_top, 'Median Regret', median_ax),\
+                                    (mean_bot, mean_mid, mean_top, 'Mean Regret', mean_ax),\
+                                    (succ_bot, succ_mid, succ_top, '% Success', succ_ax)):
+                #plt.figure()
                 for plot_type in plot_info:
                     if plot_type in name:
                         plot_params = plot_info[plot_type]
-                plt.plot(Ls, mid, c=plot_params[0], label=plot_params[1])
-                plt.fill_between(Ls, bot, top, facecolor=plot_params[0], alpha=0.2)
+                ax.plot(Ls, mid, c=plot_params[0], label=plot_params[1])
+                ax.fill_between(Ls, bot, top, facecolor=plot_params[0], alpha=0.2)
 
-                plt.ylim(0, 1)
-                plt.legend()
-                plt.xlabel('L')
-                plt.ylabel(type)
-                plt.title('Evaluated on T=%s Interactions on N=%s Mechanisms' % (T, N))
+                ax.set_ylim(0, 1)
+                ax.legend()
+                ax.set_xlabel('L')
+                ax.set_ylabel(type)
+                ax.set_title('Evaluated on T=%s Interactions on N=%s Mechanisms' % (T, N))
 
-            plt.show()
-            input('enter to close')
-            plt.close()
+    plt.show()
+    input('enter to close')
+    plt.close()
