@@ -96,17 +96,17 @@ class Policy(object):
         raise NotImplementedError('_gen not implemented for policy type ')
 
     @staticmethod
-    def get_plot_data(mech):
+    def get_plot_data(policy_type):
         """
         Return a list of PolicyPlotData for each policy type.
         This depends on the parameters that are passed into the Policy Encoder.
         """
         # these values are the mins and maxes generated in the _gen() functions
-        if mech.mechanism_type == 'Slider':
+        if policy_type == 'Prismatic':
             return [PolicyPlotData('pitch', 0, [-np.pi, 0], 'angular'),
                     PolicyPlotData('yaw', 1, [-np.pi/2, np.pi/2], 'angular'),
                     PolicyPlotData('config', 2, [-0.25, 0.25], 'linear')]
-        elif mech.mechanism_type == 'Door':
+        elif policy_type == 'Revolute':
             return [PolicyPlotData('roll', 0, [0, 2*np.pi], 'angular'),
                     PolicyPlotData('pitch', 1, [0, 0], 'angular'),
                     PolicyPlotData('radius', 2, [.08-0.025, 0.15], 'linear'),
@@ -195,19 +195,23 @@ class Prismatic(Policy):
         if mech.mechanism_type == 'Slider':
             true_pitch = -np.arctan2(mech.axis[1], mech.axis[0])
             true_yaw = 0.0
+
+            delta_pitch = randomness*np.random.uniform(-np.pi/2, np.pi/2)
+            delta_yaw = randomness*np.random.uniform(-np.pi/2, np.pi/2)
+
+            pitch = true_pitch + delta_pitch
+            yaw = true_yaw + delta_yaw
+
+            if pitch < -np.pi:
+                pitch += np.pi
+            elif pitch > 0:
+                pitch -= np.pi
+            # TODO: same for yaw if have mech with yaw != 0
         else:
-            raise NotImplementedError('Still need to implement random Prismatic for Door')
-        delta_pitch = randomness*np.random.uniform(-np.pi/2, np.pi/2)
-        delta_yaw = randomness*np.random.uniform(-np.pi/2, np.pi/2)
-
-        pitch = true_pitch + delta_pitch
-        yaw = true_yaw + delta_yaw
-
-        if pitch < -np.pi:
-            pitch += np.pi
-        elif pitch > 0:
-            pitch -= np.pi
-        # TODO: same for yaw if have mech with yaw != 0
+            pitch = np.random.uniform(-np.pi, 0.0)
+            yaw = np.random.uniform(-np.pi/2, np.pi/2)
+            delta_pitch = None
+            delta_yaw = None
         return Prismatic(rigid_position, rigid_orientation, pitch, yaw, \
                 delta_pitch, delta_yaw)
 
@@ -325,7 +329,7 @@ class Revolute(Policy):
         """ This function generates a Revolute policy. The ranges are
         based on the data.generator range revolute joints
         """
-        if randomness > 0:
+        if randomness > 0 or mech.mechanism_type is not 'Door':
             rot_axis_roll_world = np.random.uniform(0.0, 2 * np.pi)
             radius_x = np.random.uniform(0.08-0.025, 0.15)
             # toss = np.random.uniform()
@@ -347,9 +351,17 @@ class Revolute(Policy):
             rot_axis_roll_world = 0.0
             radius_x = mech.get_radius_x()
 
-        if not mech.flipped:
-            rot_axis_pitch_world = np.pi
+        # we are not learning this parameter yet, so only make it random if you
+        # have to (for sliders)
+        if mech.mechanism_type is 'Door':
+            if not mech.flipped:
+                rot_axis_pitch_world = np.pi
+            else:
+                rot_axis_pitch_world = 0.0
         else:
+            # TODO: when add rot_axis_pitch to the space of parameters being explored,
+            # change this back to random choice between 0 and pi
+            # rot_axis_pitch_world = np.random.choice([0.0, np.pi])
             rot_axis_pitch_world = 0.0
         rot_axis_world = util.quaternion_from_euler(rot_axis_roll_world,rot_axis_pitch_world, 0.0)
 

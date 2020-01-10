@@ -18,6 +18,8 @@ def generate_dataset(args, git_hash):
     for i in range(args.n_bbs):
         if args.bb_fname is not None:
             bb = BusyBox.bb_from_result(bb_data[i][0])
+        elif args.random_policies:
+            bb = BusyBox.generate_random_busybox(max_mech=args.max_mech, urdf_tag=args.urdf_num, debug=args.debug)
         else:
             mech_classes = []
             for mech_type in args.mech_types:
