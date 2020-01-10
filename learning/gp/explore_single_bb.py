@@ -305,7 +305,7 @@ class GPOptimizer(object):
             scores.append(sample_disps[0])
 
         # Sample a policy based on its score value.
-        scores = np.exp(np.array(scores)/temp)[:, 0]
+        scores = np.exp(np.array(scores)/temp)#[:, 0]
         scores /= np.sum(scores)
 
         index = np.random.choice(np.arange(scores.shape[0]),
@@ -413,10 +413,10 @@ class UCB_Interaction(object):
                             noise_level_bounds=(1e-5, 1e2))
         elif type == 'Revolute':
             variance = 0.005
-            l_roll = 1.
+            l_roll = .1
             l_pitch = 100
             l_radius = 0.04  # 0.09  # 0.05
-            l_q = 1.  # Keep greater than 0.5.
+            l_q = .5  # Keep greater than 0.5.
             return ConstantKernel(variance,
                                   constant_value_bounds=(variance, variance)) \
                 * RBF(length_scale=(l_roll, l_pitch, l_radius, l_q),
@@ -629,8 +629,7 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
 
         # update GP
         sampler.update(result)
-
-        # uncomment to generate a plot after each sample
+        # uncomment to generate a plot after each sample (WARNING: VERY SLOW!)
         '''
         if plot:
             sample_points = {'Prismatic': [(sample, 'k') for sample in sampler.xs['Prismatic']],
