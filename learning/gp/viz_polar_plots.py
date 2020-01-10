@@ -119,12 +119,8 @@ def viz_circles(image_data, mech, beta, sample_points={}, opt_points=[], gps=Non
                     max_dist = mech.get_max_dist()
 
                     # only add points to subplot that are close to this subplot "bin"
-                    all_points = sample_points[policy_type]
-                    if opt_points != []:
-                        all_points += opt_points[1] if opt_points[0] == policy_type else []
                     plot_points = []
-
-                    for pt, color in all_points:
+                    for pt, color in sample_points[policy_type]+[opt_points[1] if opt_points[0] == policy_type else []][0]:
                         keep_point = True
                         for other_param_list_num, (subplot_dim, subplot_val) in enumerate(single_subplot_inds_and_vals):
                             all_subplot_vals = np.array([inds_and_vals[1] for
