@@ -49,12 +49,17 @@ if __name__ == '__main__':
         'random': ['c', 'Train-Random']
     }
     plt.ion()
-    _, median_ax = plt.subplots()
-    _, mean_ax = plt.subplots()
-    _, succ_ax = plt.subplots()
+    plt_axes = {}
     for name in args.types:
         res_files = get_result_file(name, args.results_path)
         for (T,N), res_file in res_files.items():
+            if T in plt_axes:
+                pass
+            else:
+                _, median_ax = plt.subplots()
+                _, mean_ax = plt.subplots()
+                _, succ_ax = plt.subplots()
+                plt_axes[T] = [median_ax, mean_ax, succ_ax]
             regret_results = util.read_from_file(res_file)
             Ls = sorted(regret_results.keys())
 
@@ -85,9 +90,9 @@ if __name__ == '__main__':
                             prob_successes, \
                             np.add(prob_successes, std_successes)  # Success
 
-            for (bot, mid, top, type, ax) in ((med_bot, med_mid, med_top, 'Median Regret', median_ax),\
-                                    (mean_bot, mean_mid, mean_top, 'Mean Regret', mean_ax),\
-                                    (succ_bot, succ_mid, succ_top, '% Success', succ_ax)):
+            for (bot, mid, top, type, ax) in ((med_bot, med_mid, med_top, 'Median Regret', plt_axes[T][0]),\
+                                    (mean_bot, mean_mid, mean_top, 'Mean Regret', plt_axes[T][1]),\
+                                    (succ_bot, succ_mid, succ_top, '% Success', plt_axes[T][2])):
                 #plt.figure()
                 for plot_type in plot_info:
                     if plot_type in name:
