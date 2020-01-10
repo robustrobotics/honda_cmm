@@ -10,6 +10,7 @@ from utils import util, setup_pybullet
 def get_models(L, models_path):
     all_files = os.walk(models_path)
     models = []
+    M = None
     for root, subdir, files in all_files:
         for file in files:
             if (file[-3:] == '.pt') and ('_'+str(L)+'L_' in file):
@@ -17,6 +18,9 @@ def get_models(L, models_path):
                 M = M_result.group(2)
                 full_path = root+'/'+file
                 models.append(full_path)
+    if M is None:
+        raise Exception('make sure that the supplied L values (--Ls) correspond  \
+                to the model file names in the --models-path directory')
     return models, M
 
 
@@ -113,6 +117,10 @@ if __name__ == '__main__':
         '--stochastic',
         action='store_true',
         help='sample from acquistion function')
+    parser.add_argument(
+        '--random-policies',
+        action='store_true',
+        help='use to try random policy classes on random mechanisms')
     args = parser.parse_args()
 
     if args.debug:

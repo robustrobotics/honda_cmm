@@ -17,41 +17,10 @@ import torch
 from learning.dataloaders import PolicyDataset, parse_pickle_file
 from gen.generate_policy_data import generate_dataset
 from actions.policies import Policy, generate_policy, Revolute, Prismatic
-import itertools
-from functools import reduce
 from learning.gp.viz_doors import viz_3d_plots
+from learning.gp.viz_polar_plots import viz_circles
 
 BETA = 5 #5  # 5.0
-
-
-# takes in an x and plot variables and returns the values to be plotted
-def get_point_from_x(x, linear_param, angular_param, policy_type):
-    point = np.zeros(2)
-    linear_name = linear_param.param_name
-    angular_name = angular_param.param_name
-    if policy_type == 'slider':
-        if linear_name == 'config':
-            point[1] = abs(x[-1])
-        if angular_name == 'pitch':
-            if x[-1] < 0:
-                point[0] = x[0] - np.pi
-            else:
-                point[0] = x[0]
-        if angular_name == 'yaw':
-            if x[-1] < 0:
-                point[0] = x[1] + np.pi
-            else:
-                point[0] = x[1]
-    if policy_type == 'door':
-        if linear_name == 'config':
-            point[1] = x[-1]
-        if linear_name == 'radius':
-            point[1] = x[2]
-        if angular_name == 'pitch':
-            point[0] = x[1]
-        if angular_name == 'roll':
-            point[0] = x[0]
-    return point
 
 
 # takes in an optimization x and returns a policy
@@ -59,9 +28,14 @@ def get_policy_from_x(p_type, x, mech):
     if p_type == 'Revolute':
         rot_axis_roll = x[0]
 
-        if not mech.flipped:
-            rot_axis_pitch = np.pi
+        if mech.mechanism_type == 'Door':
+            if not mech.flipped:
+                rot_axis_pitch = np.pi
+            else:
+                rot_axis_pitch = 0.0
         else:
+            # TODO: when add rot_axis_pitch to the space of parameters being explored,
+            # change this to get rot_axis_pitch from x
             rot_axis_pitch = 0.0
         rot_axis_world = util.quaternion_from_euler(rot_axis_roll, rot_axis_pitch, 0.0)
         radius_x = x[1]
@@ -135,9 +109,13 @@ def get_policy_list(policy_type, x, mech):
     if policy_type == 'Prismatic':
         return [[x[0], x[1], x[-1]]]
     elif policy_type == 'Revolute':
-        if not mech.flipped:
-            pitch = np.pi
+        if mech.mechanism_type == 'Door':
+            if not mech.flipped:
+                pitch = np.pi
+            else:
+                pitch = 0.0
         else:
+            # TODO: change back to 0 or pi, or get from x when implemented
             pitch = 0.0
         return [[x[0], pitch, x[-2], x[-1]]]
 
@@ -198,25 +176,6 @@ def get_nn_preds(results, model, ret_dataset=False, use_cuda=False):
     else:
         return pred_motions
 
-
-def objective_func(x, policy_type, image_tensor, model, use_cuda):
-    policy_type_tensor = torch.Tensor([util.name_lookup[policy_type]])
-    x = x.squeeze()
-    policy_tensor = torch.tensor([[x[0], 0.0]]).float() # hard code yaw to be 0
-    config_tensor = torch.tensor([[x[-1]]]).float()
-    if use_cuda:
-        policy_type_tensor = policy_type_tensor.cuda()
-        policy_tensor = policy_tensor.cuda()
-        config_tensor = config_tensor.cuda()
-        image_tensor = image_tensor.cuda()
-    val = -model.forward(policy_type_tensor, policy_tensor, config_tensor, image_tensor)
-    if use_cuda:
-        val = val.cpu()
-    val = val.detach().numpy()
-    val = val.squeeze()
-    return val
-
-
 def test_model(sampler, args):
     """
     Maximize the GP mean function to get the best policy.
@@ -247,12 +206,12 @@ def test_model(sampler, args):
     stop_result = util.Result(policy.get_policy_tuple(), None, 0.0, 0.0,
                            None, None, q, None, None, 1.0, None)
     stop_x = get_x_from_result(stop_result)
-    return regret, start_x, stop_x
+    return regret, start_x, stop_x, policy.type
 
 
 class GPOptimizer(object):
 
-    def __init__(self, urdf_num, bb, image_data, n_samples, beta, gp, nn=None):
+    def __init__(self, urdf_num, bb, image_data, n_samples, beta, gps, random_policies, nn=None):
         """
         Initialize one of these for each BusyBox.
         """
@@ -261,14 +220,12 @@ class GPOptimizer(object):
         self.nn = nn
         self.mech = bb._mechanisms[0]
         self.beta = beta
-        self.gp = gp
+        self.gps = gps
         self.n_samples = n_samples
 
         # Generate random policies.
         for _ in range(n_samples):
-            # Get the mechanism from the dataset.
-            # TODO: change random_policies to True when ready
-            random_policy = generate_policy(bb, self.mech, False, 1.0)
+            random_policy = generate_policy(bb, self.mech, random_policies, 1.0)
             q = random_policy.generate_config(self.mech, None)
             policy_type = random_policy.type
             policy_tuple = random_policy.get_policy_tuple()
@@ -303,7 +260,7 @@ class GPOptimizer(object):
         x = x.squeeze()
 
         X = np.array(get_policy_list(policy_type, x, self.mech))
-        Y_pred, Y_std = self.gp.predict(X, return_std=True)
+        Y_pred, Y_std = self.gps[policy_type].predict(X, return_std=True)
 
         if not self.nn is None:
             inputs = self._optim_result_to_torch(policy_type, x, image_tensor, False)
@@ -319,7 +276,11 @@ class GPOptimizer(object):
 
     def _get_pred_motions(self, data, ucb, nn_preds=None):
         X, Y = process_data(data, len(data))
-        y_pred, y_std = self.gp.predict(X, return_std=True)
+        y_pred, y_std = np.zeros(len(data)), np.zeros(len(data))
+        for i, res in enumerate(data):
+            y_pred_res, y_std_res = self.gps[res.policy_params.type].predict(X, return_std=True)
+            y_pred[i] = y_pred_res
+            y_std[i] = y_std_res
 
         if not nn_preds is None:
             y_pred += np.array(nn_preds)
@@ -355,7 +316,7 @@ class GPOptimizer(object):
 
 
         # TODO: Make sure the policy appears correctly here.
-        policy_data = Policy.get_plot_data(self.mech)
+        policy_data = Policy.get_plot_data(policy_type_max)
         x0, bounds = get_reduced_x_and_bounds(policy_type_max, params_max, q_max, policy_data)
         start_policy = get_policy_from_x(policy_type_max, x0, self.mech)
         start_q = q_max
@@ -387,7 +348,7 @@ class GPOptimizer(object):
             images = None
         else:
             images = dataset.images[0].unsqueeze(0)
-        policy_data = Policy.get_plot_data(self.mech)
+        policy_data = Policy.get_plot_data(policy_type_max)
         x0, bounds = get_reduced_x_and_bounds(policy_type_max, params_max, q_max, policy_data)
 
         start_policy = get_policy_from_x(policy_type_max, x0, self.mech)
@@ -415,10 +376,10 @@ class UCB_Interaction(object):
         # kernel = ConstantKernel(0.005, constant_value_bounds=(0.005, 0.005)) * RBF(length_scale=(0.247, 0.084, 0.0592), length_scale_bounds=(0.0592, 0.247)) + WhiteKernel(noise_level=1e-5, noise_level_bounds=(1e-5, 1e2))
         # Pretrained Kernel (for Doors)
         # 0.0202**2 * RBF(length_scale=[0.0533, 0.000248, 0.0327, 0.0278]) + WhiteKernel(noise_level=1e-05)
-        self.interaction_data = []
-        self.xs, self.ys, self.moves = [], [], []
+        self.xs, self.ys, self.moves = {'Prismatic': [], 'Revolute': []}, \
+                                        {'Prismatic': [], 'Revolute': []}, \
+                                        {'Prismatic': [], 'Revolute': []}
 
-        self.ix = 0
         self.plot = plot
         self.nn = None
         if nn_fname != '':
@@ -426,16 +387,18 @@ class UCB_Interaction(object):
         self.bb = bb
         self.image_data = image_data
         self.mech = self.bb._mechanisms[0]
-        self.kernel = self.get_kernel()
-        self.gp = GaussianProcessRegressor(kernel=self.kernel,
-                                           n_restarts_optimizer=10)
-        self.optim = GPOptimizer(args.urdf_num, self.bb, self.image_data, args.n_gp_samples, BETA, self.gp, nn=self.nn)
+        self.gps = {'Prismatic': GaussianProcessRegressor(kernel=self.get_kernel('Prismatic'),
+                                               n_restarts_optimizer=10),
+                    'Revolute': GaussianProcessRegressor(kernel=self.get_kernel('Revolute'),
+                                                       n_restarts_optimizer=10)}
+        self.optim = GPOptimizer(args.urdf_num, self.bb, self.image_data, \
+                        args.n_gp_samples, BETA, self.gps, args.random_policies, nn=self.nn)
 
-    def get_kernel(self):
+    def get_kernel(self, type):
         # TODO: in the future will want the GP to take in all types of policy
         # params, not just the correct type
         noise = 1e-5
-        if self.mech.mechanism_type == 'Slider':
+        if type == 'Prismatic':
             variance = 0.005
             l_pitch = 0.10
             l_yaw = 0.10
@@ -448,7 +411,7 @@ class UCB_Interaction(object):
                                          (l_q, l_q))) + \
                 WhiteKernel(noise_level=noise,
                             noise_level_bounds=(1e-5, 1e2))
-        elif self.mech.mechanism_type == 'Door':
+        elif type == 'Revolute':
             variance = 0.005
             l_roll = 1.
             l_pitch = 100
@@ -465,43 +428,44 @@ class UCB_Interaction(object):
                               noise_level_bounds=(1e-5, 1e2))
 
     def sample(self, stochastic=False):
-        # (1) Choose a point to interact with.
-        if len(self.xs) < 1 and self.nn is None:
-            # (a) Choose policy randomly.
-            policy = generate_policy(self.bb, self.mech, False, 1.0)
-            q = policy.generate_config(self.mech, None)
+        # If self.nn is None then make sure each policy type has been
+        # attempted at least once
+        if self.nn is None:
+            for policy_class, policy_type in zip([Prismatic, Revolute], \
+                                                ['Prismatic', 'Revolute']):
+                if len(self.xs[policy_type]) < 1:
+                    policy = policy_class._gen(self.bb, self.mech, 1.0)
+                    q = policy.generate_config(self.mech, None)
+                    return policy, q
+        # Choose policy using UCB bound.
+        ucb = True
+        if not stochastic:
+            policy, q, _, _ = self.optim.optimize_gp(ucb)
         else:
-            # (b) Choose policy using UCB bound.
-            ucb = True
-            if not stochastic:
-                policy, q, _, _ = self.optim.optimize_gp(ucb)
-            else:
-                policy, q = self.optim.stochastic_gp(ucb)
-
-        self.ix += 1
+            policy, q = self.optim.stochastic_gp(ucb)
         return policy, q
 
     def update(self, result):
         # TODO: Update without the NN.
 
-        # (3) Update GP.
+        # Update GP.
+        policy_type = result.policy_params.type
         x = get_x_from_result(result)
-        self.xs.append(x)
+        self.xs[policy_type].append(x)
         if self.nn is None:
-            self.ys.append([result.net_motion])
+            self.ys[policy_type].append([result.net_motion])
         else:
-            policy_type = result.policy_params.type
             inputs = self.optim._optim_result_to_torch(policy_type,
-                                                       self.xs[-1],
+                                                       self.xs[policy_type][-1],
                                                        self.optim.dataset.images[0].unsqueeze(0),
                                                        use_cuda=False)
             nn_pred = self.nn.forward(*inputs)[0]
             nn_pred = nn_pred.detach().numpy().squeeze()
-            self.ys.append([result.net_motion - nn_pred])
+            self.ys[policy_type].append([result.net_motion - nn_pred])
 
-        self.moves.append([result.net_motion])
-        self.gp.fit(np.array(self.xs), np.array(self.ys))
-        # (4) Visualize GP.
+        self.moves[policy_type].append([result.net_motion])
+        self.gps[policy_type].fit(np.array(self.xs[policy_type]), np.array(self.ys[policy_type]))
+        # Visualize GP.
         # if self.ix % 1 == 0 and self.plot:
         #     params = mech.get_mechanism_tuple().params
         #     print('Range:', params.range/2.0)
@@ -522,29 +486,13 @@ class UCB_Interaction(object):
     def calc_avg_regret(self):
         regrets = []
         max_dist = self.mech.get_max_dist()
-        for y in self.moves:
+        for y in self.moves[policy_type]:
             regrets.append((max_dist - y[0])/max_dist)
         if len(regrets) > 0:
             return np.mean(regrets)
         else:
             return 'n/a'
 
-
-def format_batch(ptype, x_pred, mech, image_data):
-    results = []
-
-    for ix in range(x_pred.shape[0]):
-        policy = get_policy_from_x(ptype, x_pred[ix], mech)
-        q = x_pred[ix, -1]
-        result = util.Result(policy.get_policy_tuple(), None, 0.0, 0.0,
-                             None, None, q, image_data, None, 1.0, False)
-        results.append(result)
-
-    data = parse_pickle_file(results)
-    dataset = PolicyDataset(data)
-    train_loader = torch.utils.data.DataLoader(dataset=dataset,
-                                               batch_size=len(dataset))
-    return train_loader
 
 
 '''
@@ -589,203 +537,6 @@ def viz_gp(gp, result, num, bb, nn=None):
     # plt.savefig('gp_estimates_tuned_%d.png' % num)
 '''
 
-
-def viz_circles(image_data, mech, sample_points=[], opt_points=[], gp=None, nn=None, bb_i=0, plot_dir_prefix=''):
-    policy_plot_data = Policy.get_plot_data(mech)
-
-    n_angular = 40
-    n_linear = 20
-    N_BINS = 5
-    n_params = len(policy_plot_data)
-
-    all_angular_params = list(filter(lambda x: x.type == 'angular', policy_plot_data))
-    all_linear_params = list(filter(lambda x: x.type == 'linear', policy_plot_data))
-
-    # make figure of an image of the mechanism
-    plt.ion()
-    fig, ax = plt.subplots()
-    w, h, im = image_data
-    np_im = np.array(im, dtype=np.uint8).reshape(h, w, 3)
-    ax.imshow(np_im)
-
-    # for each pair of (linear, angular) param pairs make a figure
-    for angular_param in all_angular_params:
-        if angular_param.range[0] == angular_param.range[1]:
-            continue
-        for linear_param in all_linear_params:
-            if linear_param.range[0] == linear_param.range[1]:
-                continue
-            linear_vals = np.linspace(*linear_param.range, n_linear)
-            angular_vals = np.linspace(*angular_param.range, n_angular)
-            l, a = np.meshgrid(linear_vals, angular_vals)
-            mean_colors = np.zeros(l.shape)
-
-            # bin the other param values
-            all_other_params = list(filter(lambda x: (x != angular_param)
-                                           and (x != linear_param),
-                                    policy_plot_data))
-
-            subplot_inds_and_vals = []
-            for other_params in all_other_params:
-                if other_params.range[0] == other_params.range[1]:
-                    n_bins = 1
-                else:
-                    n_bins = N_BINS
-                subplot_inds_and_vals += [list(enumerate(np.linspace(*other_params.range, n_bins)))]
-
-            # TODO: only works for up to 2 other_params (will have to figure out new
-            # visualization past that)
-            mean_fig = plt.figure()
-            plt.suptitle('mean fn:' + angular_param.param_name + ' vs ' + linear_param.param_name)
-
-            std_fig = plt.figure()
-            plt.suptitle('std:' + angular_param.param_name + ' vs ' + linear_param.param_name)
-            if len(subplot_inds_and_vals) == 1:
-                n_rows = 1
-                n_cols = len(subplot_inds_and_vals[0])
-            elif len(subplot_inds_and_vals) == 2:
-                n_cols = len(subplot_inds_and_vals[0])
-                n_rows = len(subplot_inds_and_vals[1])
-
-            # for each other value add a dimension of plots to the figure
-            for single_subplot_inds_and_vals in itertools.product(*subplot_inds_and_vals):
-                # make matrix of all values to predict dist for
-                X_pred = np.zeros((n_angular*n_linear, n_params))
-                xpred_rowi = 0
-                for ix in range(0, n_angular):
-                    for jx in range(0, n_linear):
-                        X_pred[xpred_rowi, angular_param.param_num] = angular_vals[ix]
-                        X_pred[xpred_rowi, linear_param.param_num] = linear_vals[jx]
-                        for other_param_ind, single_subplot_ind_and_val in enumerate(single_subplot_inds_and_vals):
-                            other_param_num = all_other_params[other_param_ind].param_num
-                            X_pred[xpred_rowi, other_param_num] = single_subplot_ind_and_val[1]
-                        xpred_rowi += 1
-
-                Y_pred = np.zeros((X_pred.shape[0]))
-                if gp is not None:
-                    Y_pred_gp, Y_std = gp.predict(X_pred, return_std=True)
-                    Y_pred = np.add(Y_pred, Y_pred_gp.squeeze())
-                    Y_std = Y_std.squeeze()
-                if nn is not None:
-                    type = 'Revolute' if mech.mechanism_type == 'Door' else 'Prismatic'
-                    loader = format_batch(type, X_pred, mech, image_data)
-                    k, x, q, im, _, _ = next(iter(loader))
-                    pol = torch.Tensor([util.name_lookup[k[0]]])
-                    nn_preds = nn(pol, x, q, im)[0].detach().numpy()
-                    Y_pred = np.add(Y_pred, nn_preds.squeeze())
-                mean_colors = Y_pred.reshape(n_angular, n_linear)
-                std_colors = Y_std.reshape(n_angular, n_linear)
-
-                row_col = [o[0]+1 for o in single_subplot_inds_and_vals]
-                if len(row_col) == 1:
-                    subplot_num = 1*row_col[0]
-                else:
-                    subplot_num = reduce(lambda x, y: n_cols*(x-1)+y, row_col)
-
-                # make polar subplot of mean function
-                ax = mean_fig.add_subplot(n_rows, n_cols, subplot_num, projection='polar')
-                ax.set_title('\n'.join([str(all_other_params[other_param_i].param_name)
-                    + ' = ' + str("%.2f" % other_val) for other_param_i,
-                    (subplot_i, other_val) in enumerate(single_subplot_inds_and_vals)]),
-                    fontsize=10)
-                max_dist = mech.get_max_dist()
-
-                # only add points to subplot that are close to this subplot "bin"
-                plot_points = []
-                for pt, color in sample_points+opt_points:
-                    keep_point = True
-                    for other_param_list_num, (subplot_dim, subplot_val) in enumerate(single_subplot_inds_and_vals):
-                        all_subplot_vals = np.array([inds_and_vals[1] for
-                                inds_and_vals in subplot_inds_and_vals[other_param_list_num]])
-                        param_num = all_other_params[other_param_list_num].param_num
-                        point_param_val = pt[param_num]
-                        closest_index = (np.abs(all_subplot_vals - point_param_val)).argmin()
-                        if all_subplot_vals[closest_index] == subplot_val:
-                            keep_point = keep_point and True
-                        else:
-                            keep_point = keep_point and False
-                    if keep_point: plot_points += [(pt, color)]
-
-                mean_im = polar_plots(ax, mean_colors, max_dist, angular_param,
-                                 linear_param, points=plot_points)
-
-                # make polar subplot of std dev
-                ax = std_fig.add_subplot(n_rows, n_cols, subplot_num, projection='polar')
-                ax.set_title('\n'.join([str(all_other_params[other_param_i].param_name)
-                    + ' = ' + str("%.2f" % other_val) for other_param_i,
-                    (subplot_i, other_val) in enumerate(single_subplot_inds_and_vals)]),
-                    fontsize=10)
-                max_dist = mech.get_max_dist()
-                std_im = polar_plots(ax, std_colors, max_dist, angular_param,
-                                 linear_param, points=plot_points)
-
-            add_colorbar(mean_fig, mean_im)
-            add_colorbar(std_fig, std_im)
-
-            for plot_type, fig in zip(['mean', 'std_dev'], [mean_fig, std_fig]):
-                plot_dir = 'gp_plots/'
-                if not os.path.isdir(plot_dir):
-                    os.mkdir(plot_dir)
-                if plot_dir_prefix is not '':
-                    plot_dir += plot_dir_prefix
-                    if not os.path.isdir(plot_dir):
-                        os.mkdir(plot_dir)
-                plot_dir += '/bb_%i' % bb_i
-                if not os.path.isdir(plot_dir):
-                    os.mkdir(plot_dir)
-                plot_dir += '/%s' % angular_param.param_name+linear_param.param_name
-                if not os.path.isdir(plot_dir):
-                    os.mkdir(plot_dir)
-                plot_dir += '/%s' % plot_type
-                if not os.path.isdir(plot_dir):
-                    os.mkdir(plot_dir)
-                fig.savefig(plot_dir+'/%i.png' % (len(sample_points)))
-
-def polar_plots(ax, colors, vmax, angular_param, linear_param, points=None):
-    n_ang, n_lin = colors.shape
-
-    # for slider policies
-    if (abs(angular_param.range[0]-angular_param.range[1]) == np.pi) and \
-       (linear_param.range[0] == -linear_param.range[1]):
-        thp = np.linspace(0, 2*np.pi, n_ang*2)
-        rp = np.linspace(0, max(linear_param.range), n_lin//2)
-        rp, thp = np.meshgrid(rp, thp)
-        cp = np.zeros(rp.shape)
-
-        if abs(angular_param.range[0]) == 0 or abs(angular_param.range[0]) == np.pi:
-            cp[0:n_ang, :] = colors[:, 0:n_lin//2][:, ::-1]
-            cp[n_ang:, :] = np.copy(colors[:, n_lin//2:])
-        elif abs(angular_param.range[0]) == np.pi/2:
-            cp[0:n_ang//2, :] = np.copy(colors[n_ang//2:, n_lin//2:])
-            cp[n_ang//2:n_ang, :] = colors[:n_ang//2, :n_lin//2][:, ::-1]
-            cp[n_ang:3*n_ang//2, :] = colors[n_ang//2:, :n_lin//2][:, ::-1]
-            cp[3*n_ang//2:2*n_ang, :] = np.copy(colors[:n_ang//2, n_lin//2:])
-        type = 'slider'
-    # for door policies
-    else:
-        thp = np.linspace(*angular_param.range, n_ang)
-        rp = np.linspace(*linear_param.range, n_lin)
-        rp, thp = np.meshgrid(rp, thp)
-        cp = colors
-        type = 'door'
-    cbar = ax.pcolormesh(thp, rp, cp, vmin=0, vmax=vmax, cmap='viridis')
-    ax.tick_params(axis='x', colors='white')
-    # ax.set_yticklabels([])
-
-    if not points is None:
-        for (x, c) in points:
-            point = get_point_from_x(x, linear_param, angular_param, type)
-            ax.scatter(*point, c=c, s=3)
-
-    return cbar
-
-
-def add_colorbar(fig, im):
-    fig.subplots_adjust(right=0.8)
-    cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
-    fig.colorbar(im, cax=cbar_ax)
-
-
 def create_gpucb_dataset(n_interactions, n_bbs, args):
     """
     :param n_bbs: The number of BusyBoxes to include in the dataset.
@@ -802,7 +553,7 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
                                     n_bbs=n_bbs,
                                     n_samples=1,
                                     viz=False,
-                                    random_policies=False,
+                                    random_policies=args.random_policies,
                                     randomness=1.0,
                                     goal_config=None,
                                     bb_fname=None,
@@ -829,12 +580,13 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
     dataset = []
     regrets = []
     for ix, bb_results in enumerate(busybox_data):
-        single_dataset, _, r = create_single_bb_gpucb_dataset(bb_results,
+        single_dataset, _, r = create_single_bb_gpucb_dataset(bb_results[0],
                                                               n_interactions,
                                                               '',
                                                               args.plot,
                                                               args,
                                                               ix,
+                                                              args.plot_dir,
                                                               ret_regret=True)
         dataset.append(single_dataset)
         regrets.append(r)
@@ -849,13 +601,15 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
 
 def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, args, bb_i,
                                    plot_dir_prefix='', ret_regret=False):
+    use_cuda = False
     dataset = []
     viz = False
     debug = False
+    no_gripper = True
     # interact with BB
     bb = BusyBox.bb_from_result(bb_result, urdf_num=args.urdf_num)
     mech = bb._mechanisms[0]
-    image_data, gripper = setup_env(bb, viz, False, True)
+    image_data, gripper = setup_env(bb, viz, debug, no_gripper)
 
     pose_handle_base_world = mech.get_pose_handle_base_world()
     sampler = UCB_Interaction(bb, image_data, plot, args, nn_fname=nn_fname)
@@ -879,23 +633,23 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
         # uncomment to generate a plot after each sample
         '''
         if plot:
-            policy_plot_data = Policy.get_plot_data(mech)
-            sample_points = [(sample, 'r') for sample in sampler.xs]
-            opt_points = []
+            sample_points = {'Prismatic': [(sample, 'k') for sample in sampler.xs['Prismatic']],
+                            'Revolute': [(sample, 'k') for sample in sampler.xs['Revolute']]}
             viz_circles(image_data,
                         mech,
+                        BETA,
                         sample_points=sample_points,
-                        opt_points=opt_points,
-                        gp=sampler.gp,
+                        opt_points=[],
+                        gps=sampler.gps,
                         nn=sampler.nn,
                         bb_i=bb_i,
                         plot_dir_prefix=plot_dir_prefix)
         '''
         if ix % 10 == 0:
             if len(nn_fname) > 0:
-                model = util.load_model(nn_fname, args.hdim, use_cuda=True)
+                model = util.load_model(nn_fname, args.hdim, use_cuda=use_cuda)
             def _gp_callback(new_xs, bb_result):
-                ys, std = sampler.gp.predict(new_xs, return_std=True)
+                ys, std = sampler.gps[bb_result.policy_params.type].predict(new_xs, return_std=True)
                 ys = ys.flatten()
 
                 if len(nn_fname) > 0:
@@ -919,7 +673,7 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
                         policy_tensor = dataset.tensors[i].unsqueeze(0)
                         config_tensor = dataset.configs[i].unsqueeze(0)
                         image_tensor = dataset.images[i].unsqueeze(0)
-                        if True:
+                        if use_cuda:
                             policy_type_tensor = policy_type_tensor.cuda()
                             policy_tensor = policy_tensor.cuda()
                             config_tensor = config_tensor.cuda()
@@ -946,19 +700,19 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
     #    pickle.dump(sampler.optim.log, handle)
 
     opt_points = []
-    sample_points = []
     if ret_regret:
-        regret, start_x, stop_x = test_model(sampler, args)
-        opt_points = [(start_x, 'g'), (stop_x, 'r')]
+        regret, start_x, stop_x, policy_type = test_model(sampler, args)
+        opt_points = (policy_type, [(start_x, 'g'), (stop_x, 'r')])
 
     if plot:
-        policy_plot_data = Policy.get_plot_data(mech)
-        sample_points = [(sample, 'k') for sample in sampler.xs]
+        sample_points = {'Prismatic': [(sample, 'k') for sample in sampler.xs['Prismatic']],
+                        'Revolute': [(sample, 'k') for sample in sampler.xs['Revolute']]}
         viz_circles(image_data,
                     mech,
+                    BETA,
                     sample_points=sample_points,
                     opt_points=opt_points,
-                    gp=sampler.gp,
+                    gps=sampler.gps,
                     nn=sampler.nn,
                     bb_i=bb_i,
                     plot_dir_prefix=plot_dir_prefix)
@@ -970,9 +724,9 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
         plt.close('all')
 
     if ret_regret:
-        return dataset, sampler.gp, regret
+        return dataset, sampler.gps, regret
     else:
-        return dataset, sampler.gp
+        return dataset, sampler.gps
 
 
 def viz_radius_plots(xs, gp):
@@ -1037,7 +791,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--n-gp-samples',
         type=int,
-        default=4000,# 500,
+        default=500,# 500,
         help='number of samples to use when fitting a GP to data')
     parser.add_argument(
         '--M',
@@ -1066,6 +820,10 @@ if __name__ == '__main__':
         action='store_true',
         help='use to generate polar plots durin GP-UCB interactions')
     parser.add_argument(
+        '--plot-dir',
+        type=str,
+        default='')
+    parser.add_argument(
         '--fname',
         default='',
         help='path to save resulting dataset to')
@@ -1081,10 +839,22 @@ if __name__ == '__main__':
         '--stochastic',
         action='store_true',
         help='use to sample from the acquistion function instead of optimizing')
+    parser.add_argument(
+        '--random-policies',
+        action='store_true',
+        help='use to try random policy classes on random mechanisms')
     args = parser.parse_args()
 
     if args.debug:
         import pdb
         pdb.set_trace()
 
-    create_gpucb_dataset(args.M, args.L, args)
+    try:
+        create_gpucb_dataset(args.M, args.L, args)
+    except:
+        # for post-mortem debugging since can't run module from command line in pdb.pm() mode
+        import traceback, pdb, sys
+        traceback.print_exc()
+        print('')
+        pdb.post_mortem()
+        sys.exit(1)
