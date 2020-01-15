@@ -316,7 +316,9 @@ class GPOptimizer(object):
     def _get_pred_motions(self, data, ucb, nn_preds=None):
         X, Y = process_data(data, len(data))
         y_pred, y_std = self.gp.predict(X, return_std=True)
-
+        # TODO: Unsure why this is needed when running the inloop method.
+        # It works until the first time the NN is used.
+        y_pred = y_pred.reshape((1, 1))
         if not nn_preds is None:
             y_pred += np.array(nn_preds)
 
@@ -330,9 +332,9 @@ class GPOptimizer(object):
         scores = []
 
         # Generate random policies.
-        for res in self.sample_policies:
+        for res, nn_preds in zip(self.sample_policies, self.nn_samples):
             # Get predictions from the GP.
-            sample_disps, dataset = self._get_pred_motions(res, ucb, nn_preds=None)
+            sample_disps, dataset = self._get_pred_motions(res, ucb, nn_preds=nn_preds)
 
             policies.append((res[0].policy_params.type,
                              res[0].policy_params,
@@ -341,6 +343,7 @@ class GPOptimizer(object):
 
         # Sample a policy based on its score value.
         scores = np.exp(np.array(scores)/temp)[:, 0]
+
         scores /= np.sum(scores)
 
         index = np.random.choice(np.arange(scores.shape[0]),
