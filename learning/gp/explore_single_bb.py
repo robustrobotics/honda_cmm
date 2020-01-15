@@ -55,13 +55,9 @@ def get_point_from_x(x, linear_param, angular_param, policy_type):
 def get_policy_from_x(p_type, x, mech):
     if p_type == 'Revolute':
         rot_axis_roll = x[0]
-
-        if not mech.flipped:
-            rot_axis_pitch = np.pi
-        else:
-            rot_axis_pitch = 0.0
+        rot_axis_pitch = x[1]
         rot_axis_world = util.quaternion_from_euler(rot_axis_roll, rot_axis_pitch, 0.0)
-        radius_x = x[1]
+        radius_x = x[2]
         # true_radius_x = mech.get_radius_x()
         radius = [-radius_x, 0.0, 0.0]
         p_handle_base_world = mech.get_pose_handle_base_world().p
@@ -102,8 +98,7 @@ def get_reduced_x_and_bounds(policy_type, policy_params, q, policy_data):
     for policy_param in policy_data:
         if policy_param.param_name == 'pitch':
             pitch_bounds = policy_param.range
-            # TODO: Currently commented out as it is not used for doors.
-            # bounds.append(pitch_bounds)
+            bounds.append(pitch_bounds)
         # if policy_param.param_name == 'yaw':
         #     yaw_bounds = policy_param.range
         if policy_param.param_name == 'roll':
@@ -119,6 +114,7 @@ def get_reduced_x_and_bounds(policy_type, policy_params, q, policy_data):
         return np.concatenate([[policy_params.params.pitch], [q]]), bounds
     elif policy_type == 'Revolute':
         return np.concatenate([[policy_params.params.rot_axis_roll,
+                                policy_params.params.rot_axis_pitch,
                                 policy_params.params.rot_radius_x], [q]]), bounds
 
 
@@ -137,11 +133,7 @@ def get_policy_list(policy_type, x, mech):
     if policy_type == 'Prismatic':
         return [[x[0], 0.0, x[-1]]]
     elif policy_type == 'Revolute':
-        if not mech.flipped:
-            pitch = np.pi
-        else:
-            pitch = 0.0
-        return [[x[0], pitch, x[-2], x[-1]]]
+        return [[x[0], x[1], x[-2], x[-1]]]
 
 
 def process_data(data, n_train):
@@ -240,6 +232,7 @@ def test_model(sampler, args):
 
     # Calculate the regret.
     max_d = sampler.mech.get_max_dist()
+    print('Max, motion', max_d, motion)
     regret = (max_d - motion)/max_d
 
     # Get the initial and final x from the optimization.
@@ -402,7 +395,7 @@ class GPOptimizer(object):
         x_final = opt_res['x']
         stop_policy = get_policy_from_x(policy_type_max, x_final, self.mech)
         stop_q = x_final[-1]
-        print('OPT:', opt_res['success'], opt_res['nit'], opt_res['message'])
+        # print('OPT:', opt_res['success'], opt_res['nit'], opt_res['message'])
         # print('------ Start')
         # print(x0)
         # print(x_final)
@@ -454,7 +447,7 @@ class UCB_Interaction(object):
         elif self.mech.mechanism_type == 'Door':
             variance = 0.005
             l_roll = 1.
-            l_pitch = 100
+            l_pitch = 1.
             l_radius = 0.04  # 0.09  # 0.05
             l_q = 1.  # Keep greater than 0.5.
             return ConstantKernel(variance,
@@ -773,7 +766,7 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
         # Load in a file with predetermined BusyBoxes.
         with open(args.bb_fname, 'rb') as handle:
             busybox_data = pickle.load(handle)
-        busybox_data = [bb_results[0] for bb_results in busybox_data][:n_bbs]
+    busybox_data = [bb_results[0] for bb_results in busybox_data][:n_bbs]
 
     '''
     # Do a GP-UCB interaction and return Result tuples.

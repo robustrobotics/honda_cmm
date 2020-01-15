@@ -108,7 +108,7 @@ class Policy(object):
                     PolicyPlotData('config', 2, [-0.25, 0.25], 'linear')]
         elif mech.mechanism_type == 'Door':
             return [PolicyPlotData('roll', 0, [0, 2*np.pi], 'angular'),
-                    PolicyPlotData('pitch', 1, [0, 0], 'angular'),
+                    PolicyPlotData('pitch', 1, [0, 2*np.pi], 'angular'),
                     PolicyPlotData('radius', 2, [.08-0.025, 0.15], 'linear'),
                     PolicyPlotData('config', 3, [-np.pi/2, 0.0], 'linear')]
 
@@ -330,6 +330,7 @@ class Revolute(Policy):
         """
         if randomness > 0:
             rot_axis_roll_world = np.random.uniform(0.0, 2 * np.pi)
+            rot_axis_pitch_world = np.random.uniform(0.0, 2 * np.pi)
             radius_x = np.random.uniform(0.08-0.025, 0.15)
             # toss = np.random.uniform()
 
@@ -350,10 +351,10 @@ class Revolute(Policy):
             rot_axis_roll_world = 0.0
             radius_x = mech.get_radius_x()
 
-        if not mech.flipped:
-            rot_axis_pitch_world = np.pi
-        else:
-            rot_axis_pitch_world = 0.0
+            if not mech.flipped:
+                rot_axis_pitch_world = np.pi
+            else:
+                rot_axis_pitch_world = 0.0
         rot_axis_world = util.quaternion_from_euler(rot_axis_roll_world,rot_axis_pitch_world, 0.0)
 
         # calculate the center of rotation in the world frame
