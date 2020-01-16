@@ -409,7 +409,7 @@ class GPOptimizer(object):
 
 class UCB_Interaction(object):
 
-    def __init__(self, bb, image_data, plot, args, nn_fname=''):
+    def __init__(self, bb, image_data, plot, args, nn_fname='', beta=BETA):
         # Pretrained Kernel (for Sliders)
         # kernel = ConstantKernel(0.005, constant_value_bounds=(0.005, 0.005)) * RBF(length_scale=(0.247, 0.084, 0.0592), length_scale_bounds=(0.0592, 0.247)) + WhiteKernel(noise_level=1e-5, noise_level_bounds=(1e-5, 1e2))
         # Pretrained Kernel (for Doors)
@@ -428,7 +428,7 @@ class UCB_Interaction(object):
         self.kernel = self.get_kernel()
         self.gp = GaussianProcessRegressor(kernel=self.kernel,
                                            n_restarts_optimizer=10)
-        self.optim = GPOptimizer(args.urdf_num, self.bb, self.image_data, args.n_gp_samples, BETA, self.gp, nn=self.nn)
+        self.optim = GPOptimizer(args.urdf_num, self.bb, self.image_data, args.n_gp_samples, beta, self.gp, nn=self.nn)
 
     def get_kernel(self):
         # TODO: in the future will want the GP to take in all types of policy
@@ -806,7 +806,7 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
 
 
 def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, args, bb_i,
-                                   plot_dir_prefix='', ret_regret=False):
+                                   plot_dir_prefix='', ret_regret=False, beta=BETA):
     dataset = []
 
     # interact with BB
@@ -816,7 +816,7 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
     true_rad = mech.get_radius_x()
 
     pose_handle_base_world = mech.get_pose_handle_base_world()
-    sampler = UCB_Interaction(bb, image_data, plot, args, nn_fname=nn_fname)
+    sampler = UCB_Interaction(bb, image_data, plot, args, nn_fname=nn_fname, beta=beta)
     for ix in range(n_interactions):
         # sample a policy
         policy, q = sampler.sample(stochastic=args.stochastic)

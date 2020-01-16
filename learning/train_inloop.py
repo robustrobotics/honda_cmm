@@ -59,6 +59,7 @@ def create_dataset_while_training_nn(n_interactions, n_bbs, args):
     results = []
     regrets = []
     nn_fname = ''
+    BETA = 5
     for ix, bb_results in enumerate(busybox_data):
         # Sample a dataset with the most recent NN.
         single_dataset, _, r = create_single_bb_gpucb_dataset(bb_results,
@@ -67,7 +68,8 @@ def create_dataset_while_training_nn(n_interactions, n_bbs, args):
                                                               args.plot,
                                                               args,
                                                               ix,
-                                                              ret_regret=True)
+                                                              ret_regret=True,
+                                                              beta=BETA)
         dataset.append(single_dataset)
         results.extend(single_dataset)
 
@@ -85,6 +87,7 @@ def create_dataset_while_training_nn(n_interactions, n_bbs, args):
                        fname='{}/model_{}L_{}M'.format(model_dir, ix+1, args.M),
                        writer=writer)
             nn_fname = '{}/model_{}L_{}M.pt'.format(model_dir, ix+1, args.M)
+            BETA /= 2
 
         regrets.append(r)
         print('Interacted with BusyBox %d.' % ix)
