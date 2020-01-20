@@ -252,7 +252,7 @@ class Gripper:
             raise NotImplementedError('Gains for Slider with no_gripper have not \
                     been tuned as yet.')
 
-    def execute_trajectory(self, traj, mech, policy_type, debug):
+    def execute_trajectory(self, traj, mech, policy_type, debug, show):
         pose_handle_base_world = mech.get_pose_handle_base_world()
         self.set_control_params(policy_type)
 
@@ -269,7 +269,10 @@ class Gripper:
         for i in range(len(traj)):
             last_traj_p = (i == len(traj)-1)
             handle_base_ps, finished = self._move_PD(traj[i], q_offset, mech, last_traj_p, debug)
-            cumu_motion = np.add(cumu_motion, np.linalg.norm(np.subtract(handle_base_ps[-1],handle_base_ps[0])))
+
+            dist = np.linalg.norm(np.subtract(handle_base_ps[-1], handle_base_ps[0]))
+
+            cumu_motion = np.add(cumu_motion, dist)
             if finished:
                 break
         pose_handle_world_final = None

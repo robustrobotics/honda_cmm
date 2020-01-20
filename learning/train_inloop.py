@@ -10,6 +10,7 @@ import argparse
 from argparse import Namespace
 from gen.generate_policy_data import generate_dataset
 from learning.gp.explore_single_bb import create_single_bb_gpucb_dataset
+from learning.gp.mh_exploration import create_single_bb_mh_dataset
 from learning.train import train_eval
 import numpy as np
 import os
@@ -62,14 +63,20 @@ def create_dataset_while_training_nn(n_interactions, n_bbs, args):
     BETA = 5
     for ix, bb_results in enumerate(busybox_data):
         # Sample a dataset with the most recent NN.
-        single_dataset, _, r = create_single_bb_gpucb_dataset(bb_results,
-                                                              n_interactions,
-                                                              nn_fname,
-                                                              args.plot,
-                                                              args,
-                                                              ix,
-                                                              ret_regret=True,
-                                                              beta=BETA)
+        if args.exp_type == 'gpucb':
+            single_dataset, _, r = create_single_bb_gpucb_dataset(bb_results,
+                                                                  n_interactions,
+                                                                  nn_fname,
+                                                                  args.plot,
+                                                                  args,
+                                                                  ix,
+                                                                  ret_regret=True,
+                                                                  beta=BETA)
+        elif args.exp_type == 'mh':
+            single_dataset, _, r = create_single_bb_mh_dataset(bb_results,
+                                                               n_interactions,
+                                                               nn_fname)
+
         dataset.append(single_dataset)
         results.extend(single_dataset)
 
@@ -87,7 +94,7 @@ def create_dataset_while_training_nn(n_interactions, n_bbs, args):
                        fname='{}/model_{}L_{}M'.format(model_dir, ix+1, args.M),
                        writer=writer)
             nn_fname = '{}/model_{}L_{}M.pt'.format(model_dir, ix+1, args.M)
-            BETA /= 2
+            BETA /= 2.
 
         regrets.append(r)
         print('Interacted with BusyBox %d.' % ix)
@@ -149,6 +156,7 @@ if __name__ == '__main__':
     parser.add_argument('--use-cuda', default=False, type=lambda x: (str(x).lower() == 'true'))
     parser.add_argument('--save-dir', required=True, type=str)
     parser.add_argument('--image-encoder', type=str, default='spatial', choices=['spatial', 'cnn'])
+    parser.add_argument('--exp-type', choices=['mh', 'gpucb'], default='gpucb')
 
     args = parser.parse_args()
     print(args)

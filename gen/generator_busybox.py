@@ -350,6 +350,7 @@ class Door(Mechanism):
 
     def get_max_dist(self):
         motion_radius = self.door_size[0] - (self.handle_radius/2 + self.handle_offset_x)
+        return np.sqrt(2*motion_radius**2)
         return 2*np.pi*motion_radius/4
 
     def get_radius_x(self):

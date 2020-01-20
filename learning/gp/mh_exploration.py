@@ -4,12 +4,60 @@ from gen.generator_busybox import BusyBox
 from actions.policies import generate_policy, Revolute
 from utils.setup_pybullet import setup_env
 from scipy.stats.distributions import norm
+from learning.gp.explore_single_bb import get_nn_preds
 import numpy as np
 import pickle
 from utils import util
 import time
 
-def cost(policy, q, mech, gripper):
+
+def create_single_bb_mh_dataset(bb_result, n_interactions, nn_fname, n_chains=10):
+    bb = BusyBox.bb_from_result(bb_result, urdf_num=0)
+    mech = bb._mechanisms[0]
+    image_data, gripper = setup_env(bb, False, False, True)
+
+    policies = []
+    # TODO: If nn_fname is empty, just collect random data.
+    if nn_fname == '':
+        for _ in range(0, n_interactions):
+            policy = generate_policy(bb=bb,
+                                     mech=mech,
+                                     random_policies=False,
+                                     randomness=1.0)
+            q = policy.generate_config(mech=bb._mechanisms[0],
+                                       goal_config=None)
+            policies.append((policy, q))
+    else:
+        nn = util.load_model(nn_fname, 16, use_cuda=False)
+        def nn_callback(p, q, m, g):
+            res = util.Result(p.get_policy_tuple(), m.get_mechanism_tuple(), 0, 0, None,
+                              None, float(q), image_data, None, 1.0, True)
+            preds = get_nn_preds([res], nn, ret_dataset=False, use_cuda=False)
+            preds = preds[0]
+            return np.exp(preds/0.0175), preds
+
+        # TODO: Otherwise, run a bunch of MCMC chains on the NN.
+
+        print('Start MCMC')
+        policies = mh_exploration(bb_result, n_iters=1000, cost_callback=nn_callback)
+        print('End MCMC')
+
+        # TODO: Sample to chains so there are n_interactions policies to evaluate.
+
+
+    # Interact with the BusyBox at the chosen policies.
+    dataset = []
+    regrets = []
+    for policy, q in policies:
+        _, motion = true_cost(policy, q, mech, gripper)
+        dataset.append(util.Result(policy.get_policy_tuple(),
+                                   mech.get_mechanism_tuple(),
+                                   float(motion), 0, None, None, float(q), image_data, None, 1.0, True))
+        regrets.append(1 - motion/mech.get_max_dist())
+    return dataset, None, np.mean(regrets)
+
+
+def true_cost(policy, q, mech, gripper):
     """ Calculate the cost by measuring the distance the mechanism moves. """
     gripper.reset(mech)
     pose_handle_base_world = mech.get_pose_handle_base_world()
@@ -68,13 +116,13 @@ def proposal(policy, q, bb, s_roll=1., s_pitch=1., s_rad=0.04, s_q=1.):
     return new_policy, new_q, 1, 1
 
 
-def mh_exploration(bb_result, n_iters):
+def mh_exploration(bb_result, n_iters, cost_callback):
     bb = BusyBox.bb_from_result(bb_result, urdf_num=0)
     mech = bb._mechanisms[0]
     image_data, gripper = setup_env(bb, False, False, True)
 
     samples = []
-
+    policies = []
     policy = generate_policy(bb=bb,
                              mech=bb._mechanisms[0],
                              random_policies=False,
@@ -85,23 +133,23 @@ def mh_exploration(bb_result, n_iters):
     for _ in range(n_iters):
         new_policy, new_q, rev_trans_cost, trans_cost = proposal(policy, q, bb, s_q=0.2, s_pitch=0.3, s_roll=0.3, s_rad=0.02)
 
-        c, motion = cost(policy, q, mech, gripper)
+        c, motion = cost_callback(policy, q, mech, gripper)
         gripper.reset(mech)
-        new_c, _ = cost(new_policy, new_q, mech, gripper)
+        new_c, _ = cost_callback(new_policy, new_q, mech, gripper)
         gripper.reset(mech)
-        print(motion / mech.get_max_dist())
+        # print(motion / mech.get_max_dist())
 
         acc = new_c*rev_trans_cost/(c*trans_cost)
         r = np.min([acc, 1])
-
+        policies.append((policy, q))
         samples.append(util.Result(policy.get_policy_tuple(),
                                    mech.get_mechanism_tuple(),
-                                   motion, 0, None, None, q, None, None, 1.0, False))
+                                   motion, 0, None, None, q, image_data, None, 1.0, False))
 
         if np.random.uniform() < r:
             policy, q = new_policy, new_q
 
-    return samples[0::10]
+    return policies[0::10]  # , samples[0::10]
 
 
 if __name__ == '__main__':
@@ -122,7 +170,7 @@ if __name__ == '__main__':
 
     samples = []
     for bb in busybox_data:
-        samples.append(mh_exploration(bb[0], 1000))
+        samples.append(mh_exploration(bb[0], 1000, cost_callback=true_cost))
 
     with open('mh_samples_lin.pickle', 'wb') as handle:
         pickle.dump(samples, handle)

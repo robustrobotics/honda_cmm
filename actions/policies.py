@@ -276,7 +276,7 @@ class Revolute(Policy):
         # derived
         self._M_center_world = util.pose_to_matrix(self.rot_center, self.rot_axis)
         self._M_radius_center = util.pose_to_matrix([self.rot_radius_x, 0., 0.], self.rot_orientation)
-        super(Revolute,self).__init__('Revolute')
+        super(Revolute, self).__init__('Revolute')
 
     def _forward_kinematics(self, config):
         # rotation matrix for a rotation about the z-axis by config radians

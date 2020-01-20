@@ -41,7 +41,11 @@ def generate_dataset(args, git_hash):
 
                 # execute trajectory
                 cumu_motion, net_motion, pose_handle_world_final = \
-                        gripper.execute_trajectory(traj, mech, policy.type, args.debug)
+                        gripper.execute_trajectory(traj, mech, policy.type, args.debug, True)
+                # print()
+                # print(policy.get_policy_tuple())
+                # print(config_goal)
+                # print(cumu_motion, mech.get_max_dist())
                 # save result data
                 policy_params = policy.get_policy_tuple()
                 mechanism_params = mech.get_mechanism_tuple()

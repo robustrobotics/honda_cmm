@@ -228,7 +228,7 @@ def test_model(sampler, args):
     _, gripper = setup_env(sampler.bb, viz, debug, no_gripper)
     pose_handle_base_world = sampler.mech.get_pose_handle_base_world()
     traj = policy.generate_trajectory(pose_handle_base_world, q, debug=debug)
-    motion, _, _ = gripper.execute_trajectory(traj, sampler.mech, policy.type, debug=debug)
+    _, motion, _ = gripper.execute_trajectory(traj, sampler.mech, policy.type, debug=debug, show=False)
 
     # Calculate the regret.
     max_d = sampler.mech.get_max_dist()
@@ -260,15 +260,15 @@ class GPOptimizer(object):
         self.n_samples = n_samples
 
         # Generate random policies.
+        print('Generating Samples')
         for _ in range(n_samples):
             # Get the mechanism from the dataset.
-            # TODO: change random_policies to True when ready
             random_policy = generate_policy(bb, self.mech, False, 1.0)
             q = random_policy.generate_config(self.mech, None)
             policy_type = random_policy.type
             policy_tuple = random_policy.get_policy_tuple()
 
-            results = [util.Result(policy_tuple, None, 0.0, 0.0,
+            results = [util.Result(policy_tuple, bb._mechanisms[0].get_mechanism_tuple(), 0.0, 0.0,
                                    None, None, q, image_data, None, 1.0, True)]
             self.sample_policies.append(results)
 
@@ -278,6 +278,7 @@ class GPOptimizer(object):
             else:
                 self.dataset = None
                 self.nn_samples.append(None)
+        print('Done generating')
         # print('Max:', np.max(self.nn_samples))
 
         self.log = []
@@ -313,39 +314,52 @@ class GPOptimizer(object):
         # print(Y_pred[0][0], Y_std[0], obj)
         return obj
 
-    def _get_pred_motions(self, data, ucb, nn_preds=None):
+    def _get_pred_motions(self, pdata, ucb, nn_preds=None):
+        if len(pdata) > 1:
+            data = [d[0] for d in pdata]
+        else:
+            data = pdata
         X, Y = process_data(data, len(data))
         y_pred, y_std = self.gp.predict(X, return_std=True)
         # TODO: Unsure why this is needed when running the inloop method.
         # It works until the first time the NN is used.
-        y_pred = y_pred.reshape((1, 1))
+        y_pred = y_pred.reshape((len(data), 1))
         if not nn_preds is None:
             y_pred += np.array(nn_preds)
 
         if ucb:
+            y_std = y_std.reshape(len(data), 1)
             return y_pred + np.sqrt(self.beta) * y_std, self.dataset
         else:
             return y_pred, self.dataset
 
-    def stochastic_gp(self, ucb, temp=0.0075):
+    def stochastic_gp(self, ucb, temp=0.0075, bs=50):
         policies = []
         scores = []
 
         # Generate random policies.
-        for res, nn_preds in zip(self.sample_policies, self.nn_samples):
+        for bx in range(0, len(self.sample_policies)//bs):
             # Get predictions from the GP.
-            sample_disps, dataset = self._get_pred_motions(res, ucb, nn_preds=nn_preds)
+            sample_disps, dataset = self._get_pred_motions(self.sample_policies[bx*bs:(bx+1)*bs], ucb, nn_preds=None)
 
-            policies.append((res[0].policy_params.type,
-                             res[0].policy_params,
-                             res[0].config_goal))
-            scores.append(sample_disps[0])
-
+            for res, disp in zip(self.sample_policies[bx*bs:(bx+1)*bs], sample_disps):
+                policies.append((res[0].policy_params.type,
+                                 res[0].policy_params,
+                                 res[0].config_goal))
+                scores.append(disp)
+        # for res, nn_preds in zip(self.sample_policies, self.nn_samples):
+        #     # Get predictions from the GP.
+        #     sample_disps, dataset = self._get_pred_motions(res, ucb, nn_preds=nn_preds)
+        #
+        #     policies.append((res[0].policy_params.type,
+        #                      res[0].policy_params,
+        #                      res[0].config_goal))
+        #     scores.append(sample_disps[0])
         # Sample a policy based on its score value.
         scores = np.exp(np.array(scores)/temp)[:, 0]
 
         scores /= np.sum(scores)
-
+        print(scores, np.argmax(scores), np.max(scores))
         index = np.random.choice(np.arange(scores.shape[0]),
                                  p=scores)
 
@@ -369,6 +383,7 @@ class GPOptimizer(object):
         samples = []
 
         # Generate random policies.
+        #TODO: Batch this.
         for res, nn_preds in zip(self.sample_policies, self.nn_samples):
             # Get predictions from the GP.
             sample_disps, dataset = self._get_pred_motions(res, ucb, nn_preds=nn_preds)
@@ -478,6 +493,7 @@ class UCB_Interaction(object):
                 policy, q = self.optim.stochastic_gp(ucb)
 
         self.ix += 1
+        print(self.ix)
         return policy, q
 
     def update(self, result):
@@ -824,7 +840,7 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
 
         # execute
         traj = policy.generate_trajectory(pose_handle_base_world, q, debug=False)
-        c_motion, motion, handle_pose_final = gripper.execute_trajectory(traj, mech, policy.type, False)
+        c_motion, motion, handle_pose_final = gripper.execute_trajectory(traj, mech, policy.type, False, show=False)
         gripper.reset(mech)
 
         result = util.Result(policy.get_policy_tuple(), mech.get_mechanism_tuple(),
@@ -980,7 +996,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--n-gp-samples',
         type=int,
-        default=4000,# 500,
+        default=500,# 500,
         help='number of samples to use when fitting a GP to data')
     parser.add_argument(
         '--M',
