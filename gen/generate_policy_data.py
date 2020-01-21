@@ -22,6 +22,7 @@ def generate_dataset(args, git_hash):
             bb = BusyBox.generate_random_busybox(max_mech=args.max_mech, urdf_tag=args.urdf_num, debug=args.debug)
         else:
             mech_classes = []
+            # TODO: i think there is a bug here...
             for mech_type in args.mech_types:
                 if mech_type == 'slider': mech_classes.append(Slider)
                 if mech_type == 'door': mech_classes.append(Door)

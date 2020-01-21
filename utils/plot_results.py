@@ -121,15 +121,26 @@ class SliderRangeMotion(PlotFunc):
 
     @staticmethod
     def description():
-        return 'Plot of the slider range versus the joint motion'
+        return 'Plot of the slider params versus the joint motion (each in separate plot)'
 
     def _plot(self, data, model):
-        for data_point in data:
-            if data_point.mechanism_params.type == 'Slider':
-                plt.plot(data_point.mechanism_params.params.range, data_point.net_motion, 'b.')
-        plt.xlabel('Slider Range')
-        plt.ylabel('Motion of Handle')
-        plt.title('Motion of Sliders')
+        pitches = []
+        yaws = []
+        configs = []
+        motions = []
+        for bb_data in data:
+            for data_point in bb_data:
+                if data_point.mechanism_params.type == 'Slider':
+                    pitches.append(data_point.policy_params.params.pitch)
+                    yaws.append(data_point.policy_params.params.yaw)
+                    configs.append(data_point.config_goal)
+                    motions.append(data_point.net_motion)
+        for params, name in zip((pitches, yaws, configs), \
+                                ('Pitch', 'Yaw', 'Config')):
+            plt.figure()
+            plt.plot(params, motions, '.b')
+            plt.xlabel('Slider'+name)
+            plt.ylabel('Motion of Handle')
 
 class SliderConfigMotion(PlotFunc):
 
@@ -343,7 +354,13 @@ class MotionHistSlider(PlotFunc):
 
     def _plot(self, data, model):
         fig, ax = plt.subplots()
-        config_ps = [point.net_motion/(point.mechanism_params.params.range/2) for point in data]
+        config_ps = []
+        for bb_data in data:
+            bb = BusyBox.bb_from_result(bb_data[0])
+            mech = bb._mechanisms[0]
+            max_dist = mech.get_max_dist()
+            for point in bb_data:
+                config_ps.append(point.net_motion/max_dist)
         ax.hist(config_ps, 20, edgecolor='black', histtype='bar')
         plt.grid(b=True, which='major', color='#666666', linestyle='-')
         ax.set_xlabel('Generated Motion as a % of Slider Length')
@@ -366,6 +383,27 @@ class MotionHistDoor(PlotFunc):
         ax.hist(motion_percs, 20, edgecolor='black', histtype='bar')
         plt.grid(b=True, which='major', color='#666666', linestyle='-')
         ax.set_xlabel('Generated Motion as a % of Door Max Motion')
+
+class MixedPolicyResults(PlotFunc):
+
+    @staticmethod
+    def description():
+        return 'Histogram of different (mechanism, policy type) combinations'
+
+    def _plot(self, data, model):
+        fig, ax = plt.subplots()
+        combos = [0, 0, 0, 0]
+        for bb_data in data:
+            for point in bb_data:
+                if point.mechanism_params.type == 'Door' and point.policy_params.type == 'Prismatic':
+                    combos[0] += 1
+                elif point.mechanism_params.type == 'Door' and point.policy_params.type == 'Revolute':
+                    combos[1] += 1
+                elif point.mechanism_params.type == 'Slider' and point.policy_params.type == 'Prismatic':
+                    combos[2] += 1
+                elif point.mechanism_params.type == 'Slider' and point.policy_params.type == 'Revolute':
+                    combos[3] += 1
+        ax.bar(list(range(4)), combos)
 
 class TestMechs(PlotFunc):
 

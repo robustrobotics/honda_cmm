@@ -7,28 +7,28 @@ import pybullet as p
 """See actions.gripper for variable naming and naming conventions
 """
 
-PolicyParams = namedtuple('PolicyParams', 'type params delta_values')
+PolicyParams = namedtuple('PolicyParams', 'type params param_data')
 """
 Tuple for storing policy data
 :param type: str, name of the Policy object type
 :param params: one of {actions.policies.PrismaticParams, actions.policies.RevoluteParams}
-:param delta_values: one of {actions.policies.PrismaticDelta, actions.policies.RevoluteDelta}
+:param vary_params: dictionary with keys corresponding to Policy subclasses (string)
+                    and keys corresponding to dictionaries with policy parameter
+                    keys and True/False values where True means the param was
+                    randomly sampled when generating this policy
 """
 
 PrismaticParams = namedtuple('PrismaticParams', 'rigid_position rigid_orientation pitch yaw')
-PrismaticDelta = namedtuple('PrismaticDelta', 'delta_pitch delta_yaw')
 
 RevoluteParams = namedtuple('RevoluteParams', 'rot_center rot_axis_roll rot_axis_pitch \
                             rot_axis rot_radius_x rot_orientation')
-RevoluteDelta = namedtuple('RevoluteDelta', 'delta_roll, delta_pitch, delta_radius_x')
-
-
-PolicyPlotData = namedtuple('PolicyPlotData', 'param_name param_num range type')
+ParamData = namedtuple('ParamData', 'name varied bounds type')
 """
-param_name: name of input param
-param_num: number of input to NN (config is always last)
-range: ranges for plotting
-type: angular or linear
+:param name: string, name of param
+:param varied: boolean, True if param was randomly sampled when policy was generated
+:param bounds: list of len()==2, range of values sampled from (if varied == True),
+                else range of potential param values
+:param type: string 'angular' or 'linear', coordinate system of param for plotting
 """
 
 class Policy(object):
@@ -40,6 +40,14 @@ class Policy(object):
         """
         self.type = type
         self.traj_lines = []
+        self.param_data = {'Revolute': [ParamData('rot_axis_roll', False, [0.0, 0.0], 'angular'),
+                                        ParamData('rot_axis_pitch', True, [0.0, 2*np.pi], 'angular'),
+                                        ParamData('rot_axis_yaw', False, [0.0, 0.0], 'angular'),
+                                        ParamData('radius_x', True, [.08-0.025, 0.15], 'linear'),
+                                        ParamData('config', True, [-np.pi/2, 0.0], 'linear')],
+                            'Prismatic': [ParamData('pitch', True, [-np.pi, 0.0], 'angular'),
+                                        ParamData('yaw', False, [-np.pi/2, np.pi/2], 'angular'),
+                                        ParamData('config', True, [-0.25, 0.25], 'linear')]}
 
     def generate_trajectory(self, pose_handle_base_world, config_goal, debug=False, p_delta= 0.01, color=[0,0,0], old_lines=None):
         """ This method generates a trajectory of waypoints that the gripper tip should
@@ -138,6 +146,9 @@ class Prismatic(Policy):
         # should calc delta pitch from mech params and pitch, yaw
         self.delta_pitch = delta_pitch
         self.delta_yaw = delta_yaw
+
+        # mask to specify which parameters should be varied
+        self.mask = {'pitch': True, 'yaw': False, 'q': True}
 
         # derived
         self._M_origin_world = util.pose_to_matrix(self.rigid_position, self.rigid_orientation)
@@ -248,35 +259,27 @@ class Prismatic(Policy):
         return policy, goal_config
 
 class Revolute(Policy):
-    def __init__(self, rot_center, rot_axis_roll, rot_axis_pitch, rot_axis, rot_radius_x,
-                    rot_orientation, delta_roll=None, delta_pitch=None, delta_radius_x=None):
+    def __init__(self, rot_center, rot_axis_roll, rot_axis_pitch, rot_axis_yaw, rot_radius_x):
         """
         :param center: vector of length 3, a rigid (x,y,z) position in the world frame
                     of the center of rotation
-        :param axis_roll: scalar, roll angle between the world frame to the rotation frame
-        :param axis_pitch: scalar, pitch angle between the world frame to the rotation frame
-        :param radius: vector of length 3, an (x,y,z) position of the radius/handle base
-                        in the rotation frame
-        :param orn: vector of length 4, a rigid (x,y,z,w) quaternion representing the
-                    rotataion from rotation frame to the handle base frame
-        :param delta_roll: scalar or None, distance from true rotation frame roll for Door, else None
-        :param delta_pitch: scalar or None, distance from true rotation frame pitch for Door, else None
-        :param delta_radius_x: scalar or None, distance from true revolute radius in x-direction for Door, else None
-        :param delta_radius_z: scalar or None, distance from true revolute radius in z-direction for Door, else None
+        :param rot_axis_roll: scalar, roll angle between the world frame to the rotation frame
+        :param rot_axis_pitch: scalar, pitch angle between the world frame to the rotation frame
+        :param rot_axis_yaw: scalar, yaw angle between the world frame and the rotation frame
+        :param rot_radius_x: scalar, distance from handle frame to rotational axis along the -x-axis
+                        of the rotation frame
         """
         self.rot_center = rot_center
         self.rot_axis_roll = rot_axis_roll
         self.rot_axis_pitch = rot_axis_pitch
-        self.rot_axis = rot_axis
+        self.rot_axis_yaw = rot_axis_yaw
         self.rot_radius_x = rot_radius_x
-        self.rot_orientation = rot_orientation
-        self.delta_roll = delta_roll
-        self.delta_pitch = delta_pitch
-        self.delta_radius_x = delta_radius_x
 
         # derived
-        self._M_center_world = util.pose_to_matrix(self.rot_center, self.rot_axis)
-        self._M_radius_center = util.pose_to_matrix([self.rot_radius_x, 0., 0.], self.rot_orientation)
+        rot_axis = util.quaternion_from_euler(self.rot_axis_roll, self.rot_axis_pitch, self.rot_axis_yaw)
+        rot_orn = [0., 0., 0., 1.] # rotation between handle frame and rotational axis
+        self._M_center_world = util.pose_to_matrix(self.rot_center, rot_axis)
+        self._M_radius_center = util.pose_to_matrix([self.rot_radius_x, 0., 0.], rot_orn)
         super(Revolute,self).__init__('Revolute')
 
     def _forward_kinematics(self, config):
@@ -302,10 +305,6 @@ class Revolute(Policy):
     @staticmethod
     def generate_config(mech, goal_config):
         if goal_config is None:
-            # if np.random.uniform() > 0.75:
-            #     return -np.random.uniform(0.0, np.pi/4)
-            # else:
-            #     return -np.random.uniform(np.pi/4, np.pi/2)
             return -np.random.uniform(0.0, np.pi/2)
         else:
             return -goal_config*np.pi/2.0
@@ -324,60 +323,61 @@ class Revolute(Policy):
         self.traj_lines = lines
 
     @staticmethod
-    # TODO: randomness is binary (either on or off)
     def _gen(bb, mech, randomness):
         """ This function generates a Revolute policy. The ranges are
         based on the data.generator range revolute joints
         """
-        if randomness > 0 or mech.mechanism_type is not 'Door':
+        if randomness == 0 and mech.mechanism_type != 'Door':
+            raise Exception('cannot set randomness == 0 and try Revolute policy \
+                                on non-Revolute mechanism')
+        elif randomness == 0 and mech.mechanism_type == 'Door':
+            Policy.vary_param['Revolute'] = {'axis_roll': False, 'axis_pitch': False,
+                                            'axis_yaw': False, 'radius_x': False}
+
+        # set roll param
+        if Policy.vary_param['Revolute']['rot_axis_roll']:
             rot_axis_roll_world = np.random.uniform(0.0, 2 * np.pi)
-            radius_x = np.random.uniform(0.08-0.025, 0.15)
-            # toss = np.random.uniform()
-
-            # if toss > 0.80:
-            #     rot_axis_roll_world = np.random.uniform(np.pi/16.0, 31*np.pi/16.0)
-            # elif toss > 0.40:
-            #     rot_axis_roll_world = np.random.uniform(0, np.pi/16.0)
-            # else:
-            #     rot_axis_roll_world = np.random.uniform(31*np.pi/16.0, 2*np.pi)
-            #
-            # true_radius = mech.get_radius_x()
-            # radius_x = np.random.normal()*0.0125 + true_radius
-
-            # FIX THIS!@
-            # rot_axis_roll_world = 0.
-            # radius_x = mech.get_radius_x()
         else:
             rot_axis_roll_world = 0.0
-            radius_x = mech.get_radius_x()
-
-        # we are not learning this parameter yet, so only make it random if you
-        # have to (for sliders)
-        if mech.mechanism_type is 'Door':
-            if not mech.flipped:
-                rot_axis_pitch_world = np.pi
-            else:
-                rot_axis_pitch_world = 0.0
+        # set pitch param
+        if Policy.vary_param['Revolute']['rot_axis_pitch']:
+            rot_axis_pitch_world = np.random.choice([0.0, np.pi])
+            # rot_axis_pitch_world = np.random.uniform(0.0, 2*np.pi)
         else:
-            # TODO: when add rot_axis_pitch to the space of parameters being explored,
-            # change this back to random choice between 0 and pi
-            # rot_axis_pitch_world = np.random.choice([0.0, np.pi])
-            rot_axis_pitch_world = 0.0
-        rot_axis_world = util.quaternion_from_euler(rot_axis_roll_world,rot_axis_pitch_world, 0.0)
+            if mech.mechanism_type == 'Door':
+                if not mech.flipped:
+                    rot_axis_pitch_world = np.pi
+                else:
+                    rot_axis_pitch_world = 0.0
+            else:
+                raise Exception('cannot mask the rot_axis_pitch when attempting \
+                        Revolute policies on non-Revolute mechanisms')
+        # set yaw param
+        if Policy.vary_param['Revolute']['rot_axis_yaw']:
+            rot_axis_yaw_world = np.random.uniform(0.0, 2*np.pi)
+        else:
+            rot_axis_yaw_world = 0.0
+        # set radius_x param
+        if Policy.vary_param['Revolute']['radius_x']:
+            radius_x = np.random.uniform(0.08-0.025, 0.15)
+        else:
+            if mech.mechanism_type == 'Door':
+                radius_x = mech.get_radius_x()
+            else:
+                raise Exception('cannot mask the radius_x when attempting \
+                        Revolute policies on non-Revolute mechanisms')
 
         # calculate the center of rotation in the world frame
+        rot_axis_world = util.quaternion_from_euler(rot_axis_roll_world, rot_axis_pitch_world, rot_axis_yaw_world)
         radius = [-radius_x, 0.0, 0.0]
         p_handle_base_world = mech.get_pose_handle_base_world().p
         p_rot_center_world = p_handle_base_world + util.transformation(radius, [0., 0., 0.], rot_axis_world)
 
-        # calculate the orientation of the handle frame in the rotational axis frame
-        rot_orn = [0., 0., 0., 1.]
         return Revolute(p_rot_center_world,
                         rot_axis_roll_world,
                         rot_axis_pitch_world,
-                        rot_axis_world,
-                        radius_x,
-                        rot_orn)
+                        rot_axis_yaw_world,
+                        radius_x)
 
 class Poke(Policy):
     def __init__(self):
