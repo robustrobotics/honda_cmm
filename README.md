@@ -24,7 +24,6 @@ Argument | Type | Description | Default
 ```--randomness``` | int in [0,1] | if 0 then only generate correct policies for each mechanism, if 1 then generate random policies for each mechanism | 1
 ```--goal-config``` | float in [0.0,1.0] or None | if specified, the goal config to attempt in the dataset, else (None) goal config is randomly sampled | None
 ```--bb-fname``` | string | if specified, the file path of the results dataset with the desired Busyboxes for this generated dataset, else (None) random Busyboxes are generated for this dataset | None
-```--no-gripper``` | bool | if True, then apply forces directly to mechanism handles, else use and apply forces to the gripper | False
 
 #### GP-UCB Exploration 
 
