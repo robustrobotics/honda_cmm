@@ -13,8 +13,9 @@ def get_models(L, models_path):
     for root, subdir, files in all_files:
         for file in files:
             if (file[-3:] == '.pt') and ('_'+str(L)+'L_' in file):
-                M_result = re.search('(.*)/(.*)M/(.*)', root)\
-                M = M_result.group(2)
+                # M_result = re.search('(.*)/(.*)M/(.*)', root)
+                # M = M_result.group(2)
+                M = 100
                 full_path = root+'/'+file
                 models.append(full_path)
     return models, M

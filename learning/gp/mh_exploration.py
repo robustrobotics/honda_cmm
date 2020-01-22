@@ -34,12 +34,12 @@ def create_single_bb_mh_dataset(bb_result, n_interactions, nn_fname, n_chains=10
                               None, float(q), image_data, None, 1.0, True)
             preds = get_nn_preds([res], nn, ret_dataset=False, use_cuda=False)
             preds = preds[0]
-            return np.exp(preds/0.0175), preds
+            return np.exp(preds/0.0125), preds
 
         # TODO: Otherwise, run a bunch of MCMC chains on the NN.
 
         print('Start MCMC')
-        policies = mh_exploration(bb_result, n_iters=1000, cost_callback=nn_callback)
+        policies = mh_exploration(bb_result, n_iters=2000, cost_callback=nn_callback)
         print('End MCMC')
 
         # TODO: Sample to chains so there are n_interactions policies to evaluate.
@@ -67,7 +67,7 @@ def true_cost(policy, q, mech, gripper):
 
     if motion > 0.05 and q > -0.01:
         print('YIKES', q, motion/mech.get_max_dist())
-    return np.exp(motion/0.0175), motion # 0.00175
+    return np.exp(motion/0.0125), motion  # 0.0175
 
 
 def proposal(policy, q, bb, s_roll=1., s_pitch=1., s_rad=0.04, s_q=1.):
@@ -131,8 +131,8 @@ def mh_exploration(bb_result, n_iters, cost_callback):
                                goal_config=None)
 
     for _ in range(n_iters):
-        new_policy, new_q, rev_trans_cost, trans_cost = proposal(policy, q, bb, s_q=0.2, s_pitch=0.3, s_roll=0.3, s_rad=0.02)
-
+        # new_policy, new_q, rev_trans_cost, trans_cost = proposal(policy, q, bb, s_q=0.2, s_pitch=0.3, s_roll=0.3, s_rad=0.02)
+        new_policy, new_q, rev_trans_cost, trans_cost = proposal(policy, q, bb, s_q=0.2, s_pitch=0.1, s_roll=0.1, s_rad=0.01)
         c, motion = cost_callback(policy, q, mech, gripper)
         gripper.reset(mech)
         new_c, _ = cost_callback(new_policy, new_q, mech, gripper)
@@ -148,8 +148,8 @@ def mh_exploration(bb_result, n_iters, cost_callback):
 
         if np.random.uniform() < r:
             policy, q = new_policy, new_q
-
-    return policies[0::10]  # , samples[0::10]
+    # return samples[::10]
+    return policies[1000::10]  # , samples[0::10]
 
 
 if __name__ == '__main__':
@@ -158,7 +158,7 @@ if __name__ == '__main__':
                                 mech_types=['door'],
                                 urdf_num=0,
                                 debug=False,
-                                n_bbs=4,
+                                n_bbs=1,
                                 n_samples=1,
                                 viz=False,
                                 random_policies=False,
@@ -167,10 +167,13 @@ if __name__ == '__main__':
                                 bb_fname=None,
                                 no_gripper=True)
     busybox_data = generate_dataset(bb_dataset_args, None)
+    print(busybox_data[0][0].mechanism_params)
+    input()
+    n_chains = 3
+    for cx in range(n_chains):
+        samples = []
+        for bb in busybox_data:
+            samples.append(mh_exploration(bb[0], 4000, cost_callback=true_cost))
 
-    samples = []
-    for bb in busybox_data:
-        samples.append(mh_exploration(bb[0], 1000, cost_callback=true_cost))
-
-    with open('mh_samples_lin.pickle', 'wb') as handle:
-        pickle.dump(samples, handle)
+        with open('mh_samples_true21_0175_chain_%d.pickle' % cx, 'wb') as handle:
+            pickle.dump(samples, handle)
