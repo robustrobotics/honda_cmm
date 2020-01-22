@@ -6,7 +6,7 @@ TODO
 
 ## Usage
 
-### Generating Datasets 
+### Generating Datasets
 
 #### Random Exploration
 
@@ -21,15 +21,13 @@ Argument | Type | Description | Default
 ```--mech-types``` | list of strings in ['slider', 'door'] | mechanism types in dataset | 'slider'
 ```--fname``` | string | file path to save dataset to | does not save file if not specified
 ```--random-policies``` | bool | if True, generate random policies from any policy class, else only generate policies from the correct policy class | False 
-```--randomness``` | int in [0,1] | if 0 then only generate correct policies for each mechanism, if 1 then generate random policies for each mechanism | 1
-```--goal-config``` | float in [0.0,1.0] or None | if specified, the goal config to attempt in the dataset, else (None) goal config is randomly sampled | None
 ```--bb-fname``` | string | if specified, the file path of the results dataset with the desired Busyboxes for this generated dataset, else (None) random Busyboxes are generated for this dataset | None
 ```--no-gripper``` | bool | if True, then apply forces directly to mechanism handles, else use and apply forces to the gripper | False
 
-#### GP-UCB Exploration 
+#### GP-UCB Exploration
 
  To generate datasets using the GP-UCB method use the module ```learning.gp.explore_single_bb``` with the following arguments:
- 
+
 Argument | Type | Description | Default
 --- | --- | --- | ---
 ```--L``` | int | number of Busyboxes in generated dataset | required

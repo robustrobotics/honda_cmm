@@ -35,12 +35,11 @@ def generate_dataset(args, git_hash):
             for mech in bb._mechanisms:
                 # generate either a random or model-based policy and goal configuration
                 pose_handle_base_world = mech.get_pose_handle_base_world()
-                policy = policies.generate_policy(bb, mech, args.random_policies, args.randomness, init_pose=pose_handle_base_world)
-                config_goal = policy.generate_config(mech, args.goal_config)
+                policy = policies.generate_policy(bb, mech, args.random_policies, init_pose=pose_handle_base_world)
                 pose_handle_world_init = mech.get_handle_pose()
 
                 # calculate trajectory
-                traj = policy.generate_trajectory(pose_handle_base_world, config_goal, args.debug, color=[0, 0, 1])
+                traj = policy.generate_trajectory(pose_handle_base_world, args.debug, color=[0, 0, 1])
 
                 # execute trajectory
                 cumu_motion, net_motion, pose_handle_world_final = \
@@ -50,7 +49,7 @@ def generate_dataset(args, git_hash):
                 mechanism_params = mech.get_mechanism_tuple()
                 bb_results.append(util.Result(policy_params, mechanism_params, net_motion, \
                             cumu_motion, pose_handle_world_init, pose_handle_world_final, \
-                            config_goal, image_data, git_hash, args.randomness, args.no_gripper))
+                            image_data, git_hash, args.no_gripper))
 
                 gripper.reset(mech)
         results.append(bb_results)
@@ -71,9 +70,7 @@ if __name__ == '__main__':
     # if running multiple gens, give then a urdf_num so the correct urdf is read from/written to
     parser.add_argument('--urdf-num', type=int, default=0)
     parser.add_argument('--random-policies', action='store_true') # if want to only use random policy class on mechanisms
-    parser.add_argument('--randomness', type=float, default=1.0) # how far from true policy parameters to sample (as a fraction)
     # desired goal config represented as a percentage of the max config, if unused then random config is generated
-    parser.add_argument('--goal-config', type=float)
     parser.add_argument('--bb-fname', type=str)
     parser.add_argument('--no-gripper', action='store_true')
     args = parser.parse_args()

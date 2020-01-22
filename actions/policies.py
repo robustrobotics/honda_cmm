@@ -11,20 +11,27 @@ PolicyParams = namedtuple('PolicyParams', 'type params param_data')
 """
 Tuple for storing policy data
 :param type: str, name of the Policy object type
-:param params: one of {actions.policies.PrismaticParams, actions.policies.RevoluteParams}
-:param vary_params: dictionary with keys corresponding to Policy subclasses (string)
-                    and keys corresponding to dictionaries with policy parameter
-                    keys and True/False values where True means the param was
-                    randomly sampled when generating this policy
+:param params: one of {actions.policies.PrismaticParams,
+                actions.policies.RevoluteParams}
+:param param_data: dictionary where keys are param names and values are
+                    actions.policies.ParamData
 """
 
-PrismaticParams = namedtuple('PrismaticParams', 'rigid_position rigid_orientation pitch yaw')
+PrismaticParams = namedtuple('PrismaticParams', 'rigid_position \
+                                                rigid_orientation \
+                                                pitch \
+                                                yaw \
+                                                goal_config')
 
-RevoluteParams = namedtuple('RevoluteParams', 'rot_center rot_axis_roll rot_axis_pitch \
-                            rot_axis rot_radius_x rot_orientation')
-ParamData = namedtuple('ParamData', 'name varied bounds type')
+RevoluteParams = namedtuple('RevoluteParams', 'rot_center \
+                                                rot_axis_roll \
+                                                rot_axis_pitch \
+                                                rot_axis_yaw \
+                                                rot_radius_x \
+                                                goal_config')
+
+ParamData = namedtuple('ParamData', 'varied bounds type')
 """
-:param name: string, name of param
 :param varied: boolean, True if param was randomly sampled when policy was generated
 :param bounds: list of len()==2, range of values sampled from (if varied == True),
                 else range of potential param values
@@ -40,33 +47,25 @@ class Policy(object):
         """
         self.type = type
         self.traj_lines = []
-        self.param_data = {'Revolute': [ParamData('rot_axis_roll', False, [0.0, 0.0], 'angular'),
-                                        ParamData('rot_axis_pitch', True, [0.0, 2*np.pi], 'angular'),
-                                        ParamData('rot_axis_yaw', False, [0.0, 0.0], 'angular'),
-                                        ParamData('radius_x', True, [.08-0.025, 0.15], 'linear'),
-                                        ParamData('config', True, [-np.pi/2, 0.0], 'linear')],
-                            'Prismatic': [ParamData('pitch', True, [-np.pi, 0.0], 'angular'),
-                                        ParamData('yaw', False, [-np.pi/2, np.pi/2], 'angular'),
-                                        ParamData('config', True, [-0.25, 0.25], 'linear')]}
 
-    def generate_trajectory(self, pose_handle_base_world, config_goal, debug=False, p_delta= 0.01, color=[0,0,0], old_lines=None):
+    def generate_trajectory(self, pose_handle_base_world, debug=False,
+                                p_delta= 0.01, color=[0,0,0], old_lines=None):
         """ This method generates a trajectory of waypoints that the gripper tip should
         move through
         :param pose_handle_base_world: util.Pose, initial pose of the base of the handle
-        :param config_goal: the goal configuration of the joint
         :param debug: if True, display debug visualizations
         :param p_delta: scalar, the distance between trajectory waypoints
         """
         # TODO: don't assume handle always starts at config = 0
         config_curr = self._inverse_kinematics(*pose_handle_base_world)
-        config_dir_unit = self._config_dir(config_curr, config_goal)
+        config_dir_unit = self._config_dir(config_curr)
         config_delta = p_delta*config_dir_unit
 
         poses = []
         for i in itertools.count():
             if i < 400:
-                if self._past_goal_config(config_curr, config_goal, config_dir_unit):
-                    pose_handle_base_world = self._forward_kinematics(config_goal)
+                if self._past_goal_config(config_curr, config_dir_unit):
+                    pose_handle_base_world = self._forward_kinematics(self.goal_config)
                     poses += [pose_handle_base_world]
                     break
                 pose_handle_base_world = self._forward_kinematics(config_curr)
@@ -80,45 +79,43 @@ class Policy(object):
             p.stepSimulation()
         return poses
 
-    @staticmethod
-    def generate_config(mech, goal_config):
-        raise NotImplementedError('generate_config not implemented for policy type ')
-
     def get_policy_tuple(self):
-        raise NotImplementedError('get_policy_tuple not implemented for policy type '+self.type)
+        raise NotImplementedError('get_policy_tuple not implemented for policy \
+                                    type '+self.type)
 
-    def _config_dir(self, config_curr, config_goal):
-        return 1 if (config_goal > config_curr) else -1
+    def _config_dir(self, config_curr):
+        return 1 if (self.goal_config > config_curr) else -1
 
-    def _past_goal_config(self, curr_q, config_goal, q_dir_unit):
-        return (curr_q > config_goal) if (q_dir_unit == 1) else (curr_q < config_goal)
+    def _past_goal_config(self, curr_q, q_dir_unit):
+        return (curr_q > self.goal_config) if (q_dir_unit == 1) \
+                else (curr_q < self.goal_config)
 
     def _forward_kinematics(self, config):
-        raise NotImplementedError('_forward_kinematics function not implemented for policy type '+self.type)
+        raise NotImplementedError('_forward_kinematics function not implemented \
+                                    for policy type '+self.type)
 
     def _inverse_kinematics(self, p_joint_world, q_joint_world):
-        raise NotImplementedError('_inverse_kinematics function not implemented for policy type '+self.type)
+        raise NotImplementedError('_inverse_kinematics function not implemented \
+                                    for policy type '+self.type)
 
     @staticmethod
-    def _gen(bb, mech, randomness):
+    def _get_param_data(policy_type):
+        if policy_type == 'Revolute':
+            # NOTE: currently the rot_axis_pitch bounds are not used for sampling
+            # samples are either 0 or pi just like true doors
+            return {'rot_axis_roll': ParamData(False, [0.0, 0.0], 'angular'),
+                    'rot_axis_pitch': ParamData(True, [0.0, 2*np.pi], 'angular'),
+                    'rot_axis_yaw': ParamData(False, [0.0, 0.0], 'angular'),
+                    'radius_x': ParamData(True, [.08-0.025, 0.15], 'linear'),
+                    'config': ParamData(True, [-np.pi/2, 0.0], 'linear')}
+        elif policy_type == 'Prismatic':
+            return {'pitch': ParamData(True, [-np.pi, 0.0], 'angular'),
+                    'yaw': ParamData(False, [-np.pi/2, np.pi/2], 'angular'),
+                    'config': ParamData(True, [-0.25, 0.25], 'linear')}
+
+    @staticmethod
+    def _gen(bb, mech):
         raise NotImplementedError('_gen not implemented for policy type ')
-
-    @staticmethod
-    def get_plot_data(policy_type):
-        """
-        Return a list of PolicyPlotData for each policy type.
-        This depends on the parameters that are passed into the Policy Encoder.
-        """
-        # these values are the mins and maxes generated in the _gen() functions
-        if policy_type == 'Prismatic':
-            return [PolicyPlotData('pitch', 0, [-np.pi, 0], 'angular'),
-                    PolicyPlotData('yaw', 1, [-np.pi/2, np.pi/2], 'angular'),
-                    PolicyPlotData('config', 2, [-0.25, 0.25], 'linear')]
-        elif policy_type == 'Revolute':
-            return [PolicyPlotData('roll', 0, [0, 2*np.pi], 'angular'),
-                    PolicyPlotData('pitch', 1, [0, 0], 'angular'),
-                    PolicyPlotData('radius', 2, [.08-0.025, 0.15], 'linear'),
-                    PolicyPlotData('config', 3, [-np.pi/2, 0.0], 'linear')]
 
     def _draw_traj(self, poses, color):
         if len(self.traj_lines) > 0:
@@ -127,7 +124,7 @@ class Policy(object):
         self._draw(poses, color)
 
 class Prismatic(Policy):
-    def __init__(self, pos, orn, pitch, yaw, delta_pitch=None, delta_yaw=None):
+    def __init__(self, pos, orn, pitch, yaw, goal_config, param_data):
         """
         :param pos: vector of length 3, a rigid (x,y,z) position in the world frame
                     along the prismatic joint
@@ -135,20 +132,15 @@ class Prismatic(Policy):
                     frame representing the orientation of the handle in the world
         :param pitch: scalar, pitch between world frame and the direction of the prismatic joint
         :param yaw: scalar, yaw between world frame and the direction of the prismatic joint
-        :param delta_pitch: scalar or None, distance from model-based true pitch for Slider, else None
-        :param delta_yaw: scalar or None, distance from model-based true yaw for Slider, else None
+        :param goal_config: scalar, distance to move along constrained trajectory
+        :param param_delta: dict, keys are param names and values are ParamData tuples
         """
         self.rigid_position = pos
         self.rigid_orientation = orn
         self.pitch = pitch
         self.yaw = yaw
-
-        # should calc delta pitch from mech params and pitch, yaw
-        self.delta_pitch = delta_pitch
-        self.delta_yaw = delta_yaw
-
-        # mask to specify which parameters should be varied
-        self.mask = {'pitch': True, 'yaw': False, 'q': True}
+        self.goal_config = goal_config
+        self.param_data = param_data
 
         # derived
         self._M_origin_world = util.pose_to_matrix(self.rigid_position, self.rigid_orientation)
@@ -175,105 +167,91 @@ class Prismatic(Policy):
         p_joint_origin = M_joint_origin[:3,3]
         return np.dot(prismatic_dir, p_joint_origin)
 
-    @staticmethod
-    def generate_config(mech, goal_config):
-        if goal_config is None:
-            max_config = 0.25 # from generator_busybox
-            # max_config = np.random.uniform(-0.1, 0.1)
-            return np.random.uniform(-max_config, max_config)
-        else:
-            return goal_config*mech.range/2.0
-
     def get_policy_tuple(self):
-        prism_params = PrismaticParams(self.rigid_position, self.rigid_orientation, self.pitch, self.yaw)
-        delta_values = PrismaticDelta(self.delta_pitch, self.delta_yaw)
-        return PolicyParams(self.type, prism_params, delta_values)
+        prism_params = PrismaticParams(self.rigid_position,
+                                        self.rigid_orientation,
+                                        self.pitch,
+                                        self.yaw,
+                                        self.goal_config)
+        return PolicyParams(self.type, prism_params, self.param_data)
 
     def _draw(self, traj, color):
         lines = util.draw_line([np.add(traj[0].p, [0., .025, 0.]), np.add(traj[-1].p, [0., .025, 0.])], color, thick=False)
         self.traj_lines = lines
 
     @staticmethod
-    def _gen(bb, mech, randomness, init_pose=None):
+    def _gen(bb, mech, init_pose=None):
         """ This function generates a Prismatic policy. The ranges are
         based on the data.generator range prismatic joints
         """
+        param_data = Policy._get_param_data('Prismatic')
+
         if not init_pose:
             rigid_position = mech.get_pose_handle_base_world().p
         else:
             rigid_position = init_pose.p
         rigid_orientation = np.array([0., 0., 0., 1.])
-        if mech.mechanism_type == 'Slider':
-            true_pitch = -np.arctan2(mech.axis[1], mech.axis[0])
-            true_yaw = 0.0
 
-            delta_pitch = randomness*np.random.uniform(-np.pi/2, np.pi/2)
-            delta_yaw = randomness*np.random.uniform(-np.pi/2, np.pi/2)
-
-            pitch = true_pitch + delta_pitch
-            yaw = true_yaw + delta_yaw
-
-            if pitch < -np.pi:
-                pitch += np.pi
-            elif pitch > 0:
-                pitch -= np.pi
-            # TODO: same for yaw if have mech with yaw != 0
+        # pitch
+        if param_data['pitch'].varied:
+            pitch = np.random.uniform(*param_data['pitch'].bounds)
         else:
-            pitch = np.random.uniform(-np.pi, 0.0)
-            yaw = np.random.uniform(-np.pi/2, np.pi/2)
-            delta_pitch = None
-            delta_yaw = None
-        return Prismatic(rigid_position, rigid_orientation, pitch, yaw, \
-                delta_pitch, delta_yaw)
+            if mech.mechanism_type == 'Slider':
+                pitch = -np.arctan2(mech.axis[1], mech.axis[0])
+            else:
+                raise Exception('Cannot use ground truth pitch for Prismatic \
+                                policies on non-Prismatic mechanisms as there is \
+                                not a single ground truth value. It varies with \
+                                each Prismatic mechanism. Must vary pitch \
+                                param for non-Prismatic mechanism.')
 
+        # yaw
+        if param_data['yaw'].varied:
+            yaw = np.random.uniform(*param_data['yaw'].bounds)
+        else:
+            yaw = 0.0
 
-    def get_goal_from_policy(self, goal_config):#, bb, mech, handle_pose, goal_pos):
-        goal_pose = self._forward_kinematics(goal_config)
-        return goal_pose.p
+        # goal config
+        if param_data['config'].varied:
+            goal_config = np.random.uniform(*param_data['config'].bounds)
+        else:
+            if mech.mechanism_type == 'Slider':
+                goal_config = mech.range/2.0
+            else:
+                raise Exception('Cannot use ground truth config for Prismatic \
+                                policies on non-Prismatic mechanisms as there is \
+                                not a single ground truth value. It varies with \
+                                each Prismatic mechanism. Must vary config \
+                                param for non-Prismatic mechanism.')
 
-    @staticmethod
-    def get_policy_from_goal(bb, mech, handle_pose, goal_pos):
-        direction3d = np.subtract(goal_pos, handle_pose.p)
-        direction = [direction3d[0], direction3d[2]]
-        dist = np.linalg.norm(direction)
-        axis = np.divide(direction, dist)
-        # mechs all have positive z axis
-        if axis[1] < 0:
-            axis = -1*axis
-        p.addUserDebugLine(handle_pose.p, np.add(handle_pose.p, [axis[0], 0.0, axis[1]]), [0,1,0], lifeTime=0)
-        pitch = -np.arctan2(axis[1], axis[0])
-        yaw = 0.0
-        true_policy = Prismatic._gen(bb, mech, 0.0)
-        delta_pitch = pitch - true_policy.pitch
-        delta_yaw = yaw - true_policy.yaw
-        if delta_pitch > np.pi/2:
-            delta_pitch = np.pi - delta_pitch
-        elif delta_pitch < -np.pi/2:
-            delta_pitch = -np.pi - delta_pitch
-        # TODO: same for yaw if have mech with yaw != 0
-        rigid_position = handle_pose.p
-        rigid_orientation = np.array([0., 0., 0., 1.])
-        policy = Prismatic(rigid_position, rigid_orientation, pitch, yaw, delta_pitch,
-                delta_yaw)
-        goal_config = policy._inverse_kinematics(goal_pos, [0., 0., 0., 1.])
-        return policy, goal_config
+        return Prismatic(rigid_position,
+                            rigid_orientation,
+                            pitch,
+                            yaw,
+                            goal_config,
+                            param_data)
 
 class Revolute(Policy):
-    def __init__(self, rot_center, rot_axis_roll, rot_axis_pitch, rot_axis_yaw, rot_radius_x):
+    def __init__(self, rot_center, rot_axis_roll, rot_axis_pitch, rot_axis_yaw, \
+                    rot_radius_x, goal_config, param_data):
         """
-        :param center: vector of length 3, a rigid (x,y,z) position in the world frame
+        :param rot_center: vector of length 3, a rigid (x,y,z) position in the world frame
                     of the center of rotation
         :param rot_axis_roll: scalar, roll angle between the world frame to the rotation frame
         :param rot_axis_pitch: scalar, pitch angle between the world frame to the rotation frame
         :param rot_axis_yaw: scalar, yaw angle between the world frame and the rotation frame
         :param rot_radius_x: scalar, distance from handle frame to rotational axis along the -x-axis
                         of the rotation frame
+        :param goal_config: scalar, distance to move along constrained trajectory
+        :param param_delta: dict, keys are param names and values are ParamData tuples
         """
         self.rot_center = rot_center
         self.rot_axis_roll = rot_axis_roll
         self.rot_axis_pitch = rot_axis_pitch
         self.rot_axis_yaw = rot_axis_yaw
         self.rot_radius_x = rot_radius_x
+        self.goal_config = goal_config
+        self.param_data = param_data
 
         # derived
         rot_axis = util.quaternion_from_euler(self.rot_axis_roll, self.rot_axis_pitch, self.rot_axis_yaw)
@@ -302,19 +280,15 @@ class Revolute(Policy):
         angle, direction, point = util.trans.rotation_from_matrix(M_radius_joint_center)
         return angle
 
-    @staticmethod
-    def generate_config(mech, goal_config):
-        if goal_config is None:
-            return -np.random.uniform(0.0, np.pi/2)
-        else:
-            return -goal_config*np.pi/2.0
-
     def get_policy_tuple(self):
-        rev_params = RevoluteParams(self.rot_center, self.rot_axis_roll, \
-                        self.rot_axis_pitch, self.rot_axis, self.rot_radius_x, \
-                        self.rot_orientation)
-        delta_values = RevoluteDelta(self.delta_roll, self.delta_pitch, self.delta_radius_x)
-        return PolicyParams(self.type, rev_params, delta_values)
+        rev_params = RevoluteParams(self.rot_center,
+                                    self.rot_axis_roll,
+                                    self.rot_axis_pitch,
+                                    self.rot_axis_yaw,
+                                    self.rot_radius_x,
+                                    self.goal_config)
+
+        return PolicyParams(self.type, rev_params, self.param_data)
 
     def _draw(self, traj, color):
         lines = []
@@ -323,26 +297,25 @@ class Revolute(Policy):
         self.traj_lines = lines
 
     @staticmethod
-    def _gen(bb, mech, randomness):
+    def _gen(bb, mech):
         """ This function generates a Revolute policy. The ranges are
         based on the data.generator range revolute joints
         """
-        if randomness == 0 and mech.mechanism_type != 'Door':
-            raise Exception('cannot set randomness == 0 and try Revolute policy \
-                                on non-Revolute mechanism')
-        elif randomness == 0 and mech.mechanism_type == 'Door':
-            Policy.vary_param['Revolute'] = {'axis_roll': False, 'axis_pitch': False,
-                                            'axis_yaw': False, 'radius_x': False}
+        param_data = Policy._get_param_data('Revolute')
 
-        # set roll param
-        if Policy.vary_param['Revolute']['rot_axis_roll']:
-            rot_axis_roll_world = np.random.uniform(0.0, 2 * np.pi)
+        # axis roll
+        if param_data['rot_axis_roll'].varied:
+            rot_axis_roll_world = \
+                    np.random.uniform(*param_data['rot_axis_roll'].bounds)
         else:
             rot_axis_roll_world = 0.0
-        # set pitch param
-        if Policy.vary_param['Revolute']['rot_axis_pitch']:
+
+        # axis pitch
+        if param_data['rot_axis_pitch'].varied:
+            # NOTE: this is sampling from a set, not a continuous range
             rot_axis_pitch_world = np.random.choice([0.0, np.pi])
-            # rot_axis_pitch_world = np.random.uniform(0.0, 2*np.pi)
+            # rot_axis_pitch_world =
+            #        np.random.uniform(*param_data['rot_axis_pitch'].bounds)
         else:
             if mech.mechanism_type == 'Door':
                 if not mech.flipped:
@@ -350,34 +323,57 @@ class Revolute(Policy):
                 else:
                     rot_axis_pitch_world = 0.0
             else:
-                raise Exception('cannot mask the rot_axis_pitch when attempting \
-                        Revolute policies on non-Revolute mechanisms')
-        # set yaw param
-        if Policy.vary_param['Revolute']['rot_axis_yaw']:
-            rot_axis_yaw_world = np.random.uniform(0.0, 2*np.pi)
+                raise Exception('Cannot use ground truth rot_axis_pitch for Revolute \
+                                policies on non-Revolute mechanisms as there is \
+                                not a single ground truth value. It varies with \
+                                each Revolute mechanism. Must vary rot_axis_pitch \
+                                param for non-Revolute mechanism.')
+        # axis yaw
+        if param_data['rot_axis_yaw'].varied:
+            rot_axis_yaw_world = \
+                    np.random.uniform(*param_data['rot_axis_yaw'].bounds)
         else:
             rot_axis_yaw_world = 0.0
-        # set radius_x param
-        if Policy.vary_param['Revolute']['radius_x']:
-            radius_x = np.random.uniform(0.08-0.025, 0.15)
+
+        # radius_x
+        if param_data['radius_x'].varied:
+            radius_x = np.random.uniform(*param_data['radius_x'].bounds)
         else:
             if mech.mechanism_type == 'Door':
                 radius_x = mech.get_radius_x()
             else:
-                raise Exception('cannot mask the radius_x when attempting \
-                        Revolute policies on non-Revolute mechanisms')
+                raise Exception('Cannot use ground truth radius_x for Revolute \
+                                policies on non-Revolute mechanisms as there is \
+                                not a single ground truth value. It varies with \
+                                each Revolute mechanism. Must vary radius_x \
+                                param for non-Revolute mechanism.')
 
-        # calculate the center of rotation in the world frame
+        # center of rotation
         rot_axis_world = util.quaternion_from_euler(rot_axis_roll_world, rot_axis_pitch_world, rot_axis_yaw_world)
         radius = [-radius_x, 0.0, 0.0]
         p_handle_base_world = mech.get_pose_handle_base_world().p
         p_rot_center_world = p_handle_base_world + util.transformation(radius, [0., 0., 0.], rot_axis_world)
 
+        # goal config
+        if param_data['config'].varied:
+            goal_config = np.random.uniform(*param_data['config'].bounds)
+        else:
+            if mech.mechanism_type == 'Door':
+                goal_config = -np.pi/2
+            else:
+                raise Exception('Cannot use ground truth config for Revolute \
+                                policies on non-Revolute mechanisms as there is \
+                                not a single ground truth value. It varies with \
+                                each Revolute mechanism. Must vary config \
+                                param for non-Revolute mechanism.')
+
         return Revolute(p_rot_center_world,
                         rot_axis_roll_world,
                         rot_axis_pitch_world,
                         rot_axis_yaw_world,
-                        radius_x)
+                        radius_x,
+                        goal_config,
+                        param_data)
 
 class Poke(Policy):
     def __init__(self):
@@ -392,16 +388,16 @@ class Path(Policy):
         super(Path,self).__init__('Path')
 
 # TODO: add other policy_types as they're made
-def generate_policy(bb, mech, random_policies, randomness, policy_types=[Revolute, Prismatic], init_pose=None):
+def generate_policy(bb, mech, random_policies, policy_types=[Revolute, Prismatic], init_pose=None):
     if not random_policies:
         policy_type = get_matched_policy_type(mech)
         if policy_type == 'Revolute':
-            return Revolute._gen(bb, mech, randomness)
+            return Revolute._gen(bb, mech)
         elif policy_type == 'Prismatic':
-            return Prismatic._gen(bb, mech, randomness, init_pose=init_pose)
+            return Prismatic._gen(bb, mech, init_pose=init_pose)
     else:
         policy_type = np.random.choice(policy_types)
-        return policy_type._gen(bb, mech, randomness)
+        return policy_type._gen(bb, mech)
 
 def get_matched_policy_type(mech):
     if mech.mechanism_type == 'Door':
@@ -412,14 +408,15 @@ def get_matched_policy_type(mech):
 def get_policy_from_tuple(policy_params):
     type = policy_params.type
     params = policy_params.params
-    delta_values = policy_params.delta_values
+    param_data = policy_params.param_data
     if policy_params.type == 'Revolute':
-        return Revolute(params.rot_center, params.rot_axis_roll, params.rot_axis_pitch,
-                        params.rot_axis, params.rot_radius_x, params.rot_orientation,
-                        delta_values.delta_roll, delta_values.delta_pitch, delta_values.delta_radius_x)
+        policy = Revolute(params.rot_center, params.rot_axis_roll, params.rot_axis_pitch,
+                        params.rot_axis_yaw, params.rot_radius_x, params.goal_config)
     if policy_params.type == 'Prismatic':
-        return Prismatic(params.rigid_position, params.rigid_orientation, params.pitch,
-                        params.yaw, delta_values.delta_pitch, delta_values.delta_yaw)
+        policy = Prismatic(params.rigid_position, params.rigid_orientation, params.pitch,
+                        params.yaw, params.goal_config)
+    policy.param_data = param_data
+    return policy
 
 ## Helper Functions
 def _random_p(bb):

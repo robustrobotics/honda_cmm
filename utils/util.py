@@ -23,8 +23,8 @@ Pose represents an SE(3) pose
 """
 
 Result = namedtuple('Result', 'policy_params mechanism_params net_motion cumu_motion \
-                        pose_joint_world_init pose_joint_world_final config_goal \
-                        image_data git_hash randomness no_gripper')
+                        pose_joint_world_init pose_joint_world_final image_data \
+                        git_hash no_gripper')
 """
 Result contains the performance information after the gripper tries to move a mechanism
 :param policy_params: actions.policies.PolicyParams
@@ -34,10 +34,8 @@ Result contains the performance information after the gripper tries to move a me
 :param pose_joint_world_init: utils.Pose object, the initial pose of the mechanism handle
 :param pose_joint_world_final: utils.Pose object or None, the final pose of the mechanism handle if the
                     gripper tip is in contact with the mechanism at completion, else None
-:param config_goal: the goal configuration which the joint was attempting to reach
 :param image_data: utils.util.ImageData
 :param git_hash: None or str representing the git hash when the data was collected
-:param randomness: float in [0,1] representing how far from the true policy the random samples came from
 :param no_gripper: bool, if True then forces were applied directly to handle
 """
 
@@ -314,7 +312,7 @@ def replay_result(result):
     mech = bb._mechanisms[0]
     policy = get_policy_from_tuple(result.policy_params)
     pose_handle_base_world = mech.get_pose_handle_base_world()
-    traj = policy.generate_trajectory(pose_handle_base_world, result.config_goal, True)
+    traj = policy.generate_trajectory(pose_handle_base_world, True)
     cumu_motion, net_motion, pose_handle_world_final = gripper.execute_trajectory(traj, mech, policy.type, True)
     import pdb; pdb.set_trace()
     p.disconnect()
