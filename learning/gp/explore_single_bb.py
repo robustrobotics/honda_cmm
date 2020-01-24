@@ -811,7 +811,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--mech-types',
         nargs='+',
-        default='slider',
+        default=['slider'],
         type=str,
         help='if no bb-fname is specified, list the mech types desired')
     parser.add_argument(
