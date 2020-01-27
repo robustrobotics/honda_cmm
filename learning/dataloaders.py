@@ -78,7 +78,7 @@ class PolicyDataset(Dataset):
         self.items = items
 
         self.tensors = [torch.tensor(item['params']) for item in items]
-        self.configs = [torch.tensor([item['config']]) for item in items]
+        self.configs = [torch.tensor([item['goal_config']]) for item in items]
         self.ys = [torch.tensor([item['y']]) for item in items]
 
         downsample = transforms.Compose([transforms.ToPILImage(),
@@ -97,9 +97,6 @@ class PolicyDataset(Dataset):
             self.downsampled_images.append(downsample(np_im))
         # imshow(torchvision.utils.make_grid(self.images[0:10]))
         # imshow(torchvision.utils.make_grid(self.downsampled_images[0:10]))
-
-        # this is just for plotting, not learning
-        self.delta_vals = [item['delta_vals'] for item in items]
 
     def __getitem__(self, index):
         return self.items[index]['type'], self.tensors[index], self.configs[index], self.images[index], self.ys[index], self.downsampled_images[index]
@@ -122,7 +119,7 @@ def parse_pickle_file(results):
         if policy_type == 'Prismatic':
             pitch = [entry.policy_params.params.pitch]
             yaw = [entry.policy_params.params.yaw]
-            policy_params = pitch + yaw
+            policy_params = pitch + yaw + config
             # mech_params = [entry.mechanism_params.params.range]
         elif policy_type == 'Revolute':
             #center = list(entry.policy_params.params.rot_center)
@@ -137,11 +134,9 @@ def parse_pickle_file(results):
         parsed_data.append({
             'type': policy_type,
             'params': policy_params,
-            'config': entry.config_goal,
             'image': entry.image_data,
             'y': motion,
             # 'mech': mech_params,
-            'delta_vals': entry.policy_params.delta_values
         })
 
     return parsed_data
