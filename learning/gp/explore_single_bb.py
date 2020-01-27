@@ -58,32 +58,6 @@ def get_x_and_bounds_from_tuple(policy_params):
                 bounds.append(param_data[param_name].bounds)
     return x, bounds
 
-# this takes in an optimization x and returns the tensor of just the policy
-# params
-def get_policy_tensor(policy_type, x, mech):
-    policy_list = [get_policy_list(policy_type, x, mech)[0][:-1]]
-    if policy_type == 'Prismatic':
-        return torch.tensor(policy_list).float()  # hard code yaw to be 0
-    elif policy_type == 'Revolute':
-        return torch.tensor(policy_list).float()
-
-
-# this takes in an optimization x and returns an x with the policy params
-def get_policy_list(policy_type, x, mech):
-    if policy_type == 'Prismatic':
-        return [[x[0], x[1], x[-1]]]
-    elif policy_type == 'Revolute':
-        if mech.mechanism_type == 'Door':
-            if not mech.flipped:
-                pitch = np.pi
-            else:
-                pitch = 0.0
-        else:
-            # TODO: change back to 0 or pi, or get from x when implemented
-            pitch = 0.0
-        return [[x[0], pitch, x[-2], x[-1]]]
-
-
 def process_data(data, n_train):
     """
     Takes in a dataset in our typical format and outputs the dataset to fit the GP.
@@ -110,16 +84,13 @@ def get_nn_preds(results, model, ret_dataset=False, use_cuda=False):
         policy_type = dataset.items[i]['type']
         policy_type_tensor = torch.Tensor([util.name_lookup[policy_type]])
         policy_tensor = dataset.tensors[i].unsqueeze(0)
-        config_tensor = dataset.configs[i].unsqueeze(0)
         image_tensor = dataset.images[i].unsqueeze(0)
         if use_cuda:
             policy_type_tensor = policy_type_tensor.cuda()
             policy_tensor = policy_tensor.cuda()
-            config_tensor = config_tensor.cuda()
             image_tensor = image_tensor.cuda()
         pred_motion, _ = model.forward(policy_type_tensor,
                                        policy_tensor,
-                                       config_tensor,
                                        image_tensor)
         if use_cuda:
             pred_motion_float = pred_motion.cpu().detach().numpy()[0][0]
@@ -173,7 +144,7 @@ class GPOptimizer(object):
 
         # Generate random policies.
         for _ in range(n_samples):
-            random_policy = generate_policy(bb, self.mech, random_policies, 1.0)
+            random_policy = generate_policy(bb, self.mech, random_policies)
             policy_type = random_policy.type
             policy_tuple = random_policy.get_policy_tuple()
 
@@ -191,18 +162,15 @@ class GPOptimizer(object):
 
         self.log = []
 
-    # TODO: make x same for GP and NN (should eliminate get_policy_tensor_func)
     def _optim_result_to_torch(self, policy_type, x, image_tensor, use_cuda=False):
         policy_type_tensor = torch.Tensor([util.name_lookup[policy_type]])
-        policy_tensor = get_policy_tensor(policy_type, x, self.mech)
-        config_tensor = torch.tensor([[x[-1]]]).float()
+        policy_tensor = torch.tensor(x).float()
         if use_cuda:
             policy_type_tensor = policy_type_tensor.cuda()
             policy_tensor = policy_tensor.cuda()
-            config_tensor = config_tensor.cuda()
             image_tensor = image_tensor.cuda()
 
-        return [policy_type_tensor, policy_tensor, config_tensor, image_tensor]
+        return [policy_type_tensor, policy_tensor, image_tensor]
 
     def _objective_func(self, x, policy_type, ucb, image_tensor=None):
         X = np.expand_dims(x, axis=0)
@@ -397,7 +365,7 @@ class UCB_Interaction(object):
             self.ys[policy_type].append([result.net_motion])
         else:
             inputs = self.optim._optim_result_to_torch(policy_type,
-                                                       self.xs[policy_type][-1],
+                                                       self.xs[policy_type],
                                                        self.optim.dataset.images[0].unsqueeze(0),
                                                        use_cuda=False)
             nn_pred = self.nn.forward(*inputs)[0]
@@ -487,15 +455,14 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
     """
     # Create a dataset of L busyboxes.
     if args.bb_fname == '':
-        bb_dataset_args = Namespace(max_mech=1,
+        bb_dataset_args = Namespace(viz=False,
+                                    debug=False,
+                                    n_samples=1,
+                                    n_bbs=n_bbs,
+                                    max_mech=1,
                                     mech_types=args.mech_types,
                                     urdf_num=args.urdf_num,
-                                    debug=False,
-                                    n_bbs=n_bbs,
-                                    n_samples=1,
-                                    viz=False,
                                     random_policies=args.random_policies,
-                                    goal_config=None,
                                     bb_fname=None,
                                     no_gripper=True)
         print('Creating Busyboxes.')
@@ -519,20 +486,19 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
         dataset = []
     '''
     dataset = []
-    regrets = []
+    #regrets = []
     for ix, bb_results in enumerate(busybox_data):
-        single_dataset, _, r = create_single_bb_gpucb_dataset(bb_results[0],
+        single_dataset, _ = create_single_bb_gpucb_dataset(bb_results[0],
                                                               n_interactions,
                                                               '',
                                                               args.plot,
                                                               args,
                                                               ix,
-                                                              args.plot_dir,
-                                                              ret_regret=True)
+                                                              plot_dir_prefix=args.plot_dir)
         dataset.append(single_dataset)
-        regrets.append(r)
+        #regrets.append(r)
         print('Interacted with BusyBox %d.' % ix)
-        print('Regret:', np.mean(regrets))
+        #print('Regret:', np.mean(regrets))
 
     # Save the dataset.
     if args.fname != '':
@@ -588,6 +554,8 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
         if ix % 10 == 0:
             if len(nn_fname) > 0:
                 model = util.load_model(nn_fname, args.hdim, use_cuda=use_cuda)
+            '''
+            # this code has not been updated since refactor
             def _gp_callback(new_xs, bb_result):
                 ys, std = sampler.gps[bb_result.policy_params.type].predict(new_xs, return_std=True)
                 ys = ys.flatten()
@@ -628,7 +596,7 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
                         nn_ys += [pred_motion_float]
                     ys += np.array(nn_ys)
                 return ys, std, ys + np.sqrt(BETA)*std
-
+            '''
             # viz_3d_plots(xs=sampler.xs,
             #              callback=_gp_callback,
             #              bb_result=bb_result)

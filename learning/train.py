@@ -9,6 +9,7 @@ from utils import util
 import os
 import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
+from actions.policies import Policy
 torch.backends.cudnn.enabled = True
 
 RunData = namedtuple('RunData', 'hdim batch_size run_num max_epoch best_epoch best_val_error')
@@ -39,8 +40,9 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
                                                batch_size=batch_size)
 
     # Setup Model
-    net = NNPolVis(policy_names=['Prismatic', 'Revolute'],
-                   policy_dims=[2, 3],
+    policy_types = ['Prismatic', 'Revolute']
+    net = NNPolVis(policy_names=policy_types,
+                   policy_dims=Policy.get_param_dims(policy_types),
                    hdim=hdim,
                    im_h=53,  # 154, Note thiese aren't important for the SpatialAutoencoder
                    im_w=115,  # 205,
@@ -52,29 +54,19 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
     loss_fn = torch.nn.MSELoss()
     optim = torch.optim.Adam(net.parameters())
 
-    # Add the graph to TensorBoard viz,
-    k, x, q, im, y, _ = train_set.dataset[0]
-    pol = torch.Tensor([name_lookup[k]])
-    if args.use_cuda:
-        x = x.cuda().unsqueeze(0)
-        q = q.cuda().unsqueeze(0)
-        im = im.cuda().unsqueeze(0)
-        pol = pol.cuda()
-
     best_val = 1000
     # Training loop.
     for ex in range(1, args.n_epochs+1):
         train_losses = []
         net.train()
-        for bx, (k, x, q, im, y, _) in enumerate(train_set):
+        for bx, (k, x, im, y, _) in enumerate(train_set):
             pol = name_lookup[k[0]]
             if args.use_cuda:
                 x = x.cuda()
-                q = q.cuda()
                 im = im.cuda()
                 y = y.cuda()
             optim.zero_grad()
-            yhat, points = net.forward(pol, x, q, im)
+            yhat, points = net.forward(pol, x, im)
 
             loss = loss_fn(yhat, y)
             loss.backward()
@@ -98,15 +90,14 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
             net.eval()
 
             ys, yhats, types = [], [], []
-            for bx, (k, x, q, im, y, _) in enumerate(val_set):
+            for bx, (k, x, im, y, _) in enumerate(val_set):
                 pol = torch.Tensor([name_lookup[k[0]]])
                 if args.use_cuda:
                     x = x.cuda()
-                    q = q.cuda()
                     im = im.cuda()
                     y = y.cuda()
 
-                yhat, _ = net.forward(pol, x, q, im)
+                yhat, _ = net.forward(pol, x, im)
 
                 loss = loss_fn(yhat, y)
                 val_losses.append(loss.item())

@@ -100,6 +100,18 @@ class Policy(object):
                     'goal_config': ParamData(True, [-0.25, 0.25], 'linear')}
 
     @staticmethod
+    def get_param_dims(policy_types):
+        dims = []
+        for policy_type in policy_types:
+            policy_dims = 0
+            policy_params = Policy.get_param_data(policy_type)
+            for param in policy_params:
+                if policy_params[param].varied:
+                    policy_dims += 1
+            dims += [policy_dims]
+        return dims
+
+    @staticmethod
     def _gen(bb, mech):
         raise NotImplementedError('_gen not implemented for policy type ')
 

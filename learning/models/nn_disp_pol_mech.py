@@ -22,7 +22,6 @@ class DistanceRegressor(nn.Module):
         self.policy_modules = nn.ModuleDict()
         for name, dim in zip(policy_names, policy_dims):
             self.policy_modules[name] = PolicyEncoder(n_params=dim,
-                                                      n_q=1,
                                                       n_layer=2,
                                                       n_hidden=hdim)
 
@@ -37,19 +36,18 @@ class DistanceRegressor(nn.Module):
         # SoftPLUS didn't work well... probably because our outputs are such small numbers.
         self.SOFTPLUS = nn.Softplus()
 
-    def forward(self, policy_type, theta, q, mech):
+    def forward(self, policy_type, theta, mech):
         """
         Call the distance regressor for a specific policy instantiation.
         :param policy_type: The name of the policy class being executed.
         :param theta: The policy parameters.
-        :param q: How long the policy is executed for.
         :return:
         """
         if policy_type.item() == 0:
             policy_type = 'Prismatic'
         else:
             policy_type = 'Revolute'
-        pol = self.policy_modules[policy_type].forward(theta, q)
+        pol = self.policy_modules[policy_type].forward(theta)
         mech = F.relu(self.mech2(F.relu(self.mech1(mech))))
 
         x = pol*mech

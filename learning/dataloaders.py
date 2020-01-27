@@ -78,7 +78,6 @@ class PolicyDataset(Dataset):
         self.items = items
 
         self.tensors = [torch.tensor(item['params']) for item in items]
-        self.configs = [torch.tensor([item['goal_config']]) for item in items]
         self.ys = [torch.tensor([item['y']]) for item in items]
 
         downsample = transforms.Compose([transforms.ToPILImage(),
@@ -99,7 +98,7 @@ class PolicyDataset(Dataset):
         # imshow(torchvision.utils.make_grid(self.downsampled_images[0:10]))
 
     def __getitem__(self, index):
-        return self.items[index]['type'], self.tensors[index], self.configs[index], self.images[index], self.ys[index], self.downsampled_images[index]
+        return self.items[index]['type'], self.tensors[index], self.images[index], self.ys[index], self.downsampled_images[index]
 
     def __len__(self):
         return len(self.items)
@@ -115,28 +114,16 @@ def parse_pickle_file(results):
     for entry in results:
         if len(entry) == 0:
             continue
-        policy_type = entry.policy_params.type
-        if policy_type == 'Prismatic':
-            pitch = [entry.policy_params.params.pitch]
-            yaw = [entry.policy_params.params.yaw]
-            policy_params = pitch + yaw + config
-            # mech_params = [entry.mechanism_params.params.range]
-        elif policy_type == 'Revolute':
-            #center = list(entry.policy_params.params.rot_center)
-            roll = [entry.policy_params.params.rot_axis_roll]
-            pitch = [entry.policy_params.params.rot_axis_pitch]
-            #orn = list(entry.policy_params.params.rot_orientation)
-            radius_x = [entry.policy_params.params.rot_radius_x]
-            policy_params = roll + pitch + radius_x
-            #mech_params = []
-        motion = entry.net_motion
+        policy_params = []
+        for param in entry.policy_params.param_data:
+            if entry.policy_params.param_data[param].varied:
+                policy_params.append(entry.policy_params.params[param])
 
         parsed_data.append({
-            'type': policy_type,
+            'type': entry.policy_params.type,
             'params': policy_params,
             'image': entry.image_data,
-            'y': motion,
-            # 'mech': mech_params,
+            'y': entry.net_motion,
         })
 
     return parsed_data
