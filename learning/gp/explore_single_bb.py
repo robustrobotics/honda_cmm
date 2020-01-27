@@ -16,83 +16,47 @@ import operator
 import torch
 from learning.dataloaders import PolicyDataset, parse_pickle_file
 from gen.generate_policy_data import generate_dataset
-from actions.policies import Policy, generate_policy, Revolute, Prismatic
+from actions.policies import Policy, generate_policy, Revolute, Prismatic, get_policy_from_tuple
 from learning.gp.viz_doors import viz_3d_plots
 from learning.gp.viz_polar_plots import viz_circles
 
-BETA = 5 #5  # 5.0
+BETA = 5
 
 
 # takes in an optimization x and returns a policy
-def get_policy_from_x(p_type, x, mech):
-    if p_type == 'Revolute':
-        rot_axis_roll = x[0]
+def get_policy_from_x(x, policy_params):
+    policy_type = policy_params.type
+    param_vals = policy_params.params
+    param_data = policy_params.param_data
 
-        if mech.mechanism_type == 'Door':
-            if not mech.flipped:
-                rot_axis_pitch = np.pi
-            else:
-                rot_axis_pitch = 0.0
+    # NOTE: this relies on dictionaries being ordered (might not work with
+    # older Python versions)
+    args = []
+    xi = 0
+    for param_name, param_val in param_vals.items():
+        if (param_name in param_data) and param_data[param_name].varied:
+            args.append(x[xi])
+            xi += 1
         else:
-            # TODO: when add rot_axis_pitch to the space of parameters being explored,
-            # change this to get rot_axis_pitch from x
-            rot_axis_pitch = 0.0
-        rot_axis_world = util.quaternion_from_euler(rot_axis_roll, rot_axis_pitch, 0.0)
-        radius_x = x[1]
-        radius = [-radius_x, 0.0, 0.0]
-        p_handle_base_world = mech.get_pose_handle_base_world().p
-        p_rot_center_world = p_handle_base_world + util.transformation(radius, [0., 0., 0.], rot_axis_world)
-        rot_orn = [0., 0., 0., 1.]
-        return Revolute(p_rot_center_world,
-                        rot_axis_roll,
-                        rot_axis_pitch,
-                        rot_axis_world,
-                        radius_x,
-                        rot_orn)
-    if p_type == 'Prismatic':
-        pitch = x[0]
-        yaw = x[1]
-        pos = mech.get_pose_handle_base_world().p
-        orn = [0., 0., 0., 1.]
-        return Prismatic(pos, orn, pitch, yaw)
-
-
-# takes in a result and returns an x
-def get_x_from_result(result):
-    if result.policy_params.type == 'Prismatic':
-        pitch = result.policy_params.params.pitch
-        yaw = result.policy_params.params.yaw
-        q = result.config_goal
-        return [pitch, yaw, q]
-    elif result.policy_params.type == 'Revolute':
-        axis_roll = result.policy_params.params.rot_axis_roll
-        axis_pitch = result.policy_params.params.rot_axis_pitch
-        radius_x = result.policy_params.params.rot_radius_x
-        q = result.config_goal
-        return [axis_roll, axis_pitch, radius_x, q]
-
+            args.append(param_val)
+    if policy_type == 'Prismatic':
+        return Prismatic(*args, param_data)
+    elif policy_type == 'Revolute':
+        return Revolute(*args, param_data)
 
 # takes in a policy and returns and optimization x and the variable bounds
-def get_reduced_x_and_bounds(policy_type, policy_params, q, policy_data):
-    for policy_param in policy_data:
-        if policy_param.param_name == 'pitch':
-            pitch_bounds = policy_param.range
-        if policy_param.param_name == 'yaw':
-            yaw_bounds = policy_param.range
-        if policy_param.param_name == 'roll':
-            roll_bounds = policy_param.range
-        if policy_param.param_name == 'radius':
-            radius_bounds = policy_param.range
-        if policy_param.param_name == 'config':
-            config_bounds = policy_param.range
-    if policy_type == 'Prismatic':
-        bounds = [pitch_bounds, yaw_bounds, config_bounds]
-        return np.concatenate([[policy_params.params.pitch, policy_params.params.yaw], [q]]), bounds
-    elif policy_type == 'Revolute':
-        bounds = [roll_bounds, radius_bounds, config_bounds]
-        return np.concatenate([[policy_params.params.rot_axis_roll,
-                                policy_params.params.rot_radius_x], [q]]), bounds
-
+# NOTE: this assumes dictionaries are ordered. might not work for all
+# Python versions
+def get_x_and_bounds_from_tuple(policy_params):
+    param_vals = policy_params.params
+    param_data = policy_params.param_data
+    x, bounds = [], []
+    for param_name, param_val in param_vals.items():
+        if param_name in param_data:
+            if param_data[param_name].varied:
+                x.append(param_val)
+                bounds.append(param_data[param_name].bounds)
+    return x, bounds
 
 # this takes in an optimization x and returns the tensor of just the policy
 # params
@@ -129,21 +93,12 @@ def process_data(data, n_train):
     """
     xs, ys = [], []
     for entry in data[0:n_train]:
-        x = get_x_from_result(entry)
+        x, _ = get_x_and_bounds_from_tuple(entry.policy_params)
         xs.append(x)
         ys.append(entry.net_motion)
 
     X = np.array(xs)
     Y = np.array(ys).reshape(-1, 1)
-    '''
-    if max_dist:
-        x_preds = []
-        for theta in np.linspace(-np.pi, 0, num=100):
-            x_preds.append([theta, 0, max_dist])
-        X_pred = np.array(x_preds)
-        return X, Y, X_pred
-    else:
-    '''
     return X, Y
 
 
@@ -184,7 +139,7 @@ def test_model(sampler, args):
     """
     # Optimize the GP to get the best policy.
     ucb = False
-    policy, q, start_policy, start_q = sampler.optim.optimize_gp(ucb)
+    stop_x, stop_policy, start_x = sampler.optim.optimize_gp(ucb)
 
     # Execute the policy and observe the true motion.
     debug = False
@@ -192,21 +147,14 @@ def test_model(sampler, args):
     no_gripper = True
     _, gripper = setup_env(sampler.bb, viz, debug, no_gripper)
     pose_handle_base_world = sampler.mech.get_pose_handle_base_world()
-    traj = policy.generate_trajectory(pose_handle_base_world, q, debug=debug)
-    motion, _, _ = gripper.execute_trajectory(traj, sampler.mech, policy.type, debug=debug)
+    traj = stop_policy.generate_trajectory(pose_handle_base_world, debug=debug)
+    motion, _, _ = gripper.execute_trajectory(traj, sampler.mech, stop_policy.type, debug=debug)
 
     # Calculate the regret.
     max_d = sampler.mech.get_max_dist()
     regret = (max_d - motion)/max_d
 
-    # Get the initial and final x from the optimization.
-    start_result = util.Result(start_policy.get_policy_tuple(), None, 0.0, 0.0,
-                           None, None, start_q, None, None, 1.0, None)
-    start_x = get_x_from_result(start_result)
-    stop_result = util.Result(policy.get_policy_tuple(), None, 0.0, 0.0,
-                           None, None, q, None, None, 1.0, None)
-    stop_x = get_x_from_result(stop_result)
-    return regret, start_x, stop_x, policy.type
+    return regret, start_x, stop_x, stop_policy.type
 
 
 class GPOptimizer(object):
@@ -226,12 +174,11 @@ class GPOptimizer(object):
         # Generate random policies.
         for _ in range(n_samples):
             random_policy = generate_policy(bb, self.mech, random_policies, 1.0)
-            q = random_policy.generate_config(self.mech, None)
             policy_type = random_policy.type
             policy_tuple = random_policy.get_policy_tuple()
 
-            results = [util.Result(policy_tuple, None, 0.0, 0.0,
-                                   None, None, q, image_data, None, 1.0, True)]
+            results = [util.Result(policy_tuple, None, None, None, None, None, \
+                                    image_data, None, None)]
             self.sample_policies.append(results)
 
             if self.nn is not None:
@@ -244,6 +191,7 @@ class GPOptimizer(object):
 
         self.log = []
 
+    # TODO: make x same for GP and NN (should eliminate get_policy_tensor_func)
     def _optim_result_to_torch(self, policy_type, x, image_tensor, use_cuda=False):
         policy_type_tensor = torch.Tensor([util.name_lookup[policy_type]])
         policy_tensor = get_policy_tensor(policy_type, x, self.mech)
@@ -257,9 +205,8 @@ class GPOptimizer(object):
         return [policy_type_tensor, policy_tensor, config_tensor, image_tensor]
 
     def _objective_func(self, x, policy_type, ucb, image_tensor=None):
-        x = x.squeeze()
+        X = np.expand_dims(x, axis=0)
 
-        X = np.array(get_policy_list(policy_type, x, self.mech))
         Y_pred, Y_std = self.gps[policy_type].predict(X, return_std=True)
 
         if not self.nn is None:
@@ -299,9 +246,7 @@ class GPOptimizer(object):
             # Get predictions from the GP.
             sample_disps, dataset = self._get_pred_motions(res, ucb, nn_preds=None)
 
-            policies.append((res[0].policy_params.type,
-                             res[0].policy_params,
-                             res[0].config_goal))
+            policies.append(res[0].policy_params)
             scores.append(sample_disps[0])
 
         # Sample a policy based on its score value.
@@ -312,15 +257,13 @@ class GPOptimizer(object):
                                  p=scores)
 
         self.log.append([scores, index])
-        policy_type_max, params_max, q_max = policies[index]
+        policy_params_max = policies[index]
 
 
         # TODO: Make sure the policy appears correctly here.
-        policy_data = Policy.get_plot_data(policy_type_max)
-        x0, bounds = get_reduced_x_and_bounds(policy_type_max, params_max, q_max, policy_data)
-        start_policy = get_policy_from_x(policy_type_max, x0, self.mech)
-        start_q = q_max
-        return start_policy, start_q
+        x0, bounds = get_x_and_bounds_from_tuple(policy_params_max)
+        policy = get_policy_from_tuple(policy_params_max)
+        return policy
 
     def optimize_gp(self, ucb):
         """
@@ -335,38 +278,36 @@ class GPOptimizer(object):
             # Get predictions from the GP.
             sample_disps, dataset = self._get_pred_motions(res, ucb, nn_preds=nn_preds)
 
-            samples.append(((res[0].policy_params.type,
-                             res[0].policy_params,
-                             res[0].config_goal),
+            samples.append((res[0].policy_params,
                              sample_disps[0]))
 
         # Find the sample that maximizes the distance.
-        (policy_type_max, params_max, q_max), max_disp = max(samples, key=operator.itemgetter(1))
+        policy_params_max, max_disp = max(samples, key=operator.itemgetter(1))
 
         # Start optimization from here.
         if self.nn is None:
             images = None
         else:
             images = dataset.images[0].unsqueeze(0)
-        policy_data = Policy.get_plot_data(policy_type_max)
-        x0, bounds = get_reduced_x_and_bounds(policy_type_max, params_max, q_max, policy_data)
+        x0, bounds = get_x_and_bounds_from_tuple(policy_params_max)
 
-        start_policy = get_policy_from_x(policy_type_max, x0, self.mech)
-        start_q = q_max
-        opt_res = minimize(fun=self._objective_func, x0=x0, args=(policy_type_max, ucb, images),
-                       method='L-BFGS-B', options={'eps': 1e-3, 'maxiter': 100000, 'gtol': 1e-8}, bounds=bounds)
+        start_policy = get_policy_from_tuple(policy_params_max)
+        opt_res = minimize(fun=self._objective_func, x0=x0,
+                            args=(policy_params_max.type, ucb, images),
+                            method='L-BFGS-B', options={'eps': 1e-3,
+                                                        'maxiter': 100000,
+                                                        'gtol': 1e-8}, bounds=bounds)
 
 
         x_final = opt_res['x']
-        stop_policy = get_policy_from_x(policy_type_max, x_final, self.mech)
-        stop_q = x_final[-1]
+        stop_policy = get_policy_from_x(x_final, policy_params_max)
         # print('OPT:', opt_res['success'], opt_res['nit'], opt_res['message'])
         # print('------ Start')
         # print(x0)
         # print(x_final)
         # print(bounds)
         # print('------')
-        return stop_policy, stop_q, start_policy, start_q
+        return x_final, stop_policy, x0
 
 
 class UCB_Interaction(object):
@@ -395,37 +336,37 @@ class UCB_Interaction(object):
                         args.n_gp_samples, BETA, self.gps, args.random_policies, nn=self.nn)
 
     def get_kernel(self, type):
-        # TODO: in the future will want the GP to take in all types of policy
-        # params, not just the correct type
         noise = 1e-5
+        variance = 0.005
+
         if type == 'Prismatic':
-            variance = 0.005
-            l_pitch = 0.10
-            l_yaw = 0.10
-            l_q = 0.1
-            return ConstantKernel(variance,
-                                  constant_value_bounds=(variance, variance)) * \
-                RBF(length_scale=(l_pitch, l_yaw, l_q),
-                    length_scale_bounds=((l_pitch, l_pitch),
-                                         (l_yaw, l_yaw),
-                                         (l_q, l_q))) + \
-                WhiteKernel(noise_level=noise,
-                            noise_level_bounds=(1e-5, 1e2))
+            kernel_ls_params = {'pitch': 0.10,
+                                'yaw': 0.10,
+                                'goal_config': 0.10}
         elif type == 'Revolute':
-            variance = 0.005
-            l_roll = .1
-            l_pitch = 100
-            l_radius = 0.04  # 0.09  # 0.05
-            l_q = .5  # Keep greater than 0.5.
-            return ConstantKernel(variance,
-                                  constant_value_bounds=(variance, variance)) \
-                * RBF(length_scale=(l_roll, l_pitch, l_radius, l_q),
-                      length_scale_bounds=((l_roll, l_roll),
-                                           (l_pitch, l_pitch),
-                                           (l_radius, l_radius),
-                                           (l_q, l_q))) \
-                + WhiteKernel(noise_level=noise,
-                              noise_level_bounds=(1e-5, 1e2))
+            kernel_ls_params = {'rot_axis_roll': 0.10,
+                                'rot_axis_pitch': 100,
+                                'rot_axis_yaw': 100,
+                                'radius_x': 0.04, # 0.09  # 0.05
+                                'goal_config': 0.5} # Keep greater than 0.5
+        all_param_data = Policy.get_param_data(type)
+
+        length_scale = []
+        length_scale_bounds = []
+        # NOTE: this assumes dictionaries are ordered. might not work for all
+        # Python versions
+        for param_name, param_data in all_param_data.items():
+            if param_data.varied:
+                ls = kernel_ls_params[param_name]
+                length_scale.append(ls)
+                length_scale_bounds.append((ls, ls))
+
+        return ConstantKernel(variance,
+                              constant_value_bounds=(variance, variance)) * \
+            RBF(length_scale=length_scale,
+                length_scale_bounds=length_scale_bounds) + \
+            WhiteKernel(noise_level=noise,
+                        noise_level_bounds=(1e-5, 1e2))
 
     def sample(self, stochastic=False):
         # If self.nn is None then make sure each policy type has been
@@ -434,23 +375,23 @@ class UCB_Interaction(object):
             for policy_class, policy_type in zip([Prismatic, Revolute], \
                                                 ['Prismatic', 'Revolute']):
                 if len(self.xs[policy_type]) < 1:
-                    policy = policy_class._gen(self.bb, self.mech, 1.0)
-                    q = policy.generate_config(self.mech, None)
-                    return policy, q
+                    policy = policy_class._gen(self.bb, self.mech)
+                    policy_tuple = policy.get_policy_tuple()
+                    x, _ = get_x_and_bounds_from_tuple(policy_tuple)
+                    return x, policy
         # Choose policy using UCB bound.
         ucb = True
         if not stochastic:
-            policy, q, _, _ = self.optim.optimize_gp(ucb)
+            x_final, policy_final, _ = self.optim.optimize_gp(ucb)
         else:
-            policy, q = self.optim.stochastic_gp(ucb)
-        return policy, q
+            x_final, policy_final = self.optim.stochastic_gp(ucb)
+        return x_final, policy_final
 
-    def update(self, result):
+    def update(self, result, x):
         # TODO: Update without the NN.
 
         # Update GP.
         policy_type = result.policy_params.type
-        x = get_x_from_result(result)
         self.xs[policy_type].append(x)
         if self.nn is None:
             self.ys[policy_type].append([result.net_motion])
@@ -554,10 +495,10 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
                                     n_samples=1,
                                     viz=False,
                                     random_policies=args.random_policies,
-                                    randomness=1.0,
                                     goal_config=None,
                                     bb_fname=None,
                                     no_gripper=True)
+        print('Creating Busyboxes.')
         busybox_data = generate_dataset(bb_dataset_args, None)
         print('BusyBoxes created.')
     else:
@@ -615,20 +556,20 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
     sampler = UCB_Interaction(bb, image_data, plot, args, nn_fname=nn_fname)
     for ix in range(n_interactions):
         # sample a policy
-        policy, q = sampler.sample(stochastic=args.stochastic)
+        x, policy = sampler.sample(stochastic=args.stochastic)
 
         # execute
-        traj = policy.generate_trajectory(pose_handle_base_world, q, debug=debug)
+        traj = policy.generate_trajectory(pose_handle_base_world, debug=debug)
         c_motion, motion, handle_pose_final = gripper.execute_trajectory(traj, mech, policy.type, False)
         gripper.reset(mech)
 
         result = util.Result(policy.get_policy_tuple(), mech.get_mechanism_tuple(),
                              motion, c_motion, handle_pose_final, handle_pose_final,
-                             q, image_data, None, 1.0, True)
+                             image_data, None, True)
         dataset.append(result)
 
         # update GP
-        sampler.update(result)
+        sampler.update(result, x)
         # uncomment to generate a plot after each sample (WARNING: VERY SLOW!)
         '''
         if plot:
@@ -657,11 +598,10 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
                         data.append({
                             'type': 'Revolute',
                             'params': [roll, pitch, radius],
-                            'config': q,
+                            'goal_config': q,
                             'image': bb_result.image_data,
                             'y': 0.,
                             # 'mech': mech_params,
-                            'delta_vals': [0, 0, 0]
                         })
 
                     dataset = PolicyDataset(data)
@@ -811,7 +751,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--mech-types',
         nargs='+',
-        default='slider',
+        default=['slider'],
         type=str,
         help='if no bb-fname is specified, list the mech types desired')
     parser.add_argument(
