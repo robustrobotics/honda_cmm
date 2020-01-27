@@ -27,6 +27,5 @@ class PolicyEncoder(nn.Module):
         :param theta: The policy parameters.
         :return: An embedding of size n_hidden.
         """
-        x = torch.cat([theta], dim=1)
-        x = self.model.forward(x)
+        x = self.model.forward(theta)
         return x
