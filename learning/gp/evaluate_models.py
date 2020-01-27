@@ -5,7 +5,7 @@ import numpy as np
 import re
 from learning.gp.explore_single_bb import create_single_bb_gpucb_dataset, GPOptimizer
 from utils import util, setup_pybullet
-
+from gen.generate_policy_data import get_bb_dataset
 
 def get_models(L, models_path):
     all_files = os.walk(models_path)
@@ -19,14 +19,14 @@ def get_models(L, models_path):
                 full_path = root+'/'+file
                 models.append(full_path)
     if M is None:
-        raise Exception('make sure that the supplied L values (--Ls) correspond  \
+        raise Exception('make sure that the supplied L values (--Ls) correspond \
                 to the model file names in the --models-path directory')
     return models, M
 
 def evaluate_models(n_interactions, n_bbs, args, use_cuda=False):
-    with open(args.bb_fname, 'rb') as handle:
-        bb_data = pickle.load(handle)
-    bb_data = [bb_results[0] for bb_results in bb_data]
+    # this determines what BBs are in the evaluated mechanisms
+    mech_types = ['slider', 'door']
+    bb_data = get_bb_dataset(args.bb_fname, n_bbs, mech_types, 1, args.urdf_num)
 
     all_results = {}
     for L in range(args.Ls[0], args.Ls[1]+1, args.Ls[2]):
@@ -37,7 +37,7 @@ def evaluate_models(n_interactions, n_bbs, args, use_cuda=False):
             for ix, bb_result in enumerate(bb_data[:n_bbs]):
                 if args.debug:
                     print('BusyBox', ix)
-                dataset, gp, regret = create_single_bb_gpucb_dataset(bb_result,
+                dataset, gp, regret = create_single_bb_gpucb_dataset(bb_result[0],
                                                                      n_interactions,
                                                                      model,
                                                                      args.plot,
@@ -158,4 +158,4 @@ if __name__ == '__main__':
         import pdb; pdb.set_trace()
 
     evaluate_models(args.T, args.N, args)
-    evaluate_models_noT(args.N, args)
+    #evaluate_models_noT(args.N, args)

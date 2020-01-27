@@ -11,23 +11,10 @@ from gen.generator_busybox import Slider, Door, BusyBox
 
 results = []
 
-
 def generate_dataset(args, git_hash):
-    if args.bb_fname is not None:
-        bb_data = util.read_from_file(args.bb_fname)
-    for i in range(args.n_bbs):
-        if args.bb_fname is not None:
-            bb = BusyBox.bb_from_result(bb_data[i][0])
-        elif args.random_policies:
-            bb = BusyBox.generate_random_busybox(max_mech=args.max_mech, urdf_tag=args.urdf_num, debug=args.debug)
-        else:
-            mech_classes = []
-            # TODO: i think there is a bug here...
-            for mech_type in args.mech_types:
-                if mech_type == 'slider': mech_classes.append(Slider)
-                if mech_type == 'door': mech_classes.append(Door)
-            bb = BusyBox.generate_random_busybox(max_mech=args.max_mech, mech_types=mech_classes, urdf_tag=args.urdf_num, debug=args.debug)
-
+    bb_dataset = get_bb_dataset(args.bb_fname, args.n_bbs, args.mech_types, args.max_mech, args.urdf_num)
+    for (i, bb_results) in enumerate(bb_dataset):
+        bb = BusyBox.bb_from_result(bb_results[0])
         image_data, gripper = setup_env(bb, args.viz, args.debug, args.no_gripper)
         bb_results = []
         for j in range(args.n_samples):
@@ -57,6 +44,32 @@ def generate_dataset(args, git_hash):
     print()
     return results
 
+def get_bb_dataset(bb_fname, n_bbs, mech_types, max_mech, urdf_num):
+    # Create a dataset of busyboxes.
+    if bb_fname == '' or bb_fname is None:
+        print('Creating Busyboxes.')
+        mech_classes = []
+        for mech_type in mech_types:
+            if mech_type == 'slider': mech_classes.append(Slider)
+            if mech_type == 'door': mech_classes.append(Door)
+
+        bb_dataset = []
+        for _ in range(n_bbs):
+            # TODO: i think there is a bug here...
+            bb = BusyBox.generate_random_busybox(max_mech=max_mech,
+                                                    mech_types=mech_classes,
+                                                    urdf_tag=urdf_num)
+            mechanism_params = bb._mechanisms[0].get_mechanism_tuple()
+            image_data, gripper = setup_env(bb, False, False, True)
+            bb_dataset.append([util.Result(None, mechanism_params, None, None, None,
+                                None, image_data, None, None)])
+        print('BusyBoxes created.')
+    else:
+        # Load in a file with predetermined BusyBoxes.
+        with open(bb_fname, 'rb') as handle:
+            busybox_data = pickle.load(handle)
+        bb_dataset = [bb_results[0] for bb_results in busybox_data][:n_bbs]
+    return bb_dataset
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

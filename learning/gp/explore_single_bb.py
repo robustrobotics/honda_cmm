@@ -15,7 +15,7 @@ from gen.generator_busybox import BusyBox
 import operator
 import torch
 from learning.dataloaders import PolicyDataset, parse_pickle_file
-from gen.generate_policy_data import generate_dataset
+from gen.generate_policy_data import get_bb_dataset
 from actions.policies import Policy, generate_policy, Revolute, Prismatic, get_policy_from_tuple
 from learning.gp.viz_doors import viz_3d_plots
 from learning.gp.viz_polar_plots import viz_circles
@@ -148,7 +148,7 @@ class GPOptimizer(object):
             policy_type = random_policy.type
             policy_tuple = random_policy.get_policy_tuple()
 
-            results = [util.Result(policy_tuple, None, None, None, None, None, \
+            results = [util.Result(policy_tuple, None, 0.0, None, None, None, \
                                     image_data, None, None)]
             self.sample_policies.append(results)
 
@@ -164,7 +164,7 @@ class GPOptimizer(object):
 
     def _optim_result_to_torch(self, policy_type, x, image_tensor, use_cuda=False):
         policy_type_tensor = torch.Tensor([util.name_lookup[policy_type]])
-        policy_tensor = torch.tensor(x).float()
+        policy_tensor = torch.tensor(x).float().unsqueeze(0)
         if use_cuda:
             policy_type_tensor = policy_type_tensor.cuda()
             policy_tensor = policy_tensor.cuda()
@@ -365,7 +365,7 @@ class UCB_Interaction(object):
             self.ys[policy_type].append([result.net_motion])
         else:
             inputs = self.optim._optim_result_to_torch(policy_type,
-                                                       self.xs[policy_type],
+                                                       self.xs[policy_type][-1],
                                                        self.optim.dataset.images[0].unsqueeze(0),
                                                        use_cuda=False)
             nn_pred = self.nn.forward(*inputs)[0]
@@ -453,26 +453,7 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
     :param args:
     :return:
     """
-    # Create a dataset of L busyboxes.
-    if args.bb_fname == '':
-        bb_dataset_args = Namespace(viz=False,
-                                    debug=False,
-                                    n_samples=1,
-                                    n_bbs=n_bbs,
-                                    max_mech=1,
-                                    mech_types=args.mech_types,
-                                    urdf_num=args.urdf_num,
-                                    random_policies=args.random_policies,
-                                    bb_fname=None,
-                                    no_gripper=True)
-        print('Creating Busyboxes.')
-        busybox_data = generate_dataset(bb_dataset_args, None)
-        print('BusyBoxes created.')
-    else:
-        # Load in a file with predetermined BusyBoxes.
-        with open(args.bb_fname, 'rb') as handle:
-            busybox_data = pickle.load(handle)
-        busybox_data = [bb_results[0] for bb_results in busybox_data][:n_bbs]
+    busybox_data = get_bb_dataset(args.bb_fname, n_bbs, args.mech_types, 1, args.urdf_num)
 
     '''
     # Do a GP-UCB interaction and return Result tuples.
