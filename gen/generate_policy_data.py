@@ -65,7 +65,7 @@ if __name__ == '__main__':
     parser.add_argument('--n-samples', type=int, default=1) # number samples per bb
     parser.add_argument('--n-bbs', type=int, default=5) # number bbs to generate
     parser.add_argument('--max-mech', type=int, default=1) # mechanisms per bb
-    parser.add_argument('--mech-types', nargs='+', default='slider', type=str)
+    parser.add_argument('--mech-types', nargs='+', default=['slider'], type=str)
     parser.add_argument('--fname', type=str) # give filename if want to save to file
     # if running multiple gens, give then a urdf_num so the correct urdf is read from/written to
     parser.add_argument('--urdf-num', type=int, default=0)
