@@ -5,14 +5,16 @@ import numpy as np
 import argparse
 import pybullet as p
 from utils.setup_pybullet import setup_env, custom_bb_door, custom_bb_slider
+from utils.util import read_from_file
 from actions import policies
 from gen.generator_busybox import Slider, Door, BusyBox
 
-
-results = []
-
 def generate_dataset(args, git_hash):
     bb_dataset = get_bb_dataset(args.bb_fname, args.n_bbs, args.mech_types, args.max_mech, args.urdf_num)
+    if args.n_samples == 0:
+        return bb_dataset
+
+    results = []
     for (i, bb_results) in enumerate(bb_dataset):
         bb = BusyBox.bb_from_result(bb_results[0])
         image_data, gripper = setup_env(bb, args.viz, args.debug, args.no_gripper)
@@ -66,9 +68,7 @@ def get_bb_dataset(bb_fname, n_bbs, mech_types, max_mech, urdf_num):
         print('BusyBoxes created.')
     else:
         # Load in a file with predetermined BusyBoxes.
-        with open(bb_fname, 'rb') as handle:
-            busybox_data = pickle.load(handle)
-        bb_dataset = [bb_results[0] for bb_results in busybox_data][:n_bbs]
+        bb_dataset = read_from_file(bb_fname)
     return bb_dataset
 
 if __name__ == '__main__':
@@ -92,30 +92,13 @@ if __name__ == '__main__':
         import pdb; pdb.set_trace()
 
     try:
-        try:
-            # write git has to results if have package
-            import git
-            repo = git.Repo(search_parent_directories=True)
-            git_hash = repo.head.object.hexsha
-        except:
-            print('install gitpython to save git hash to results')
-            git_hash = None
-        generate_dataset(args, git_hash)
-        if args.fname:
-            util.write_to_file(args.fname, results)
-    except KeyboardInterrupt:
-        # if Ctrl+C write to pickle
-        if args.fname:
-            util.write_to_file(args.fname, results)
-        print('Exiting...')
+        # write git has to results if have package
+        import git
+        repo = git.Repo(search_parent_directories=True)
+        git_hash = repo.head.object.hexsha
     except:
-        # if crashes write to pickle
-        if args.fname:
-            util.write_to_file(args.fname, results)
-
-        # for post-mortem debugging since can't run module from command line in pdb.pm() mode
-        import traceback, pdb, sys
-        traceback.print_exc()
-        print('')
-        pdb.post_mortem()
-        sys.exit(1)
+        print('install gitpython to save git hash to results')
+        git_hash = None
+    results = generate_dataset(args, git_hash)
+    if args.fname:
+        util.write_to_file(args.fname, results)
