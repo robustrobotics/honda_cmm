@@ -9,6 +9,7 @@ import os
 import argparse
 from argparse import Namespace
 from scipy.optimize import minimize
+import itertools
 from utils import util
 from utils.setup_pybullet import setup_env
 from gen.generator_busybox import BusyBox
@@ -21,7 +22,6 @@ from learning.gp.viz_doors import viz_3d_plots
 from learning.gp.viz_polar_plots import viz_circles
 
 BETA = 5
-
 
 # takes in an optimization x and returns a policy
 def get_policy_from_x(x, policy_params):
@@ -470,11 +470,11 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
     #regrets = []
     for ix, bb_results in enumerate(busybox_data):
         single_dataset, _ = create_single_bb_gpucb_dataset(bb_results[0],
-                                                              n_interactions,
                                                               '',
                                                               args.plot,
                                                               args,
                                                               ix,
+                                                              n_interactions=n_interactions,
                                                               plot_dir_prefix=args.plot_dir)
         dataset.append(single_dataset)
         #regrets.append(r)
@@ -486,9 +486,9 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
         with open(args.fname, 'wb') as handle:
             pickle.dump(dataset, handle)
 
-
-def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, args, bb_i,
-                                   plot_dir_prefix='', ret_regret=False):
+def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
+                                   n_interactions=None, plot_dir_prefix='',
+                                   ret_regret=False, success_regret=None):
     use_cuda = False
     dataset = []
     viz = False
@@ -501,7 +501,51 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
 
     pose_handle_base_world = mech.get_pose_handle_base_world()
     sampler = UCB_Interaction(bb, image_data, plot, args, nn_fname=nn_fname)
-    for ix in range(n_interactions):
+    for ix in itertools.count():
+        # if we are done sampling n_interactions OR we need to get regret after
+        # each interaction
+        if ((not n_interactions is None) and ix==n_interactions) or \
+            (not success_regret is None):
+
+            regret, start_x, stop_x, policy_type = test_model(sampler, args)
+            #print('Current regret', regret)
+            opt_points = (policy_type, [(start_x, 'g'), (stop_x, 'r')])
+            sample_points = {'Prismatic': [(sample, 'k') for sample in sampler.xs['Prismatic']],
+                            'Revolute': [(sample, 'k') for sample in sampler.xs['Revolute']]}
+            # if done sampling n_interactions
+            if (not n_interactions is None) and ix==n_interactions:
+                if plot:
+                    viz_circles(image_data,
+                                mech,
+                                BETA,
+                                sample_points=sample_points,
+                                opt_points=opt_points,
+                                gps=sampler.gps,
+                                nn=sampler.nn,
+                                bb_i=bb_i,
+                                plot_dir_prefix=plot_dir_prefix)
+                    plt.show()
+                    input('Enter to close')
+                    plt.close()
+                if ret_regret:
+                    return dataset, sampler.gps, regret
+                else:
+                    return dataset, sampler.gps
+            # if got successful interaction or timeout
+            elif (not success_regret is None) and \
+                            ((regret < success_regret) or (ix > 100)):
+                if plot:
+                    viz_circles(image_data,
+                                mech,
+                                BETA,
+                                sample_points=sample_points,
+                                opt_points=opt_points,
+                                gps=sampler.gps,
+                                nn=sampler.nn,
+                                bb_i=bb_i,
+                                plot_dir_prefix=plot_dir_prefix)
+                return dataset, sampler.gps, ix
+
         # sample a policy
         x, policy = sampler.sample(stochastic=args.stochastic)
 
@@ -518,7 +562,7 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
         # update GP
         sampler.update(result, x)
         # uncomment to generate a plot after each sample (WARNING: VERY SLOW!)
-        '''
+
         if plot:
             sample_points = {'Prismatic': [(sample, 'k') for sample in sampler.xs['Prismatic']],
                             'Revolute': [(sample, 'k') for sample in sampler.xs['Revolute']]}
@@ -531,12 +575,16 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
                         nn=sampler.nn,
                         bb_i=bb_i,
                         plot_dir_prefix=plot_dir_prefix)
+            plt.show()
+            input('Enter to close')
+            plt.close()
+
         '''
+        # this code has not been updated since refactor
         if ix % 10 == 0:
             if len(nn_fname) > 0:
                 model = util.load_model(nn_fname, args.hdim, use_cuda=use_cuda)
-            '''
-            # this code has not been updated since refactor
+
             def _gp_callback(new_xs, bb_result):
                 ys, std = sampler.gps[bb_result.policy_params.type].predict(new_xs, return_std=True)
                 ys = ys.flatten()
@@ -577,7 +625,7 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
                         nn_ys += [pred_motion_float]
                     ys += np.array(nn_ys)
                 return ys, std, ys + np.sqrt(BETA)*std
-            '''
+        '''
             # viz_3d_plots(xs=sampler.xs,
             #              callback=_gp_callback,
             #              bb_result=bb_result)
@@ -586,35 +634,6 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
 
     #with open('log_%d.pickle' % bb_i, 'wb') as handle:
     #    pickle.dump(sampler.optim.log, handle)
-
-    opt_points = []
-    if ret_regret:
-        regret, start_x, stop_x, policy_type = test_model(sampler, args)
-        opt_points = (policy_type, [(start_x, 'g'), (stop_x, 'r')])
-
-    if plot:
-        sample_points = {'Prismatic': [(sample, 'k') for sample in sampler.xs['Prismatic']],
-                        'Revolute': [(sample, 'k') for sample in sampler.xs['Revolute']]}
-        viz_circles(image_data,
-                    mech,
-                    BETA,
-                    sample_points=sample_points,
-                    opt_points=opt_points,
-                    gps=sampler.gps,
-                    nn=sampler.nn,
-                    bb_i=bb_i,
-                    plot_dir_prefix=plot_dir_prefix)
-        #viz_gp(sampler.gp, bb, sampler.nn)
-        # viz_plots(sampler.xs, sampler.ys, sampler.gp)
-
-        plt.show()
-        input('Enter to close plots')
-        plt.close('all')
-
-    if ret_regret:
-        return dataset, sampler.gps, regret
-    else:
-        return dataset, sampler.gps
 
 
 def viz_radius_plots(xs, gp):
