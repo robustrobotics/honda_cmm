@@ -36,6 +36,7 @@ Argument | Type | Description | Default
 ```--mech-types``` | list of strings in ['slider', 'door'] | mechanism types in dataset | 'slider'
 ```--plot``` | bool | if True then visualize GP plots during interaction | False
 ```--n-gp-samples``` | int | the number of samples to use when initializing an optimization seed | 500
+```--random-policies``` | bool | if True, generate random policies from any policy class, else only generate policies from the correct policy class | False 
 
 #### Systematic
 
