@@ -23,11 +23,11 @@ def generate_dataset(args, git_hash):
             sys.stdout.write("\rProcessing sample %i/%i for busybox %i/%i" % (j+1, args.n_samples, i+1, args.n_bbs))
             for mech in bb._mechanisms:
                 # generate either a random or model-based policy and goal configuration
-                pose_handle_base_world = mech.get_pose_handle_base_world()
-                policy = policies.generate_policy(bb, mech, args.random_policies, init_pose=pose_handle_base_world)
+                policy = policies.generate_policy(mech, args.random_policies)
                 pose_handle_world_init = mech.get_handle_pose()
 
                 # calculate trajectory
+                pose_handle_base_world = mech.get_pose_handle_base_world()
                 traj = policy.generate_trajectory(pose_handle_base_world, args.debug, color=[0, 0, 1])
 
                 # execute trajectory
@@ -36,9 +36,10 @@ def generate_dataset(args, git_hash):
                 # save result data
                 policy_params = policy.get_policy_tuple()
                 mechanism_params = mech.get_mechanism_tuple()
-                bb_results.append(util.Result(policy_params, mechanism_params, net_motion, \
+                result = util.Result(policy_params, mechanism_params, net_motion, \
                             cumu_motion, pose_handle_world_init, pose_handle_world_final, \
-                            image_data, git_hash, args.no_gripper))
+                            image_data, git_hash, args.no_gripper)
+                bb_results.append(result)
 
                 gripper.reset(mech)
         results.append(bb_results)

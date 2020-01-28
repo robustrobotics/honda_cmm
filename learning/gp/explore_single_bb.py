@@ -25,29 +25,23 @@ from learning.gp.viz_polar_plots import viz_circles
 BETA = 5
 
 # takes in an optimization x and returns a policy
-def get_policy_from_x(x, policy_params):
-    policy_type = policy_params.type
-    param_vals = policy_params.params
+# TODO: include all params in x to pass into _gen() so aren't relying on correct
+# default values for non-varied params
+def get_policy_from_x(mech, x, policy_params):
     param_data = policy_params.param_data
-
-    # NOTE: this relies on dictionaries being ordered (might not work with
-    # older Python versions)
-    args = []
-    xi = 0
-    for param_name, param_val in param_vals.items():
-        if (param_name in param_data) and param_data[param_name].varied:
-            args.append(x[xi])
-            xi += 1
-        else:
-            args.append(param_val)
-    if policy_type == 'Prismatic':
-        return Prismatic(*args, param_data)
-    elif policy_type == 'Revolute':
-        return Revolute(*args, param_data)
+    x_dict = OrderedDict()
+    i = 0
+    for param in param_data:
+        if param_data[param].varied:
+            x_dict[param] = x[i]
+            i += 1
+    if policy_params.type == 'Revolute':
+        policy = Revolute._gen(mech, x_dict=x_dict)
+    elif policy_params.type == 'Prismatic':
+        policy = Prismatic._gen(mech, x_dict=x_dict)
+    return policy
 
 # takes in a policy and returns and optimization x and the variable bounds
-# NOTE: this assumes dictionaries are ordered. might not work for all
-# Python versions
 def get_x_and_bounds_from_tuple(policy_params):
     param_vals = policy_params.params
     param_data = policy_params.param_data
@@ -145,7 +139,7 @@ class GPOptimizer(object):
 
         # Generate random policies.
         for _ in range(n_samples):
-            random_policy = generate_policy(bb, self.mech, random_policies)
+            random_policy = generate_policy(self.mech, random_policies)
             policy_type = random_policy.type
             policy_tuple = random_policy.get_policy_tuple()
 
@@ -247,8 +241,7 @@ class GPOptimizer(object):
             # Get predictions from the GP.
             sample_disps, dataset = self._get_pred_motions(res, ucb, nn_preds=nn_preds)
 
-            samples.append((res[0].policy_params,
-                             sample_disps[0]))
+            samples.append((res[0].policy_params, sample_disps[0]))
 
         # Find the sample that maximizes the distance.
         policy_params_max, max_disp = max(samples, key=operator.itemgetter(1))
@@ -269,7 +262,8 @@ class GPOptimizer(object):
 
 
         x_final = opt_res['x']
-        stop_policy = get_policy_from_x(x_final, policy_params_max)
+        stop_policy = get_policy_from_x(self.mech, x_final, policy_params_max)
+
         # print('OPT:', opt_res['success'], opt_res['nit'], opt_res['message'])
         # print('------ Start')
         # print(x0)
@@ -322,8 +316,7 @@ class UCB_Interaction(object):
 
         length_scale = []
         length_scale_bounds = []
-        # NOTE: this assumes dictionaries are ordered. might not work for all
-        # Python versions
+
         for param_name, param_data in all_param_data.items():
             if param_data.varied:
                 ls = kernel_ls_params[param_name]
@@ -344,7 +337,7 @@ class UCB_Interaction(object):
             for policy_class, policy_type in zip([Prismatic, Revolute], \
                                                 ['Prismatic', 'Revolute']):
                 if len(self.xs[policy_type]) < 1:
-                    policy = policy_class._gen(self.bb, self.mech)
+                    policy = policy_class._gen(self.mech)
                     policy_tuple = policy.get_policy_tuple()
                     x, _ = get_x_and_bounds_from_tuple(policy_tuple)
                     return x, policy
