@@ -1,4 +1,4 @@
-from collections import namedtuple
+from collections import namedtuple, OrderedDict
 import numpy as np
 from utils import util
 import itertools
@@ -89,15 +89,15 @@ class Policy(object):
         if policy_type == 'Revolute':
             # NOTE: currently the rot_axis_pitch bounds are not used for sampling
             # samples are either 0 or pi just like true doors
-            return {'rot_axis_roll': ParamData(False, [0.0, 0.0], 'angular'),
+            return OrderedDict({'rot_axis_roll': ParamData(False, [0.0, 0.0], 'angular'),
                     'rot_axis_pitch': ParamData(True, [0.0, 2*np.pi], 'angular'),
                     'rot_axis_yaw': ParamData(False, [0.0, 0.0], 'angular'),
                     'radius_x': ParamData(True, [.08-0.025, 0.15], 'linear'),
-                    'goal_config': ParamData(True, [-np.pi/2, 0.0], 'linear')}
+                    'goal_config': ParamData(True, [-np.pi/2, 0.0], 'linear')})
         elif policy_type == 'Prismatic':
-            return {'pitch': ParamData(True, [-np.pi, 0.0], 'angular'),
+            return OrderedDict({'pitch': ParamData(True, [-np.pi, 0.0], 'angular'),
                     'yaw': ParamData(False, [-np.pi/2, np.pi/2], 'angular'),
-                    'goal_config': ParamData(True, [-0.25, 0.25], 'linear')}
+                    'goal_config': ParamData(True, [-0.25, 0.25], 'linear')})
 
     @staticmethod
     def get_param_dims(policy_types):
@@ -166,11 +166,11 @@ class Prismatic(Policy):
         return np.dot(prismatic_dir, p_joint_origin)
 
     def get_policy_tuple(self):
-        prism_params = {'rigid_position': self.rigid_position,
+        prism_params = OrderedDict({'rigid_position': self.rigid_position,
                         'rigid_orientation': self.rigid_orientation,
                         'pitch': self.pitch,
                         'yaw': self.yaw,
-                        'goal_config': self.goal_config}
+                        'goal_config': self.goal_config})
         return PolicyParams(self.type, prism_params, self.param_data)
 
     def _draw(self, traj, color):
@@ -279,12 +279,12 @@ class Revolute(Policy):
         return angle
 
     def get_policy_tuple(self):
-        rev_params = {'rot_center': self.rot_center,
+        rev_params = OrderedDict({'rot_center': self.rot_center,
                         'rot_axis_roll': self.rot_axis_roll,
                         'rot_axis_pitch': self.rot_axis_pitch,
                         'rot_axis_yaw': self.rot_axis_yaw,
                         'radius_x': self.rot_radius_x,
-                        'goal_config': self.goal_config}
+                        'goal_config': self.goal_config})
         return PolicyParams(self.type, rev_params, self.param_data)
 
     def _draw(self, traj, color):

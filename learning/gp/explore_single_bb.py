@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm
 from mpl_toolkits.mplot3d import Axes3D
+from collections import OrderedDict
 import pickle
 import os
 import argparse
@@ -308,15 +309,15 @@ class UCB_Interaction(object):
         variance = 0.005
 
         if type == 'Prismatic':
-            kernel_ls_params = {'pitch': 0.10,
+            kernel_ls_params = OrderedDict({'pitch': 0.10,
                                 'yaw': 0.10,
-                                'goal_config': 0.10}
+                                'goal_config': 0.10})
         elif type == 'Revolute':
-            kernel_ls_params = {'rot_axis_roll': 0.10,
+            kernel_ls_params = OrderedDict({'rot_axis_roll': 0.10,
                                 'rot_axis_pitch': 100,
                                 'rot_axis_yaw': 100,
                                 'radius_x': 0.04, # 0.09  # 0.05
-                                'goal_config': 0.5} # Keep greater than 0.5
+                                'goal_config': 0.5}) # Keep greater than 0.5
         all_param_data = Policy.get_param_data(type)
 
         length_scale = []
