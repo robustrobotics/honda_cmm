@@ -8,7 +8,7 @@ from actions.policies import Policy
 from utils import util
 from learning.dataloaders import PolicyDataset, parse_pickle_file
 from collections import namedtuple
-
+from actions.policies import Prismatic, Revolute
 PlotData = namedtuple('PlotData', 'param_name varied range')
 
 def viz_circles(image_data, mech, beta, sample_points={}, opt_points=[], \
@@ -118,9 +118,9 @@ def viz_circles(image_data, mech, beta, sample_points={}, opt_points=[], \
                         std_colors = Y_std.reshape(n_angular, n_linear)
                     if nn is not None:
                         loader = format_batch(policy_type, X_pred, mech, image_data)
-                        k, x, q, im, _, _ = next(iter(loader))
+                        k, x, im, _, _ = next(iter(loader))
                         pol = torch.Tensor([util.name_lookup[k[0]]])
-                        nn_preds = nn(pol, x, q, im)[0].detach().numpy()
+                        nn_preds = nn(pol, x.float(), im)[0].detach().numpy()
                         Y_pred = np.add(Y_pred, nn_preds.squeeze())
                     mean_colors = Y_pred.reshape(n_angular, n_linear)
 
@@ -146,7 +146,10 @@ def viz_circles(image_data, mech, beta, sample_points={}, opt_points=[], \
 
                     # only add points to subplot that are close to this subplot "bin"
                     plot_points = []
-                    pt_colors = sample_points[policy_type]+[opt_points[1] if opt_points[0] == policy_type else []][0]
+                    pt_colors = sample_points[policy_type]
+                    if not opt_points == []:
+                        print(opt_points)
+                        pt_colors.append(opt_points[1] if opt_points[0] == policy_type else [][0])
                     if subplot_inds_and_vals == {}:
                         plot_points = [(get_plot_point(x,
                                                         angular_param.param_name,
@@ -279,17 +282,16 @@ def add_colorbar(fig, im):
 
 
 def format_batch(ptype, x_pred, mech, image_data):
-    results = []
 
+    parsed_data = []
     for ix in range(x_pred.shape[0]):
-        policy = get_policy_from_x(ptype, x_pred[ix], mech)
-        q = x_pred[ix, -1]
-        result = util.Result(policy.get_policy_tuple(), None, 0.0, 0.0,
-                             None, None, q, image_data, None, 1.0, False)
-        results.append(result)
-
-    data = parse_pickle_file(results)
-    dataset = PolicyDataset(data)
+        parsed_data.append({
+            'type': ptype,
+            'params': x_pred[ix],
+            'image': image_data,
+            'y': 0.0
+        })
+    dataset = PolicyDataset(parsed_data)
     train_loader = torch.utils.data.DataLoader(dataset=dataset,
                                                batch_size=len(dataset))
     return train_loader
