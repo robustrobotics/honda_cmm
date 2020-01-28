@@ -7,8 +7,12 @@ from functools import reduce
 from actions.policies import Policy
 from utils import util
 from learning.dataloaders import PolicyDataset, parse_pickle_file
+from collections import namedtuple
+from actions.policies import Prismatic, Revolute
+PlotData = namedtuple('PlotData', 'param_name varied range')
 
-def viz_circles(image_data, mech, beta, sample_points={}, opt_points=[], gps=None, nn=None, bb_i=0, plot_dir_prefix=''):
+def viz_circles(image_data, mech, beta, sample_points={}, opt_points=[], \
+                gps=None, nn=None, bb_i=0, plot_dir_prefix=''):
     # make figure of an image of the mechanism
     plt.ion()
     fig, ax = plt.subplots()
@@ -17,40 +21,31 @@ def viz_circles(image_data, mech, beta, sample_points={}, opt_points=[], gps=Non
     ax.imshow(np_im)
 
     for policy_type, gp in gps.items():
-        policy_plot_data = Policy.get_plot_data(policy_type)
+        all_param_data = Policy.get_param_data(policy_type)
 
         n_angular = 40
         n_linear = 20
         N_BINS = 5
-        n_params = len(policy_plot_data)
+        n_params = len([name for name, param_data in all_param_data.items() if param_data.varied])
 
-        all_angular_params = list(filter(lambda x: x.type == 'angular', policy_plot_data))
-        all_linear_params = list(filter(lambda x: x.type == 'linear', policy_plot_data))
+        all_angular_params = [PlotData(param_name, param_data.varied, param_data.bounds)
+                                for (param_name, param_data) in all_param_data.items()
+                                if param_data.type =='angular']
+        all_linear_params = [PlotData(param_name, param_data.varied, param_data.bounds)
+                                for (param_name, param_data) in all_param_data.items()
+                                if param_data.type =='linear']
 
         # for each pair of (linear, angular) param pairs make a figure
         for angular_param in all_angular_params:
-            if angular_param.range[0] == angular_param.range[1]:
+            if not angular_param.varied:
                 continue
             for linear_param in all_linear_params:
-                if linear_param.range[0] == linear_param.range[1]:
+                if not linear_param.varied:
                     continue
                 linear_vals = np.linspace(*linear_param.range, n_linear)
                 angular_vals = np.linspace(*angular_param.range, n_angular)
                 l, a = np.meshgrid(linear_vals, angular_vals)
                 mean_colors = np.zeros(l.shape)
-
-                # bin the other param values
-                all_other_params = list(filter(lambda x: (x != angular_param)
-                                               and (x != linear_param),
-                                        policy_plot_data))
-
-                subplot_inds_and_vals = []
-                for other_params in all_other_params:
-                    if other_params.range[0] == other_params.range[1]:
-                        n_bins = 1
-                    else:
-                        n_bins = N_BINS
-                    subplot_inds_and_vals += [list(enumerate(np.linspace(*other_params.range, n_bins)))]
 
                 # TODO: only works for up to 2 other_params (will have to figure out new
                 # visualization past that)
@@ -66,25 +61,53 @@ def viz_circles(image_data, mech, beta, sample_points={}, opt_points=[], gps=Non
                 plt.suptitle(policy_type + ' ucb:' + angular_param.param_name + \
                                 ' vs ' + linear_param.param_name)
 
-                if len(subplot_inds_and_vals) == 1:
+                # bin the other param values
+                all_other_params = [PlotData(param_name, param_data.varied, param_data.bounds)
+                                        for (param_name, param_data) in all_param_data.items()
+                                        if param_name != angular_param.param_name
+                                            and param_name != linear_param.param_name
+                                            and param_data.varied]
+
+                subplot_inds_and_vals = {}
+                for other_param in all_other_params:
+                    subplot_inds_and_vals[other_param.param_name] = \
+                        list(enumerate(np.linspace(*other_param.range, N_BINS)))
+
+                if len(subplot_inds_and_vals) == 0:
                     n_rows = 1
-                    n_cols = len(subplot_inds_and_vals[0])
-                elif len(subplot_inds_and_vals) == 2:
-                    n_cols = len(subplot_inds_and_vals[0])
-                    n_rows = len(subplot_inds_and_vals[1])
+                    n_cols = 1
+                else:
+                    keys = list(subplot_inds_and_vals.keys())
+                    if len(subplot_inds_and_vals) == 1:
+                        n_rows = 1
+                        n_cols = len(subplot_inds_and_vals[keys[0]])
+                    elif len(subplot_inds_and_vals) == 2:
+                        n_rows = len(subplot_inds_and_vals[keys[0]])
+                        n_cols = len(subplot_inds_and_vals[keys[1]])
 
                 # for each other value add a dimension of plots to the figure
-                for single_subplot_inds_and_vals in itertools.product(*subplot_inds_and_vals):
+                for single_subplot_inds_and_vals in itertools.product(*subplot_inds_and_vals.values()):
                     # make matrix of all values to predict dist for
+                    x_inds = {}
                     X_pred = np.zeros((n_angular*n_linear, n_params))
                     xpred_rowi = 0
                     for ix in range(0, n_angular):
                         for jx in range(0, n_linear):
-                            X_pred[xpred_rowi, angular_param.param_num] = angular_vals[ix]
-                            X_pred[xpred_rowi, linear_param.param_num] = linear_vals[jx]
-                            for other_param_ind, single_subplot_ind_and_val in enumerate(single_subplot_inds_and_vals):
-                                other_param_num = all_other_params[other_param_ind].param_num
-                                X_pred[xpred_rowi, other_param_num] = single_subplot_ind_and_val[1]
+                            x = []
+                            for param_name, param_data in all_param_data.items():
+                                if param_data.varied:
+                                    if param_name == angular_param.param_name:
+                                        x.append(angular_vals[ix])
+                                    elif param_name == linear_param.param_name:
+                                        x.append(linear_vals[jx])
+                                    else:
+                                        for name, (ind, val) in \
+                                                zip(subplot_inds_and_vals, \
+                                                    single_subplot_inds_and_vals):
+                                            if param_name == name:
+                                                x.append(val)
+                                                x_inds[name] = len(x) - 1
+                            X_pred[xpred_rowi,:] = x
                             xpred_rowi += 1
 
                     Y_pred = np.zeros((X_pred.shape[0]))
@@ -95,20 +118,23 @@ def viz_circles(image_data, mech, beta, sample_points={}, opt_points=[], gps=Non
                         std_colors = Y_std.reshape(n_angular, n_linear)
                     if nn is not None:
                         loader = format_batch(policy_type, X_pred, mech, image_data)
-                        k, x, q, im, _, _ = next(iter(loader))
+                        k, x, im, _, _ = next(iter(loader))
                         pol = torch.Tensor([util.name_lookup[k[0]]])
-                        nn_preds = nn(pol, x, q, im)[0].detach().numpy()
+                        nn_preds = nn(pol, x.float(), im)[0].detach().numpy()
                         Y_pred = np.add(Y_pred, nn_preds.squeeze())
                     mean_colors = Y_pred.reshape(n_angular, n_linear)
 
                     ucb = np.add(Y_pred, np.sqrt(beta) * Y_std)
                     ucb_colors = ucb.reshape(n_angular, n_linear)
 
-                    row_col = [o[0]+1 for o in single_subplot_inds_and_vals]
-                    if len(row_col) == 1:
-                        subplot_num = 1*row_col[0]
+                    if len(single_subplot_inds_and_vals) == 0:
+                        subplot_num = 1
                     else:
-                        subplot_num = reduce(lambda x, y: n_cols*(x-1)+y, row_col)
+                        row_col = [o[0]+1 for o in single_subplot_inds_and_vals]
+                        if len(row_col) == 1:
+                            subplot_num = 1*row_col[0]
+                        else:
+                            subplot_num = reduce(lambda x, y: n_cols*(x-1)+y, row_col)
 
                     # make polar subplot of mean function
                     ax = mean_fig.add_subplot(n_rows, n_cols, subplot_num, projection='polar')
@@ -120,19 +146,33 @@ def viz_circles(image_data, mech, beta, sample_points={}, opt_points=[], gps=Non
 
                     # only add points to subplot that are close to this subplot "bin"
                     plot_points = []
-                    for pt, color in sample_points[policy_type]+[opt_points[1] if opt_points[0] == policy_type else []][0]:
-                        keep_point = True
-                        for other_param_list_num, (subplot_dim, subplot_val) in enumerate(single_subplot_inds_and_vals):
-                            all_subplot_vals = np.array([inds_and_vals[1] for
-                                    inds_and_vals in subplot_inds_and_vals[other_param_list_num]])
-                            param_num = all_other_params[other_param_list_num].param_num
-                            point_param_val = pt[param_num]
-                            closest_index = (np.abs(all_subplot_vals - point_param_val)).argmin()
-                            if all_subplot_vals[closest_index] == subplot_val:
-                                keep_point = keep_point and True
-                            else:
-                                keep_point = keep_point and False
-                        if keep_point: plot_points += [(pt, color)]
+                    pt_colors = sample_points[policy_type]
+                    if not opt_points == []:
+                        print(opt_points)
+                        pt_colors.append(opt_points[1] if opt_points[0] == policy_type else [][0])
+                    if subplot_inds_and_vals == {}:
+                        plot_points = [(get_plot_point(x,
+                                                        angular_param.param_name,
+                                                        linear_param.param_name,
+                                                        all_param_data), c)
+                                                            for (x, c) in pt_colors]
+                    else:
+                        for pt, color in pt_colors:
+                            keep_point = True
+                            for other_param_name, (subplot_dim, subplot_val) in  \
+                                    zip(subplot_inds_and_vals, single_subplot_inds_and_vals):
+                                all_subplot_vals = np.array([inds_and_vals[1] for
+                                        inds_and_vals in subplot_inds_and_vals[other_param_name]])
+                                point_param_val = pt[x_inds[other_param_name]]
+                                closest_index = (np.abs(all_subplot_vals - point_param_val)).argmin()
+                                if all_subplot_vals[closest_index] == subplot_val:
+                                    keep_point = keep_point and True
+                                else:
+                                    keep_point = keep_point and False
+                            if keep_point: plot_points.append((get_plot_point(pt,
+                                                                angular_param.param_name,
+                                                                linear_param.param_name,
+                                                                all_param_data), color))
 
                     mean_im = polar_plots(ax, mean_colors, max_dist, angular_param,
                                      linear_param, points=plot_points)
@@ -196,7 +236,6 @@ def viz_circles(image_data, mech, beta, sample_points={}, opt_points=[], gps=Non
                     # file name is the interaction number
                     sample_num = sum([len(sample_points[pt]) for pt in sample_points])
                     fig.savefig(plot_dir+'/%i.png' % sample_num)
-    plt.close('all')
 
 def polar_plots(ax, colors, vmax, angular_param, linear_param, points=None):
     n_ang, n_lin = colors.shape
@@ -230,8 +269,7 @@ def polar_plots(ax, colors, vmax, angular_param, linear_param, points=None):
     ax.set_yticklabels([])
 
     if not points is None:
-        for (x, c) in points:
-            point = get_point_from_x(x, linear_param, angular_param, type)
+        for (point, c) in points:
             ax.scatter(*point, c=c, s=3)
 
     return cbar
@@ -244,47 +282,28 @@ def add_colorbar(fig, im):
 
 
 def format_batch(ptype, x_pred, mech, image_data):
-    results = []
 
+    parsed_data = []
     for ix in range(x_pred.shape[0]):
-        policy = get_policy_from_x(ptype, x_pred[ix], mech)
-        q = x_pred[ix, -1]
-        result = util.Result(policy.get_policy_tuple(), None, 0.0, 0.0,
-                             None, None, q, image_data, None, 1.0, False)
-        results.append(result)
-
-    data = parse_pickle_file(results)
-    dataset = PolicyDataset(data)
+        parsed_data.append({
+            'type': ptype,
+            'params': x_pred[ix],
+            'image': image_data,
+            'y': 0.0
+        })
+    dataset = PolicyDataset(parsed_data)
     train_loader = torch.utils.data.DataLoader(dataset=dataset,
                                                batch_size=len(dataset))
     return train_loader
 
 
-# takes in an x and plot variables and returns the values to be plotted
-def get_point_from_x(x, linear_param, angular_param, policy_type):
-    point = np.zeros(2)
-    linear_name = linear_param.param_name
-    angular_name = angular_param.param_name
-    if policy_type == 'Prismatic':
-        if linear_name == 'config':
-            point[1] = abs(x[-1])
-        if angular_name == 'pitch':
-            if x[-1] < 0:
-                point[0] = x[0] - np.pi
-            else:
-                point[0] = x[0]
-        if angular_name == 'yaw':
-            if x[-1] < 0:
-                point[0] = x[1] + np.pi
-            else:
-                point[0] = x[1]
-    if policy_type == 'Revolute':
-        if linear_name == 'config':
-            point[1] = x[-1]
-        if linear_name == 'radius':
-            point[1] = x[2]
-        if angular_name == 'pitch':
-            point[0] = x[1]
-        if angular_name == 'roll':
-            point[0] = x[0]
+# takes in an x and returns the values to be plotted
+def get_plot_point(x, angular_name, linear_name, all_param_data):
+    xi = 0
+    point = []
+    for (param_name, param_data) in all_param_data.items():
+        if param_data.varied:
+            if param_name == angular_name or param_name == linear_name:
+                point.append(x[xi])
+            xi += 1
     return point

@@ -23,8 +23,6 @@ def execute_systematic(args):
     avg_regrets = []
     min_regrets = []
 
-    config_goal = 0.25
-
     for n in range(args.N):
         # generate busybox and setup pybullet env
         if args.bb_fname:
@@ -43,7 +41,7 @@ def execute_systematic(args):
         for policy in policies:
             # generate policy and execute
             pose_handle_base_world = mech.get_pose_handle_base_world()
-            traj = policy.generate_trajectory(pose_handle_base_world, config_goal, args.debug)
+            traj = policy.generate_trajectory(pose_handle_base_world, args.debug)
             _, motion, _ = gripper.execute_trajectory(traj, mech, policy.type, args.debug)
 
             # calculate regret
