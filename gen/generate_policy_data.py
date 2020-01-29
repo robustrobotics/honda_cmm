@@ -38,7 +38,7 @@ def generate_dataset(args, git_hash):
                 mechanism_params = mech.get_mechanism_tuple()
                 result = util.Result(policy_params, mechanism_params, net_motion, \
                             cumu_motion, pose_handle_world_init, pose_handle_world_final, \
-                            config_goal, image_data, git_hash, args.randomness, not args.use_gripper)
+                            image_data, git_hash, not args.use_gripper)
                 bb_results.append(result)
 
                 gripper.reset(mech)

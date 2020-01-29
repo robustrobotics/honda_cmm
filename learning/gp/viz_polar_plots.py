@@ -142,7 +142,7 @@ def viz_circles(image_data, mech, beta, sample_points={}, opt_points=[], \
                         + ' = ' + str("%.2f" % other_val) for other_param_i,
                         (subplot_i, other_val) in enumerate(single_subplot_inds_and_vals)]),
                         fontsize=10)
-                    max_dist = mech.get_max_dist()
+                    max_dist = mech.get_max_net_motion()
 
                     # only add points to subplot that are close to this subplot "bin"
                     plot_points = []
@@ -184,7 +184,7 @@ def viz_circles(image_data, mech, beta, sample_points={}, opt_points=[], \
                             + ' = ' + str("%.2f" % other_val) for other_param_i,
                             (subplot_i, other_val) in enumerate(single_subplot_inds_and_vals)]),
                             fontsize=10)
-                        max_dist = mech.get_max_dist()
+                        max_dist = mech.get_max_net_motion()
                         std_im = polar_plots(ax, std_colors, max_dist, angular_param,
                                          linear_param, points=plot_points)
 
@@ -194,7 +194,7 @@ def viz_circles(image_data, mech, beta, sample_points={}, opt_points=[], \
                             + ' = ' + str("%.2f" % other_val) for other_param_i,
                             (subplot_i, other_val) in enumerate(single_subplot_inds_and_vals)]),
                             fontsize=10)
-                        max_dist = mech.get_max_dist()
+                        max_dist = mech.get_max_net_motion()
                         ucb_im = polar_plots(ax, ucb_colors, max_dist, angular_param,
                                          linear_param, points=plot_points)
 

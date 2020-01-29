@@ -49,7 +49,7 @@ class DoorRadiusPerf(PlotFunc):
                 motion_radius = data_point.mechanism_params.params.door_size[0] - 0.025
                 bb = BusyBox.bb_from_result(data_point)
                 mech = bb._mechanisms[0]
-                des_motion = mech.get_max_dist()
+                des_motion = mech.get_max_net_motion()
                 if data_point.mechanism_params.type == 'Door':
                     performance = data_point.net_motion/des_motion
                     plt.plot(data_point.mechanism_params.params.door_size[0], performance, 'b.')
@@ -176,7 +176,7 @@ class MechanismMotion(PlotFunc):
         for bb_data in data:
             bb = BusyBox.bb_from_result(bb_data[0])
             mech = bb._mechanisms[0]
-            max_dist = mech.get_max_dist()
+            max_dist = mech.get_max_net_motion()
             for data_point in bb_data:
                 key = data_point.mechanism_params.type + ', '\
                                                 + data_point.policy_params.type
@@ -345,7 +345,7 @@ class MotionHistSlider(PlotFunc):
         for bb_data in data:
             bb = BusyBox.bb_from_result(bb_data[0])
             mech = bb._mechanisms[0]
-            max_dist = mech.get_max_dist()
+            max_dist = mech.get_max_net_motion()
             for point in bb_data:
                 config_ps.append(point.net_motion/max_dist)
         ax.hist(config_ps, 20, edgecolor='black', histtype='bar')
@@ -364,7 +364,7 @@ class MotionHistDoor(PlotFunc):
         for bb_data in data:
             bb = BusyBox.bb_from_result(bb_data[0])
             mech = bb._mechanisms[0]
-            max_dist = mech.get_max_dist()
+            max_dist = mech.get_max_net_motion()
             for point in bb_data:
                 motion_percs += [point.net_motion/max_dist]
         ax.hist(motion_percs, 20, edgecolor='black', histtype='bar')

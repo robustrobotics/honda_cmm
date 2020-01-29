@@ -190,7 +190,7 @@ class Gripper:
                 self._control_fingers('close', debug=debug)
             if (not last_traj_p) and self._at_des_handle_base_pose(pose_handle_base_world_des, q_offset, mech, 0.01):
                 return handle_base_ps, False
-            elif last_traj_p and self._at_des_handle_base_pose(pose_handle_base_world_des, q_offset, mech, 0.001) and self._stable(handle_base_ps):
+            elif last_traj_p and self._at_des_handle_base_pose(pose_handle_base_world_des, q_offset, mech, 0.000001) and self._stable(handle_base_ps):
                 return handle_base_ps, True
             elif self._stable(handle_base_ps) and (i > stable_timeout):
                 return handle_base_ps, True
@@ -253,15 +253,13 @@ class Gripper:
             self.d = [0.0, 0.0]
 
     def execute_trajectory(self, traj, mech, policy_type, debug):
-        pose_handle_base_world = mech.get_pose_handle_base_world()
+        pose_handle_base_world_init = mech.get_pose_handle_base_world()
         self.set_control_params(policy_type)
-
-        # initial grasp pose
-        pose_handle_world_init = mech.get_handle_pose()
 
         # offset between the initial trajectory orientation and the initial handle orientation
         q_offset = util.quat_math(traj[0].q, mech.get_pose_handle_base_world().q, True, False)
         if not self.no_gripper:
+            pose_handle_world_init = mech.get_handle_pose()
             p_tip_world_init = np.add(pose_handle_world_init.p, [0., .015, 0.]) # back up a little for better grasp
             pose_tip_world_init = util.Pose(p_tip_world_init, self.pose_tip_world_reset.q)
             self._grasp_handle(pose_tip_world_init, debug)
@@ -277,7 +275,9 @@ class Gripper:
             pose_handle_world_final = mech.get_handle_pose()
         net_motion = 0.0
         if pose_handle_world_final is not None:
-            net_motion = np.linalg.norm(np.subtract(pose_handle_world_final.p, pose_handle_world_init.p))
+            pose_handle_base_world_final = mech.get_pose_handle_base_world()
+            net_motion = np.linalg.norm(np.subtract(pose_handle_base_world_final.p, \
+                                                pose_handle_base_world_init.p))
         #self.plot_err_forces()
         return cumu_motion, net_motion, pose_handle_world_final
 

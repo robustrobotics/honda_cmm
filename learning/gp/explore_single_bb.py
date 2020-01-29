@@ -118,7 +118,7 @@ def test_model(sampler, args):
     motion, _, _ = gripper.execute_trajectory(traj, sampler.mech, stop_policy.type, debug=debug)
 
     # Calculate the regret.
-    max_d = sampler.mech.get_max_dist()
+    max_d = sampler.mech.get_max_net_motion()
     regret = (max_d - motion)/max_d
 
     return regret, start_x, stop_x, stop_policy.type
@@ -389,7 +389,7 @@ class UCB_Interaction(object):
 
     def calc_avg_regret(self):
         regrets = []
-        max_dist = self.mech.get_max_dist()
+        max_dist = self.mech.get_max_net_motion()
         for y in self.moves[policy_type]:
             regrets.append((max_dist - y[0])/max_dist)
         if len(regrets) > 0:

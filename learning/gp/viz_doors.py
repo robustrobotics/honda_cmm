@@ -43,7 +43,7 @@ def viz_3d_plots(xs,
     mech = bb._mechanisms[0]
     setup_env(bb, False, False, True)
     true_rad = mech.get_radius_x()
-    max_dist = mech.get_max_dist()
+    max_dist = mech.get_max_net_motion()
 
     for ix, q in enumerate(configs):
         new_xs = []

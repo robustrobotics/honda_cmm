@@ -193,7 +193,7 @@ class Slider(Mechanism):
                                 self.range,
                                 self.axis))
 
-    def get_max_dist(self):
+    def get_max_net_motion(self):
         return self.range/2
 
     def reset(self):
@@ -348,9 +348,9 @@ class Door(Mechanism):
         door_base_id = self._get_door_base_id()
         return p.getLinkState(bb_id, door_base_id)[0]
 
-    def get_max_dist(self):
-        motion_radius = self.door_size[0] - (self.handle_radius/2 + self.handle_offset_x)
-        return 2*np.pi*motion_radius/4
+    def get_max_net_motion(self):
+        motion_radius = self.door_size[0] - (self.handle_radius + self.handle_offset_x)
+        return np.sqrt(2*motion_radius**2)
 
     def get_radius_x(self):
         p_handle_base_world = self.get_pose_handle_base_world().p
