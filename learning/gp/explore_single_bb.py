@@ -308,9 +308,9 @@ class GPOptimizer(object):
             Y_pred += val.squeeze()
 
         if ucb:
-            obj = -Y_pred[0] - np.sqrt(self.beta) * Y_std[0]
+            obj = -(Y_pred[0] - np.sqrt(self.beta) * Y_std[0])*10000
         else:
-            obj = -Y_pred[0]
+            obj = -(Y_pred[0])*10000
         # print(Y_pred[0][0], Y_std[0], obj)
         return obj
 
@@ -395,6 +395,7 @@ class GPOptimizer(object):
 
         # Find the sample that maximizes the distance.
         (policy_type_max, params_max, q_max), max_disp = max(samples, key=operator.itemgetter(1))
+        policies = sorted(samples, key=operator.itemgetter(1))
 
         # Start optimization from here.
         if self.nn is None:
@@ -402,18 +403,23 @@ class GPOptimizer(object):
         else:
             images = dataset.images[0].unsqueeze(0)
         policy_data = Policy.get_plot_data(self.mech)
-        x0, bounds = get_reduced_x_and_bounds(policy_type_max, params_max, q_max, policy_data)
+        
+        min_val, stop_policy, stop_q = 0, None, None
+        for (policy_type_max, params_max, q_max), max_disp in policies[-10:-1]:
+            x0, bounds = get_reduced_x_and_bounds(policy_type_max, params_max, q_max, policy_data)
 
-        start_policy = get_policy_from_x(policy_type_max, x0, self.mech)
-        start_q = q_max
-        opt_res = minimize(fun=self._objective_func, x0=x0, args=(policy_type_max, ucb, images),
-                       method='L-BFGS-B', options={'eps': 1e-3, 'maxiter': 100000, 'gtol': 1e-8}, bounds=bounds)
+            start_policy = get_policy_from_x(policy_type_max, x0, self.mech)
+            start_q = q_max
+            opt_res = minimize(fun=self._objective_func, x0=x0, args=(policy_type_max, ucb, images),
+                method='L-BFGS-B', options={'maxcor':100, 'ftol':1e-15, 'eps': 1e-5, 'maxiter': 100000, 'gtol': 1e-8, 'maxls': 50}, bounds=bounds)
 
-
-        x_final = opt_res['x']
-        stop_policy = get_policy_from_x(policy_type_max, x_final, self.mech)
-        stop_q = x_final[-1]
-        # print('OPT:', opt_res['success'], opt_res['nit'], opt_res['message'])
+            val = opt_res['fun']
+            if val < min_val:
+                x_final = opt_res['x']
+                stop_policy = get_policy_from_x(policy_type_max, x_final, self.mech)
+                stop_q = x_final[-1]
+                min_val = val
+            print('OPT:', opt_res['success'], opt_res['nit'], opt_res['message'], opt_res['fun'])
         # print('------ Start')
         # print(x0)
         # print(x_final)
