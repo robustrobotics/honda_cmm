@@ -7,6 +7,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from collections import OrderedDict
 import pickle
 import os
+import sys
 import argparse
 from argparse import Namespace
 from scipy.optimize import minimize
@@ -308,8 +309,8 @@ class UCB_Interaction(object):
                                 ('goal_config', 0.10)])
         elif type == 'Revolute':
             kernel_ls_params = OrderedDict([('rot_axis_roll', 0.10),
-                                ('rot_axis_pitch', 100),
-                                ('rot_axis_yaw', 100),
+                                ('rot_axis_pitch', 0.10),
+                                ('rot_axis_yaw', 0.10),
                                 ('radius_x', 0.04), # 0.09  # 0.05
                                 ('goal_config', 0.5)]) # Keep greater than 0.5
         all_param_data = Policy.get_param_data(type)
@@ -496,6 +497,8 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
     pose_handle_base_world = mech.get_pose_handle_base_world()
     sampler = UCB_Interaction(bb, image_data, plot, args, nn_fname=nn_fname)
     for ix in itertools.count():
+        if args.debug:
+            sys.stdout.write('\rProcessing sample %i' % ix)
         # if we are done sampling n_interactions OR we need to get regret after
         # each interaction
         if ((not n_interactions is None) and ix==n_interactions) or \
