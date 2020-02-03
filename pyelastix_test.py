@@ -39,5 +39,5 @@ axes[2].imshow(im3)
 axes[3].quiver(X,Y,U,V)
 plt.show()  # mpl
 
-print('field: ', field)
-print('field shape: ', field[0].shape, field[1].shape)
+# print('field: ', field)
+# print('field shape: ', field[0].shape, field[1].shape)
