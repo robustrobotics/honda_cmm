@@ -27,8 +27,12 @@ def get_result_file(type_name, results_path):
     for root, subdir, files in all_files:
         for file in files:
             if ('regret_results' in file) and (type_name in file):
+                print(file)
                 T_result = re.search('regret_results_(.*)_(.*)T_(.*)N_(.*)M.pickle', file)
-                T, N = T_result.group(2,3)
+                model, T, N = T_result.group(1,2,3)
+                print(type_name, model)
+                if model != type_name:
+                    continue
                 result_files[(T, N)] = root + '/' + file
     return result_files
 
@@ -38,6 +42,7 @@ if __name__ == '__main__':
     parser.add_argument('--results-path', type=str)
     parser.add_argument('--debug', action='store_true')
     args = parser.parse_args()
+    print(args)
 
     if args.debug:
         import pdb; pdb.set_trace()
@@ -46,10 +51,14 @@ if __name__ == '__main__':
         'active': ['k', 'Train-Active'],
         'gpucb': ['r', 'Train-GP-UCB'],
         'systematic': ['b', 'Systematic'],
-        'random': ['c', 'Train-Random']
+        'random': ['c', 'Train-Random'],
+        'mh': ['b', 'MH-Train'],
+        'untuned_mh': ['k', 'Untuned-MH-Train'],
+        'gpucbnn': ['k', 'GPUCB-NN']
     }
     plt.ion()
     for name in args.types:
+        print(name)
         res_files = get_result_file(name, args.results_path)
         for (T,N), res_file in res_files.items():
             regret_results = util.read_from_file(res_file)

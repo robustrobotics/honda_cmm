@@ -223,7 +223,7 @@ if __name__ == '__main__':
         help='path to model files')
     parser.add_argument(
         '--no-gripper',
-        help='use to apply foce directly to handles')
+        help='use to apply force directly to handles')
     args = parser.parse_args()
 
     if args.debug:

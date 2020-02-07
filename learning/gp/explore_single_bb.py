@@ -359,7 +359,7 @@ class GPOptimizer(object):
         scores = np.exp(np.array(scores)/temp)[:, 0]
 
         scores /= np.sum(scores)
-        print(scores, np.argmax(scores), np.max(scores))
+        #print(scores, np.argmax(scores), np.max(scores))
         index = np.random.choice(np.arange(scores.shape[0]),
                                  p=scores)
 

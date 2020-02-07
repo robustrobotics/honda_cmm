@@ -78,8 +78,7 @@ class PlotDoorData(PlotFunc):
 
                 viridis = cm.get_cmap('viridis', 100)
 
-                c = viridis(data_point.cumu_motion/des_motion)
-
+                c = [viridis(data_point.net_motion/des_motion)]
                 ax0.scatter(params.rot_axis_roll, params.rot_radius_x, data_point.config_goal, c=c, s=2)
 
             ax0.set_xlim(0, 2 * np.pi)

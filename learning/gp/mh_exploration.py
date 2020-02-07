@@ -67,7 +67,7 @@ def true_cost(policy, q, mech, gripper):
 
     if motion > 0.05 and q > -0.01:
         print('YIKES', q, motion/mech.get_max_dist())
-    return np.exp(motion/0.0125), motion  # 0.0175
+    return np.exp(motion/0.0075), motion  # 0.0175
 
 
 def proposal(policy, q, bb, s_roll=1., s_pitch=1., s_rad=0.04, s_q=1.):
@@ -137,7 +137,7 @@ def mh_exploration(bb_result, n_iters, cost_callback):
         gripper.reset(mech)
         new_c, _ = cost_callback(new_policy, new_q, mech, gripper)
         gripper.reset(mech)
-        # print(motion / mech.get_max_dist())
+        print(motion / mech.get_max_dist())
 
         acc = new_c*rev_trans_cost/(c*trans_cost)
         r = np.min([acc, 1])
@@ -148,7 +148,7 @@ def mh_exploration(bb_result, n_iters, cost_callback):
 
         if np.random.uniform() < r:
             policy, q = new_policy, new_q
-    # return samples[::10]
+    return samples[::10]
     return policies[1000::10]  # , samples[0::10]
 
 
@@ -173,7 +173,7 @@ if __name__ == '__main__':
     for cx in range(n_chains):
         samples = []
         for bb in busybox_data:
-            samples.append(mh_exploration(bb[0], 4000, cost_callback=true_cost))
+            samples.append(mh_exploration(bb[0], 2000, cost_callback=true_cost))
 
-        with open('mh_samples_true21_0175_chain_%d.pickle' % cx, 'wb') as handle:
+        with open('mh_samples_true9_0075_chain_%d.pickle' % cx, 'wb') as handle:
             pickle.dump(samples, handle)
