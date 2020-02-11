@@ -1,11 +1,13 @@
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF, WhiteKernel, ConstantKernel
+from sklearn.tree import DecisionTreeClassifier
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm
 from mpl_toolkits.mplot3d import Axes3D
 import pickle
 import os
+import copy
 import argparse
 from argparse import Namespace
 from scipy.optimize import minimize
@@ -219,7 +221,7 @@ def test_model(sampler, args):
     """
     # Optimize the GP to get the best policy.
     ucb = False
-    policy, q, start_policy, start_q = sampler.optim.optimize_gp(ucb)
+    policy, q, start_policy, start_q = sampler.optim.optimize_global_gp(ucb)
 
     # Execute the policy and observe the true motion.
     debug = False
@@ -247,7 +249,7 @@ def test_model(sampler, args):
 
 class GPOptimizer(object):
 
-    def __init__(self, urdf_num, bb, image_data, n_samples, beta, gp, nn=None):
+    def __init__(self, urdf_num, bb, image_data, n_samples, beta, gps, dt, nn=None):
         """
         Initialize one of these for each BusyBox.
         """
@@ -256,7 +258,8 @@ class GPOptimizer(object):
         self.nn = nn
         self.mech = bb._mechanisms[0]
         self.beta = beta
-        self.gp = gp
+        self.gps = gps
+        self.dt = dt
         self.n_samples = n_samples
 
         # Generate random policies.
@@ -295,11 +298,11 @@ class GPOptimizer(object):
 
         return [policy_type_tensor, policy_tensor, config_tensor, image_tensor]
 
-    def _objective_func(self, x, policy_type, ucb, image_tensor=None):
+    def _objective_func(self, x, policy_type, gp_type, ucb, image_tensor=None):
         x = x.squeeze()
 
         X = np.array(get_policy_list(policy_type, x, self.mech))
-        Y_pred, Y_std = self.gp.predict(X, return_std=True)
+        Y_pred, Y_std = self.gps[gp_type]['model'].predict(X, return_std=True)
 
         if not self.nn is None:
             inputs = self._optim_result_to_torch(policy_type, x, image_tensor, False)
@@ -308,19 +311,19 @@ class GPOptimizer(object):
             Y_pred += val.squeeze()
 
         if ucb:
-            obj = -(Y_pred[0] - np.sqrt(self.beta) * Y_std[0])*10000
+            obj = -(Y_pred[0] + np.sqrt(self.beta) * Y_std[0])*10000
         else:
             obj = -(Y_pred[0])*10000
         # print(Y_pred[0][0], Y_std[0], obj)
         return obj
 
-    def _get_pred_motions(self, pdata, ucb, nn_preds=None):
+    def _get_pred_motions(self, pdata, gp_type, ucb, nn_preds=None):
         if len(pdata) > 1:
             data = [d[0] for d in pdata]
         else:
             data = pdata
         X, Y = process_data(data, len(data))
-        y_pred, y_std = self.gp.predict(X, return_std=True)
+        y_pred, y_std = self.gps[gp_type]['model'].predict(X, return_std=True)
         # TODO: Unsure why this is needed when running the inloop method.
         # It works until the first time the NN is used.
         y_pred = y_pred.reshape((len(data), 1))
@@ -334,6 +337,7 @@ class GPOptimizer(object):
             return y_pred, self.dataset
 
     def stochastic_gp(self, ucb, temp=0.0075, bs=50):
+        # TODO: Make this work with non-stationary method if we need to.
         policies = []
         scores = []
 
@@ -374,7 +378,47 @@ class GPOptimizer(object):
         start_q = q_max
         return start_policy, start_q
 
-    def optimize_gp(self, ucb):
+    def optimize_global_gp(self, ucb):
+        # Given the current DT, do a DFS. At each node do an optimization for the best policy.
+        policy_data = Policy.get_plot_data(self.mech)
+        bounds = [[p.range[0], p.range[1]] for p in policy_data]
+        best_policies = self.dt_dfs(0, bounds, ucb)
+
+        # TODO: Find best policy from returned tuple.
+        print(best_policies)
+        (node, region, stop_p, stop_q, min_val) = min(best_policies, key=operator.itemgetter(4))
+        return stop_p, stop_q, stop_p, stop_q
+
+    def dt_dfs(self, node_id, region, ucb):
+        lefts = self.dt['model'].tree_.children_left
+        rights = self.dt['model'].tree_.children_right
+        features = self.dt['model'].tree_.feature
+        thresholds = self.dt['model'].tree_.threshold
+
+        if lefts[node_id] == rights[node_id]:
+            x = [[np.random.uniform(l, h) for l, h in region]]
+            print(x)
+            cls = self.dt['model'].predict(x)[0]
+            if cls == 1:
+                stop_policy, stop_q, start_policy, start_q, min_val = self.optimize_gp_node('narrow', region, ucb)
+            else:
+                stop_policy, stop_q, start_policy, start_q, min_val = self.optimize_gp_node('wide', region, ucb)
+
+            return [(node_id, region, stop_policy, stop_q, min_val)]
+        else:
+            r_region = copy.deepcopy(region)
+            l_region = copy.deepcopy(region)
+
+            ax = features[node_id]
+            val = thresholds[node_id]
+
+            # the left node follows the <= case, thus setting the max value of the feature
+            l_region[ax][1] = val
+            r_region[ax][0] = val
+
+            return self.dt_dfs(lefts[node_id], l_region, ucb) + self.dt_dfs(rights[node_id], r_region, ucb)
+
+    def optimize_gp_node(self, gp_type, region, ucb):
         """
         Find the input (policy) that maximizes the GP (+ NN) output.
         :param ucb: If True use the GP-UCB criterion
@@ -382,11 +426,15 @@ class GPOptimizer(object):
         """
         samples = []
 
-        # Generate random policies.
-        #TODO: Batch this.
-        for res, nn_preds in zip(self.sample_policies, self.nn_samples):
-            # Get predictions from the GP.
-            sample_disps, dataset = self._get_pred_motions(res, ucb, nn_preds=nn_preds)
+        # TODO: Generate random policies from the given region.
+        for _ in range(0, 100):
+            # TODO: Generate a random policy in this range (check this).
+            x = [np.random.uniform(l, h) for l, h in region]
+            policy = get_policy_from_x('Revolute', x, self.mech)
+            res = [util.Result(policy.get_policy_tuple(), None, 0.0, 0.0,
+                               None, None, x[-1], None, None, 1.0, False)]
+            # TODO: Get predictions from the GP.
+            sample_disps, dataset = self._get_pred_motions(res, gp_type, ucb, nn_preds=None)
 
             samples.append(((res[0].policy_params.type,
                              res[0].policy_params,
@@ -398,10 +446,7 @@ class GPOptimizer(object):
         policies = sorted(samples, key=operator.itemgetter(1))
 
         # Start optimization from here.
-        if self.nn is None:
-            images = None
-        else:
-            images = dataset.images[0].unsqueeze(0)
+        images = None
         policy_data = Policy.get_plot_data(self.mech)
         
         min_val, stop_policy, stop_q = 0, None, None
@@ -410,8 +455,8 @@ class GPOptimizer(object):
 
             start_policy = get_policy_from_x(policy_type_max, x0, self.mech)
             start_q = q_max
-            opt_res = minimize(fun=self._objective_func, x0=x0, args=(policy_type_max, ucb, images),
-                method='L-BFGS-B', options={'maxcor':100, 'ftol':1e-15, 'eps': 1e-5, 'maxiter': 100000, 'gtol': 1e-8, 'maxls': 50}, bounds=bounds)
+            opt_res = minimize(fun=self._objective_func, x0=x0, args=(policy_type_max, gp_type, ucb, images),
+                method='L-BFGS-B', options={'maxcor':100, 'ftol':1e-15, 'eps': 1e-5, 'maxiter': 100000, 'gtol': 1e-8, 'maxls': 50}, bounds=region)
 
             val = opt_res['fun']
             if val < min_val:
@@ -425,17 +470,13 @@ class GPOptimizer(object):
         # print(x_final)
         # print(bounds)
         # print('------')
-        return stop_policy, stop_q, start_policy, start_q
+        return stop_policy, stop_q, start_policy, start_q, min_val
 
 
 class UCB_Interaction(object):
 
     def __init__(self, bb, image_data, plot, args, nn_fname='', beta=BETA):
-        # Pretrained Kernel (for Sliders)
-        # kernel = ConstantKernel(0.005, constant_value_bounds=(0.005, 0.005)) * RBF(length_scale=(0.247, 0.084, 0.0592), length_scale_bounds=(0.0592, 0.247)) + WhiteKernel(noise_level=1e-5, noise_level_bounds=(1e-5, 1e2))
-        # Pretrained Kernel (for Doors)
-        # 0.0202**2 * RBF(length_scale=[0.0533, 0.000248, 0.0327, 0.0278]) + WhiteKernel(noise_level=1e-05)
-        self.interaction_data = []
+        # ys are specifically the GP targets. If not using a NN, this will be the same as moves.
         self.xs, self.ys, self.moves = [], [], []
 
         self.ix = 0
@@ -446,14 +487,37 @@ class UCB_Interaction(object):
         self.bb = bb
         self.image_data = image_data
         self.mech = self.bb._mechanisms[0]
-        self.kernel = self.get_kernel()
-        self.gp = GaussianProcessRegressor(kernel=self.kernel,
-                                           n_restarts_optimizer=10)
-        self.optim = GPOptimizer(args.urdf_num, self.bb, self.image_data, args.n_gp_samples, beta, self.gp, nn=self.nn)
+        self.dist_eps = 0.001
 
-    def get_kernel(self):
-        # TODO: in the future will want the GP to take in all types of policy
-        # params, not just the correct type
+        # The models used to fit the data.
+        self.gps = {
+            'narrow': {
+                'data': {
+                    'xs': [],
+                    'ys': []
+                },
+                'model': GaussianProcessRegressor(kernel=self.get_kernel('narrow'), n_restarts_optimizer=10)
+            },
+            'wide': {
+                'data': {
+                    'xs': [],
+                    'ys': []
+                },
+                'model': GaussianProcessRegressor(kernel=self.get_kernel('wide'), n_restarts_optimizer=10)
+            }
+        }
+
+        self.dt = {
+            'data': {
+                'xs': [],
+                'ys': []
+            },
+            'model': DecisionTreeClassifier()
+        }
+
+        self.optim = GPOptimizer(args.urdf_num, self.bb, self.image_data, args.n_gp_samples, beta, self.gps, self.dt, nn=self.nn)
+
+    def get_kernel(self, k_type):
         noise = 1e-5
         if self.mech.mechanism_type == 'Slider':
             variance = 0.005
@@ -468,7 +532,7 @@ class UCB_Interaction(object):
                                          (l_q, l_q))) + \
                 WhiteKernel(noise_level=noise,
                             noise_level_bounds=(1e-5, 1e2))
-        elif self.mech.mechanism_type == 'Door':
+        elif self.mech.mechanism_type == 'Door' and k_type == 'wide':
             variance = 0.005
             l_roll = 1.
             l_pitch = 1.
@@ -483,6 +547,22 @@ class UCB_Interaction(object):
                                            (l_q, l_q))) \
                 + WhiteKernel(noise_level=noise,
                               noise_level_bounds=(1e-5, 1e2))
+        elif self.mech.mechanism_type == 'Door' and k_type == 'narrow':
+            variance = 0.005
+            l_roll = 0.25
+            l_pitch = 0.25
+            l_radius = 0.01  # 0.09  # 0.05
+            l_q = 0.5  # Keep greater than 0.5.
+            return ConstantKernel(variance,
+                                  constant_value_bounds=(variance, variance)) \
+                * RBF(length_scale=(l_roll, l_pitch, l_radius, l_q),
+                      length_scale_bounds=((l_roll, l_roll),
+                                           (l_pitch, l_pitch),
+                                           (l_radius, l_radius),
+                                           (l_q, l_q))) \
+                + WhiteKernel(noise_level=noise,
+                              noise_level_bounds=(1e-5, 1e2))
+
 
     def sample(self, stochastic=False):
         # (1) Choose a point to interact with.
@@ -494,7 +574,7 @@ class UCB_Interaction(object):
             # (b) Choose policy using UCB bound.
             ucb = True
             if not stochastic:
-                policy, q, _, _ = self.optim.optimize_gp(ucb)
+                policy, q, _, _ = self.optim.optimize_global_gp(ucb)
             else:
                 policy, q = self.optim.stochastic_gp(ucb)
 
@@ -506,11 +586,20 @@ class UCB_Interaction(object):
         # TODO: Update without the NN.
 
         # (3) Update GP.
-        x = get_x_from_result(result)
+        x, y = get_x_from_result(result), result.net_motion
+        self.dt['data']['xs'].append(x)
         self.xs.append(x)
         if self.nn is None:
-            self.ys.append([result.net_motion])
+            if y > self.dist_eps:
+                self.gps['narrow']['data']['xs'].append(x)
+                self.gps['narrow']['data']['ys'].append([y])
+                self.dt['data']['ys'].append([1.0])
+            else:
+                self.gps['wide']['data']['xs'].append(x)
+                self.gps['wide']['data']['ys'].append([y])
+                self.dt['data']['ys'].append([0.0])
         else:
+            # TODO: Make this work with mutliple GPs and NN.
             policy_type = result.policy_params.type
             inputs = self.optim._optim_result_to_torch(policy_type,
                                                        self.xs[-1],
@@ -521,7 +610,14 @@ class UCB_Interaction(object):
             self.ys.append([result.net_motion - nn_pred])
 
         self.moves.append([result.net_motion])
-        self.gp.fit(np.array(self.xs), np.array(self.ys))
+
+        # Fit each of our models.
+        self.dt['model'].fit(self.dt['data']['xs'], self.dt['data']['ys'])
+        for name in ['narrow', 'wide']:
+            if len(self.gps[name]['data']['xs']) > 0:
+                self.gps[name]['model'].fit(np.array(self.gps[name]['data']['xs']),
+                                            np.array(self.gps[name]['data']['ys']))
+
         # (4) Visualize GP.
         # if self.ix % 1 == 0 and self.plot:
         #     params = mech.get_mechanism_tuple().params
@@ -935,9 +1031,9 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
         # viz_plots(sampler.xs, sampler.ys, sampler.gp)
 
     if ret_regret:
-        return dataset, sampler.gp, regret
+        return dataset, sampler.gps, regret
     else:
-        return dataset, sampler.gp
+        return dataset, sampler.gps
 
 
 def viz_radius_plots(xs, gp):
