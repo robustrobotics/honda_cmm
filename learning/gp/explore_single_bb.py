@@ -315,10 +315,10 @@ class UCB_Interaction(object):
             WhiteKernel(noise_level=noise,
                         noise_level_bounds=(1e-5, 1e2))
 
-    def sample(self, stochastic=False):
+    def sample(self, random_policies, stochastic=False):
         # If self.nn is None then make sure each policy type has been
         # attempted at least once
-        if self.nn is None:
+        if self.nn is None and random_policies:
             for policy_class, policy_type in zip([Prismatic, Revolute], \
                                                 ['Prismatic', 'Revolute']):
                 if len(self.xs[policy_type]) < 1:
@@ -530,7 +530,7 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
                 return dataset, sampler.gps, ix
 
         # sample a policy
-        x, policy = sampler.sample(stochastic=args.stochastic)
+        x, policy = sampler.sample(args.random_policies, stochastic=args.stochastic)
 
         # execute
         traj = policy.generate_trajectory(pose_handle_base_world, debug=debug)
