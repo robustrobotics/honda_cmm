@@ -72,6 +72,27 @@ def get_bb_dataset(bb_fname, n_bbs, mech_types, max_mech, urdf_num):
         bb_dataset = read_from_file(bb_fname)
     return bb_dataset
 
+
+def get_true_ys(X_pred, mech, policy_params):
+    Y_pred = np.zeros((X_pred.shape[0]))
+    viz = False
+    debug = False
+    for i, x in enumerate(X_pred):
+        policy = policies.get_policy_from_x(mech, x, policy_params)
+        width, height = 0.6, 0.6
+        bb = BusyBox.get_busybox(width, height, [mech])
+        _, gripper = setup_env(bb, viz, debug, True)
+
+        # calculate trajectory
+        pose_handle_base_world = mech.get_pose_handle_base_world()
+        traj = policy.generate_trajectory(pose_handle_base_world, debug)
+
+        # execute trajectory
+        _, net_motion, _ = gripper.execute_trajectory(traj, mech, policy.type, False)
+        Y_pred[i] = net_motion
+        gripper.reset(mech)
+    return Y_pred
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--viz', action='store_true')
