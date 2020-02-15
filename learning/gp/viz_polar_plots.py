@@ -4,14 +4,16 @@ import torch
 import os
 import itertools
 from functools import reduce
-from actions.policies import Policy
+from actions.policies import Policy, PolicyParams
 from utils import util
 from learning.dataloaders import PolicyDataset, parse_pickle_file
 from collections import namedtuple
 from actions.policies import Prismatic, Revolute
+from gen.generate_policy_data import get_true_ys
+
 PlotData = namedtuple('PlotData', 'param_name varied range')
 
-def viz_circles(image_data, mech, beta, sample_points={}, opt_points=[], \
+def viz_circles(plot_mode, image_data, mech, beta=None, sample_points={}, opt_points=[], \
                 gps=None, nn=None, bb_i=0, plot_dir_prefix=''):
     # make figure of an image of the mechanism
     plt.ion()
@@ -19,12 +21,15 @@ def viz_circles(image_data, mech, beta, sample_points={}, opt_points=[], \
     w, h, im = image_data
     np_im = np.array(im, dtype=np.uint8).reshape(h, w, 3)
     ax.imshow(np_im)
+    policy_types = ['Prismatic', 'Revolute']
 
-    for policy_type, gp in gps.items():
+    for policy_type in policy_types:
+        if plot_mode == util.GP_PLOT or plot_mode == util.GP_NN_PLOT:
+            gp = gps[policy_type]
         all_param_data = Policy.get_param_data(policy_type)
 
         n_angular = 40
-        n_linear = 20
+        n_linear = 20 # NOTE: Must be an even number!!!
         N_BINS = 5
         n_params = len([name for name, param_data in all_param_data.items() if param_data.varied])
 
@@ -50,6 +55,7 @@ def viz_circles(image_data, mech, beta, sample_points={}, opt_points=[], \
                 # TODO: only works for up to 2 other_params (will have to figure out new
                 # visualization past that)
                 mean_fig = plt.figure()
+                mean_fig_axes = []
                 plt.suptitle(policy_type + ' mean fn:' + angular_param.param_name + \
                                 ' vs ' + linear_param.param_name)
 
@@ -111,21 +117,25 @@ def viz_circles(image_data, mech, beta, sample_points={}, opt_points=[], \
                             xpred_rowi += 1
 
                     Y_pred = np.zeros((X_pred.shape[0]))
-                    if gp is not None:
+                    if plot_mode == util.GP_PLOT:
                         Y_pred_gp, Y_std = gp.predict(X_pred, return_std=True)
                         Y_pred = np.add(Y_pred, Y_pred_gp.squeeze())
                         Y_std = Y_std.squeeze()
                         std_colors = Y_std.reshape(n_angular, n_linear)
-                    if nn is not None:
+                    if plot_mode == util.GP_NN_PLOT:
                         loader = format_batch(policy_type, X_pred, mech, image_data)
                         k, x, im, _, _ = next(iter(loader))
                         pol = torch.Tensor([util.name_lookup[k[0]]])
                         nn_preds = nn(pol, x.float(), im)[0].detach().numpy()
                         Y_pred = np.add(Y_pred, nn_preds.squeeze())
+                    if plot_mode == util.GROUND_TRUTH_PLOT:
+                        Y_pred = get_true_ys(X_pred, mech, \
+                                    PolicyParams(policy_type, None, all_param_data))
                     mean_colors = Y_pred.reshape(n_angular, n_linear)
 
-                    ucb = np.add(Y_pred, np.sqrt(beta) * Y_std)
-                    ucb_colors = ucb.reshape(n_angular, n_linear)
+                    if plot_mode == util.GP_PLOT:
+                        ucb = np.add(Y_pred, np.sqrt(beta) * Y_std)
+                        ucb_colors = ucb.reshape(n_angular, n_linear)
 
                     if len(single_subplot_inds_and_vals) == 0:
                         subplot_num = 1
@@ -138,6 +148,7 @@ def viz_circles(image_data, mech, beta, sample_points={}, opt_points=[], \
 
                     # make polar subplot of mean function
                     ax = mean_fig.add_subplot(n_rows, n_cols, subplot_num, projection='polar')
+                    mean_fig_axes.append(ax)
                     ax.set_title('\n'.join([str(all_other_params[other_param_i].param_name)
                         + ' = ' + str("%.2f" % other_val) for other_param_i,
                         (subplot_i, other_val) in enumerate(single_subplot_inds_and_vals)]),
@@ -147,14 +158,14 @@ def viz_circles(image_data, mech, beta, sample_points={}, opt_points=[], \
                     # only add points to subplot that are close to this subplot "bin"
                     plot_points = []
                     pt_colors = sample_points[policy_type]
-                    if not opt_points == []:
-                        print(opt_points)
-                        pt_colors.append(opt_points[1] if opt_points[0] == policy_type else [][0])
+                    if not opt_points == [] and opt_points[0] == policy_type:
+                        #TODO: something on this line is broken
+                        pt_colors += opt_points[1]
                     if subplot_inds_and_vals == {}:
                         plot_points = [(get_plot_point(x,
                                                         angular_param.param_name,
                                                         linear_param.param_name,
-                                                        all_param_data), c)
+                                                        all_param_data, policy_type), c)
                                                             for (x, c) in pt_colors]
                     else:
                         for pt, color in pt_colors:
@@ -169,15 +180,16 @@ def viz_circles(image_data, mech, beta, sample_points={}, opt_points=[], \
                                     keep_point = keep_point and True
                                 else:
                                     keep_point = keep_point and False
-                            if keep_point: plot_points.append((get_plot_point(pt,
-                                                                angular_param.param_name,
-                                                                linear_param.param_name,
-                                                                all_param_data), color))
+                            if keep_point:
+                                plot_points.append((get_plot_point(pt,
+                                                            angular_param.param_name,
+                                                            linear_param.param_name,
+                                                            all_param_data, policy_type), color))
 
                     mean_im = polar_plots(ax, mean_colors, max_dist, angular_param,
                                      linear_param, points=plot_points)
 
-                    if gp is not None:
+                    if plot_mode == util.GP_PLOT or plot_mode == util.GP_NN_PLOT:
                         # make polar subplot of std dev
                         ax = std_fig.add_subplot(n_rows, n_cols, subplot_num, projection='polar')
                         ax.set_title('\n'.join([str(all_other_params[other_param_i].param_name)
@@ -201,7 +213,7 @@ def viz_circles(image_data, mech, beta, sample_points={}, opt_points=[], \
                 add_colorbar(mean_fig, mean_im)
                 plot_list = [('mean', mean_fig)]
 
-                if gp is not None:
+                if plot_mode == util.GP_PLOT or plot_mode == util.GP_NN_PLOT:
                     add_colorbar(std_fig, std_im)
                     plot_list.append(('std_dev', std_fig))
                     add_colorbar(ucb_fig, ucb_im)
@@ -209,7 +221,7 @@ def viz_circles(image_data, mech, beta, sample_points={}, opt_points=[], \
 
                 for plot_type, fig in plot_list:
                     # folder for all plot figures
-                    plot_dir = 'gp_plots/'
+                    plot_dir = 'plots/'
                     if not os.path.isdir(plot_dir):
                         os.mkdir(plot_dir)
                     # (optionally) another folder set with --plot-dir
@@ -236,6 +248,8 @@ def viz_circles(image_data, mech, beta, sample_points={}, opt_points=[], \
                     # file name is the interaction number
                     sample_num = sum([len(sample_points[pt]) for pt in sample_points])
                     fig.savefig(plot_dir+'/%i.png' % sample_num)
+    util.write_to_file('mean_fig.pickle', [mean_fig, mean_fig_axes, \
+                        all_param_data, all_angular_params, all_linear_params])
 
 def polar_plots(ax, colors, vmax, angular_param, linear_param, points=None):
     n_ang, n_lin = colors.shape
@@ -267,13 +281,9 @@ def polar_plots(ax, colors, vmax, angular_param, linear_param, points=None):
     cbar = ax.pcolormesh(thp, rp, cp, vmin=0, vmax=vmax, cmap='viridis')
     ax.tick_params(axis='x', colors='white')
     ax.set_yticklabels([])
-
-    if not points is None:
-        for (point, c) in points:
-            ax.scatter(*point, c=c, s=3)
+    add_points(ax, points)
 
     return cbar
-
 
 def add_colorbar(fig, im):
     fig.subplots_adjust(right=0.8)
@@ -298,12 +308,127 @@ def format_batch(ptype, x_pred, mech, image_data):
 
 
 # takes in an x and returns the values to be plotted
-def get_plot_point(x, angular_name, linear_name, all_param_data):
+def get_plot_point(x, angular_name, linear_name, all_param_data, policy_type):
+    if policy_type == 'Prismatic':
+        flipped = False
+        xi = 0
+        for (param_name, param_data) in all_param_data.items():
+            if param_data.varied:
+                if param_name == 'goal_config':
+                    if x[xi] < 0.0:
+                        flipped = True
+                xi += 1
+
     xi = 0
     point = []
     for (param_name, param_data) in all_param_data.items():
         if param_data.varied:
             if param_name == angular_name or param_name == linear_name:
-                point.append(x[xi])
+                if policy_type == 'Prismatic and flipped:
+                    if param_name == 'pitch':
+                        point.append(x[xi] - np.pi)
+                    if param_name == 'goal_config':
+                        point.append(-1*x[xi])
+                else:
+                    point.append(x[xi])
             xi += 1
     return point
+
+def add_points(ax, points):
+    if not points is None:
+        for (point, c) in points:
+            ax.scatter(*point, c=c, s=3)
+
+def add_points_to_saved_ax(explr_p, sample_points={}):
+    fname = 'mean_fig.pickle'
+    fig, axes, all_param_data, all_angular_params, all_linear_params = util.read_from_file(fname)
+    policy_type = 'Prismatic'
+
+    curr_ax_i = 0
+    for angular_param in all_angular_params:
+        if not angular_param.varied:
+            continue
+        for linear_param in all_linear_params:
+            if not linear_param.varied:
+                continue
+
+            # TODO: only works for up to 2 other_params (will have to figure out new
+            # visualization past that)
+
+            plt.suptitle(policy_type + ' mean fn:' + angular_param.param_name + \
+                            ' vs ' + linear_param.param_name)
+
+            # bin the other param values
+            all_other_params = [PlotData(param_name, param_data.varied, param_data.bounds)
+                                    for (param_name, param_data) in all_param_data.items()
+                                    if param_name != angular_param.param_name
+                                        and param_name != linear_param.param_name
+                                        and param_data.varied]
+
+            subplot_inds_and_vals = {}
+            for other_param in all_other_params:
+                subplot_inds_and_vals[other_param.param_name] = \
+                    list(enumerate(np.linspace(*other_param.range, N_BINS)))
+
+            if len(subplot_inds_and_vals) == 0:
+                n_rows = 1
+                n_cols = 1
+            else:
+                keys = list(subplot_inds_and_vals.keys())
+                if len(subplot_inds_and_vals) == 1:
+                    n_rows = 1
+                    n_cols = len(subplot_inds_and_vals[keys[0]])
+                elif len(subplot_inds_and_vals) == 2:
+                    n_rows = len(subplot_inds_and_vals[keys[0]])
+                    n_cols = len(subplot_inds_and_vals[keys[1]])
+
+            for single_subplot_inds_and_vals in itertools.product(*subplot_inds_and_vals.values()):
+                if len(single_subplot_inds_and_vals) == 0:
+                    subplot_num = 1
+                else:
+                    row_col = [o[0]+1 for o in single_subplot_inds_and_vals]
+                    if len(row_col) == 1:
+                        subplot_num = 1*row_col[0]
+                    else:
+                        subplot_num = reduce(lambda x, y: n_cols*(x-1)+y, row_col)
+
+            # make polar subplot of mean function
+            axes[curr_ax_i].set_title('\n'.join([str(all_other_params[other_param_i].param_name)
+                + ' = ' + str("%.2f" % other_val) for other_param_i,
+                (subplot_i, other_val) in enumerate(single_subplot_inds_and_vals)]),
+                fontsize=10)
+
+            # only add points to subplot that are close to this subplot "bin"
+            plot_points = []
+            pt_colors = sample_points[policy_type]
+            if subplot_inds_and_vals == {}:
+                plot_points = [(get_plot_point(x,
+                                                angular_param.param_name,
+                                                linear_param.param_name,
+                                                all_param_data, policy_type), c)
+                                                    for (x, c) in pt_colors]
+            else:
+                for pt, color in pt_colors:
+                    keep_point = True
+                    for other_param_name, (subplot_dim, subplot_val) in  \
+                            zip(subplot_inds_and_vals, single_subplot_inds_and_vals):
+                        all_subplot_vals = np.array([inds_and_vals[1] for
+                                inds_and_vals in subplot_inds_and_vals[other_param_name]])
+                        point_param_val = pt[x_inds[other_param_name]]
+                        closest_index = (np.abs(all_subplot_vals - point_param_val)).argmin()
+                        if all_subplot_vals[closest_index] == subplot_val:
+                            keep_point = keep_point and True
+                        else:
+                            keep_point = keep_point and False
+                    if keep_point: plot_points.append((get_plot_point(pt,
+                                                        angular_param.param_name,
+                                                        linear_param.param_name,
+                                                        all_param_data, policy_type), color))
+            add_points(axes[curr_ax_i], plot_points)
+            curr_ax_i += 1
+
+    #plt.show()
+    fig.savefig('voo_testing/omega_%f.png' % explr_p)
+
+if __name__ == '__main__':
+    add_points_to_saved_ax()

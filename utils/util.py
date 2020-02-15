@@ -39,6 +39,10 @@ Result contains the performance information after the gripper tries to move a me
 :param no_gripper: bool, if True then forces were applied directly to handle
 """
 
+GP_PLOT = 0
+GP_NN_PLOT = 1
+GROUND_TRUTH_PLOT = 2
+
 def compare_results(list_a, list_b):
     """ Compare two lists of utils.util.Results.
 
