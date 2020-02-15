@@ -434,6 +434,24 @@ def get_policy_from_tuple(policy_params):
                     params['pitch'], params['yaw'], params['goal_config'], param_data)
     return policy
 
+
+# takes in an optimization x and returns a policy
+# TODO: include all params in x to pass into _gen() so aren't relying on correct
+# default values for non-varied params
+def get_policy_from_x(mech, x, policy_params):
+    param_data = policy_params.param_data
+    x_dict = OrderedDict()
+    i = 0
+    for param in param_data:
+        if param_data[param].varied:
+            x_dict[param] = x[i]
+            i += 1
+    if policy_params.type == 'Revolute':
+        policy = Revolute._gen(mech, x_dict=x_dict)
+    elif policy_params.type == 'Prismatic':
+        policy = Prismatic._gen(mech, x_dict=x_dict)
+    return policy
+
 ## Helper Functions
 def _random_p(bb):
     bb_center = bb.get_center_pos()

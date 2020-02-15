@@ -19,28 +19,12 @@ import operator
 import torch
 from learning.dataloaders import PolicyDataset, parse_pickle_file
 from gen.generate_policy_data import get_bb_dataset
-from actions.policies import Policy, generate_policy, Revolute, Prismatic, get_policy_from_tuple
+from actions.policies import Policy, generate_policy, Revolute, Prismatic, \
+                                    get_policy_from_tuple, get_policy_from_x
 from learning.gp.viz_doors import viz_3d_plots
 from learning.gp.viz_polar_plots import viz_circles
 
 BETA = 5
-
-# takes in an optimization x and returns a policy
-# TODO: include all params in x to pass into _gen() so aren't relying on correct
-# default values for non-varied params
-def get_policy_from_x(mech, x, policy_params):
-    param_data = policy_params.param_data
-    x_dict = OrderedDict()
-    i = 0
-    for param in param_data:
-        if param_data[param].varied:
-            x_dict[param] = x[i]
-            i += 1
-    if policy_params.type == 'Revolute':
-        policy = Revolute._gen(mech, x_dict=x_dict)
-    elif policy_params.type == 'Prismatic':
-        policy = Prismatic._gen(mech, x_dict=x_dict)
-    return policy
 
 # takes in a policy and returns and optimization x and the variable bounds
 def get_x_and_bounds_from_tuple(policy_params):
@@ -512,7 +496,8 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
             # if done sampling n_interactions
             if (not n_interactions is None) and ix==n_interactions:
                 if plot:
-                    viz_circles(image_data,
+                    viz_circles(util.GP_PLOT,
+                                image_data,
                                 mech,
                                 BETA,
                                 sample_points=sample_points,
@@ -532,7 +517,8 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
             elif (not success_regret is None) and \
                             ((regret < success_regret) or (ix > 100)):
                 if plot:
-                    viz_circles(image_data,
+                    viz_circles(util.GP_PLOT,
+                                image_data,
                                 mech,
                                 BETA,
                                 sample_points=sample_points,
@@ -559,11 +545,12 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
         # update GP
         sampler.update(result, x)
         # uncomment to generate a plot after each sample (WARNING: VERY SLOW!)
-
+        '''
         if plot:
             sample_points = {'Prismatic': [(sample, 'k') for sample in sampler.xs['Prismatic']],
                             'Revolute': [(sample, 'k') for sample in sampler.xs['Revolute']]}
-            viz_circles(image_data,
+            viz_circles(util.GP_PLOT,
+                        image_data,
                         mech,
                         BETA,
                         sample_points=sample_points,
@@ -576,6 +563,7 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
             input('Enter to close')
             plt.close()
 
+        '''
         '''
         # this code has not been updated since refactor
         if ix % 10 == 0:
