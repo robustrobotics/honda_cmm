@@ -723,7 +723,7 @@ def plot_results(file_name, model, hdim):
     data = None
     if file_name:
         data = util.read_from_file(file_name)
-        print_stats(data)
+        #print_stats(data)
     if model is not None:
         model = util.load_model(model, hdim, model_type='polvis')
 

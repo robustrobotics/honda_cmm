@@ -12,6 +12,10 @@ from actions.policies import Prismatic, Revolute
 from gen.generate_policy_data import get_true_ys
 
 PlotData = namedtuple('PlotData', 'param_name varied range')
+N_BINS = 5
+
+n_angular = 40
+n_linear = 20 # NOTE: Must be an even number!!!
 
 def viz_circles(plot_mode, image_data, mech, beta=None, sample_points={}, opt_points=[], \
                 gps=None, nn=None, bb_i=0, plot_dir_prefix=''):
@@ -22,15 +26,14 @@ def viz_circles(plot_mode, image_data, mech, beta=None, sample_points={}, opt_po
     np_im = np.array(im, dtype=np.uint8).reshape(h, w, 3)
     ax.imshow(np_im)
     policy_types = ['Prismatic', 'Revolute']
+    mean_figs = []
+    all_mean_axes = []
 
     for policy_type in policy_types:
         if plot_mode == util.GP_PLOT or plot_mode == util.GP_NN_PLOT:
             gp = gps[policy_type]
         all_param_data = Policy.get_param_data(policy_type)
 
-        n_angular = 40
-        n_linear = 20 # NOTE: Must be an even number!!!
-        N_BINS = 5
         n_params = len([name for name, param_data in all_param_data.items() if param_data.varied])
 
         all_angular_params = [PlotData(param_name, param_data.varied, param_data.bounds)
@@ -55,6 +58,7 @@ def viz_circles(plot_mode, image_data, mech, beta=None, sample_points={}, opt_po
                 # TODO: only works for up to 2 other_params (will have to figure out new
                 # visualization past that)
                 mean_fig = plt.figure()
+                mean_figs.append(mean_fig)
                 mean_fig_axes = []
                 plt.suptitle(policy_type + ' mean fn:' + angular_param.param_name + \
                                 ' vs ' + linear_param.param_name)
@@ -212,6 +216,7 @@ def viz_circles(plot_mode, image_data, mech, beta=None, sample_points={}, opt_po
 
                 add_colorbar(mean_fig, mean_im)
                 plot_list = [('mean', mean_fig)]
+                all_mean_axes.append(mean_fig_axes)
 
                 if plot_mode == util.GP_PLOT or plot_mode == util.GP_NN_PLOT:
                     add_colorbar(std_fig, std_im)
@@ -248,7 +253,7 @@ def viz_circles(plot_mode, image_data, mech, beta=None, sample_points={}, opt_po
                     # file name is the interaction number
                     sample_num = sum([len(sample_points[pt]) for pt in sample_points])
                     fig.savefig(plot_dir+'/%i.png' % sample_num)
-    util.write_to_file('mean_fig.pickle', [mean_fig, mean_fig_axes, \
+    util.write_to_file('mean_fig_door.pickle', [mean_figs, all_mean_axes, \
                         all_param_data, all_angular_params, all_linear_params])
 
 def polar_plots(ax, colors, vmax, angular_param, linear_param, points=None):
@@ -324,7 +329,7 @@ def get_plot_point(x, angular_name, linear_name, all_param_data, policy_type):
     for (param_name, param_data) in all_param_data.items():
         if param_data.varied:
             if param_name == angular_name or param_name == linear_name:
-                if policy_type == 'Prismatic and flipped:
+                if policy_type == 'Prismatic' and flipped:
                     if param_name == 'pitch':
                         point.append(x[xi] - np.pi)
                     if param_name == 'goal_config':
@@ -339,96 +344,129 @@ def add_points(ax, points):
         for (point, c) in points:
             ax.scatter(*point, c=c, s=3)
 
-def add_points_to_saved_ax(explr_p, sample_points={}):
-    fname = 'mean_fig.pickle'
-    fig, axes, all_param_data, all_angular_params, all_linear_params = util.read_from_file(fname)
-    policy_type = 'Prismatic'
-
-    curr_ax_i = 0
-    for angular_param in all_angular_params:
-        if not angular_param.varied:
-            continue
-        for linear_param in all_linear_params:
-            if not linear_param.varied:
+def add_points_to_saved_ax(explr_p=1.0, sample_points={}):
+    fname = 'mean_fig_door.pickle'
+    figs, axes, all_param_data, all_angular_params, all_linear_params = util.read_from_file(fname)
+    figs = figs[1:]
+    axes = axes[1:]
+    curr_fig = 0
+    for policy_type in ['Revolute']:#'Prismatic'
+        n_params = len([name for name, param_data in all_param_data.items() if param_data.varied])
+        for angular_param in all_angular_params:
+            if not angular_param.varied:
                 continue
+            for linear_param in all_linear_params:
+                if not linear_param.varied:
+                    continue
 
-            # TODO: only works for up to 2 other_params (will have to figure out new
-            # visualization past that)
+                linear_vals = np.linspace(*linear_param.range, n_linear)
+                angular_vals = np.linspace(*angular_param.range, n_angular)
+                l, a = np.meshgrid(linear_vals, angular_vals)
 
-            plt.suptitle(policy_type + ' mean fn:' + angular_param.param_name + \
-                            ' vs ' + linear_param.param_name)
+                # TODO: only works for up to 2 other_params (will have to figure out new
+                # visualization past that)
 
-            # bin the other param values
-            all_other_params = [PlotData(param_name, param_data.varied, param_data.bounds)
-                                    for (param_name, param_data) in all_param_data.items()
-                                    if param_name != angular_param.param_name
-                                        and param_name != linear_param.param_name
-                                        and param_data.varied]
+                plt.suptitle(policy_type + ' mean fn:' + angular_param.param_name + \
+                                ' vs ' + linear_param.param_name)
 
-            subplot_inds_and_vals = {}
-            for other_param in all_other_params:
-                subplot_inds_and_vals[other_param.param_name] = \
-                    list(enumerate(np.linspace(*other_param.range, N_BINS)))
+                # bin the other param values
+                all_other_params = [PlotData(param_name, param_data.varied, param_data.bounds)
+                                        for (param_name, param_data) in all_param_data.items()
+                                        if param_name != angular_param.param_name
+                                            and param_name != linear_param.param_name
+                                            and param_data.varied]
 
-            if len(subplot_inds_and_vals) == 0:
-                n_rows = 1
-                n_cols = 1
-            else:
-                keys = list(subplot_inds_and_vals.keys())
-                if len(subplot_inds_and_vals) == 1:
+                subplot_inds_and_vals = {}
+                for other_param in all_other_params:
+                    subplot_inds_and_vals[other_param.param_name] = \
+                        list(enumerate(np.linspace(*other_param.range, N_BINS)))
+
+                if len(subplot_inds_and_vals) == 0:
                     n_rows = 1
-                    n_cols = len(subplot_inds_and_vals[keys[0]])
-                elif len(subplot_inds_and_vals) == 2:
-                    n_rows = len(subplot_inds_and_vals[keys[0]])
-                    n_cols = len(subplot_inds_and_vals[keys[1]])
-
-            for single_subplot_inds_and_vals in itertools.product(*subplot_inds_and_vals.values()):
-                if len(single_subplot_inds_and_vals) == 0:
-                    subplot_num = 1
+                    n_cols = 1
                 else:
-                    row_col = [o[0]+1 for o in single_subplot_inds_and_vals]
-                    if len(row_col) == 1:
-                        subplot_num = 1*row_col[0]
+                    keys = list(subplot_inds_and_vals.keys())
+                    if len(subplot_inds_and_vals) == 1:
+                        n_rows = 1
+                        n_cols = len(subplot_inds_and_vals[keys[0]])
+                    elif len(subplot_inds_and_vals) == 2:
+                        n_rows = len(subplot_inds_and_vals[keys[0]])
+                        n_cols = len(subplot_inds_and_vals[keys[1]])
+
+                curr_ax_i = 0
+                for single_subplot_inds_and_vals in itertools.product(*subplot_inds_and_vals.values()):
+                    x_inds = {}
+                    X_pred = np.zeros((n_angular*n_linear, n_params))
+                    xpred_rowi = 0
+                    for ix in range(0, n_angular):
+                        for jx in range(0, n_linear):
+                            x = []
+                            for param_name, param_data in all_param_data.items():
+                                if param_data.varied:
+                                    if param_name == angular_param.param_name:
+                                        x.append(angular_vals[ix])
+                                    elif param_name == linear_param.param_name:
+                                        x.append(linear_vals[jx])
+                                    else:
+                                        for name, (ind, val) in \
+                                                zip(subplot_inds_and_vals, \
+                                                    single_subplot_inds_and_vals):
+                                            if param_name == name:
+                                                x.append(val)
+                                                x_inds[name] = len(x) - 1
+                            X_pred[xpred_rowi,:] = x
+                            xpred_rowi += 1
+
+                    if len(single_subplot_inds_and_vals) == 0:
+                        subplot_num = 1
                     else:
-                        subplot_num = reduce(lambda x, y: n_cols*(x-1)+y, row_col)
-
-            # make polar subplot of mean function
-            axes[curr_ax_i].set_title('\n'.join([str(all_other_params[other_param_i].param_name)
-                + ' = ' + str("%.2f" % other_val) for other_param_i,
-                (subplot_i, other_val) in enumerate(single_subplot_inds_and_vals)]),
-                fontsize=10)
-
-            # only add points to subplot that are close to this subplot "bin"
-            plot_points = []
-            pt_colors = sample_points[policy_type]
-            if subplot_inds_and_vals == {}:
-                plot_points = [(get_plot_point(x,
-                                                angular_param.param_name,
-                                                linear_param.param_name,
-                                                all_param_data, policy_type), c)
-                                                    for (x, c) in pt_colors]
-            else:
-                for pt, color in pt_colors:
-                    keep_point = True
-                    for other_param_name, (subplot_dim, subplot_val) in  \
-                            zip(subplot_inds_and_vals, single_subplot_inds_and_vals):
-                        all_subplot_vals = np.array([inds_and_vals[1] for
-                                inds_and_vals in subplot_inds_and_vals[other_param_name]])
-                        point_param_val = pt[x_inds[other_param_name]]
-                        closest_index = (np.abs(all_subplot_vals - point_param_val)).argmin()
-                        if all_subplot_vals[closest_index] == subplot_val:
-                            keep_point = keep_point and True
+                        row_col = [o[0]+1 for o in single_subplot_inds_and_vals]
+                        if len(row_col) == 1:
+                            subplot_num = 1*row_col[0]
                         else:
-                            keep_point = keep_point and False
-                    if keep_point: plot_points.append((get_plot_point(pt,
+                            subplot_num = reduce(lambda x, y: n_cols*(x-1)+y, row_col)
+
+                    # make polar subplot of mean function
+                    axes[curr_fig][curr_ax_i].set_title('\n'.join([str(all_other_params[other_param_i].param_name)
+                        + ' = ' + str("%.2f" % other_val) for other_param_i,
+                        (subplot_i, other_val) in enumerate(single_subplot_inds_and_vals)]),
+                        fontsize=10)
+
+                    # only add points to subplot that are close to this subplot "bin"
+                    plot_points = []
+                    pt_colors = sample_points[policy_type]
+                    if subplot_inds_and_vals == {}:
+                        plot_points = [(get_plot_point(x,
                                                         angular_param.param_name,
                                                         linear_param.param_name,
-                                                        all_param_data, policy_type), color))
-            add_points(axes[curr_ax_i], plot_points)
-            curr_ax_i += 1
+                                                        all_param_data, policy_type), c)
+                                                            for (x, c) in pt_colors]
+                    else:
+                        for pt, color in pt_colors:
+                            keep_point = True
+                            for other_param_name, (subplot_dim, subplot_val) in  \
+                                    zip(subplot_inds_and_vals, single_subplot_inds_and_vals):
+                                all_subplot_vals = np.array([inds_and_vals[1] for
+                                        inds_and_vals in subplot_inds_and_vals[other_param_name]])
+                                point_param_val = pt[x_inds[other_param_name]]
+                                closest_index = (np.abs(all_subplot_vals - point_param_val)).argmin()
+                                if all_subplot_vals[closest_index] == subplot_val:
+                                    keep_point = keep_point and True
+                                else:
+                                    keep_point = keep_point and False
+                            if keep_point: plot_points.append((get_plot_point(pt,
+                                                                angular_param.param_name,
+                                                                linear_param.param_name,
+                                                                all_param_data, policy_type), color))
+                    #print(len(axes), len(axes[0]), curr_fig, curr_ax_i)
+                    add_points(axes[curr_fig][curr_ax_i], plot_points)
+
+                    curr_ax_i += 1
+                curr_fig += 1
 
     #plt.show()
-    fig.savefig('voo_testing/omega_%f.png' % explr_p)
+    for fi, fig in enumerate(figs):
+        fig.savefig('voo_testing/gpucb/omega_%f_%i_doors.png' % (explr_p, fi))
 
 if __name__ == '__main__':
     add_points_to_saved_ax()

@@ -465,6 +465,19 @@ def quaternion_from_euler(roll, pitch, yaw):
     return to_pyquat(trans_q)
 
 if __name__ == '__main__':
-    train_data = read_from_file('square_bb_100.pickle')
-    test_data = read_from_file('prism_gp_evals.pickle')
-    viz_train_test_data(train_data, test_data)
+    '''
+    all_voo_data = read_from_file('voo_200M_100L_hybrid_gaussian_p2explr_p.pickle')
+    door_image_data = read_from_file('100_train_doors.pickle')
+    all_new_voo_data = []
+    for i, bb_results in enumerate(all_voo_data):
+        new_bb_results = []
+        for result in bb_results:
+            new_result = Result(result.policy_params, result.mechanism_params,
+                            result.net_motion, result.cumu_motion,
+                            result.pose_joint_world_init, result.pose_joint_world_final,
+                            door_image_data[i][0].image_data, result.git_hash, result.no_gripper)
+            new_bb_results.append(new_result)
+        all_new_voo_data.append(new_bb_results)
+    write_to_file('voo_200M_100L_hybrid_gaussian_p2explr_p.pickle', all_new_voo_data)
+    '''
+    data = read_from_file('voo_200M_100L_hybrid_gaussian_p1explr_p.pickle')

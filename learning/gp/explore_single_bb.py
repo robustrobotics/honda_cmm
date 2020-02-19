@@ -22,7 +22,7 @@ from gen.generate_policy_data import get_bb_dataset
 from actions.policies import Policy, generate_policy, Revolute, Prismatic, \
                                     get_policy_from_tuple, get_policy_from_x
 from learning.gp.viz_doors import viz_3d_plots
-from learning.gp.viz_polar_plots import viz_circles
+from learning.gp.viz_polar_plots import viz_circles, add_points_to_saved_ax
 
 BETA = 5
 
@@ -209,9 +209,9 @@ class GPOptimizer(object):
 
 
         # TODO: Make sure the policy appears correctly here.
-        x0, bounds = get_x_and_bounds_from_tuple(policy_params_max)
+        x, bounds = get_x_and_bounds_from_tuple(policy_params_max)
         policy = get_policy_from_tuple(policy_params_max)
-        return policy
+        return x, policy
 
     def optimize_gp(self, ucb):
         """
@@ -293,7 +293,7 @@ class UCB_Interaction(object):
                                 ('goal_config', 0.10)])
         elif type == 'Revolute':
             kernel_ls_params = OrderedDict([('rot_axis_roll', 0.10),
-                                ('rot_axis_pitch', 0.10),
+                                ('rot_axis_pitch', 0.50),
                                 ('rot_axis_yaw', 0.10),
                                 ('radius_x', 0.04), # 0.09  # 0.05
                                 ('goal_config', 0.5)]) # Keep greater than 0.5
@@ -496,6 +496,9 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
             # if done sampling n_interactions
             if (not n_interactions is None) and ix==n_interactions:
                 if plot:
+                    plot_points(image_data, mech, sample_points, dataset)
+
+                    '''
                     viz_circles(util.GP_PLOT,
                                 image_data,
                                 mech,
@@ -509,6 +512,7 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
                     plt.show()
                     input('Enter to close')
                     plt.close()
+                    '''
                 if ret_regret:
                     return dataset, sampler.gps, regret
                 else:
@@ -674,6 +678,22 @@ def viz_plots(xs, gp):
     axes[0].set_xlabel('roll')
     plt.show()
 
+def plot_points(image_data, mech, points, dataset):
+    import matplotlib.pyplot as plt
+    plt.ion()
+
+    # below to add points to an existing mean_fig pickle
+    add_points_to_saved_ax(sample_points=points)
+
+    from utils.plot_results import MechanismMotion
+    #plot_voo(image_data, bb._mechanisms[0], evaled_x, bb_i, explr_p)
+
+    fig = plt.figure()
+    hist_plot = MechanismMotion()
+    hist_plot._plot([dataset], None)
+    plt.show()
+    input('enter to close plots')
+    plt.close('all')
 
 # this executive is for generating GP-UCB interactions from no search_parent_directories
 # typically used to generate datasets for training, but can also be used in the L=0
