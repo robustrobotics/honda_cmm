@@ -164,5 +164,5 @@ if __name__ == '__main__':
     if args.debug:
         import pdb; pdb.set_trace()
 
-    #evaluate_models(args.T, args.N, args)
-    evaluate_models_noT(args.N, args)
+    evaluate_models(args.T, args.N, args)
+    #evaluate_models_noT(args.N, args)
