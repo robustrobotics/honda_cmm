@@ -24,7 +24,7 @@ Pose represents an SE(3) pose
 
 Result = namedtuple('Result', 'policy_params mechanism_params net_motion cumu_motion \
                         pose_joint_world_init pose_joint_world_final image_data \
-                        git_hash no_gripper')
+                        git_hash use_gripper')
 """
 Result contains the performance information after the gripper tries to move a mechanism
 :param policy_params: actions.policies.PolicyParams
@@ -36,7 +36,7 @@ Result contains the performance information after the gripper tries to move a me
                     gripper tip is in contact with the mechanism at completion, else None
 :param image_data: utils.util.ImageData
 :param git_hash: None or str representing the git hash when the data was collected
-:param no_gripper: bool, if True then forces were applied directly to handle
+:param use_gripper: bool, if False then forces were applied directly to handle
 """
 
 GP_PLOT = 0
@@ -312,7 +312,7 @@ def replay_result(result):
     from actions.policies import get_policy_from_tuple
 
     bb = BusyBox.bb_from_result(result)
-    image_data, gripper = setup_env(bb, True, True, result.no_gripper)
+    image_data, gripper = setup_env(bb, True, True, result.use_gripper)
     mech = bb._mechanisms[0]
     policy = get_policy_from_tuple(result.policy_params)
     pose_handle_base_world = mech.get_pose_handle_base_world()

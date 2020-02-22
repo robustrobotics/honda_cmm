@@ -39,7 +39,7 @@ _thresh - threshold
 _M - matrix form of a pose/transformation
 """
 class Gripper:
-    def __init__(self, mech, no_gripper, k=[2000.0,20.0], d=[0.45,0.45]):
+    def __init__(self, mech, use_gripper, k=[2000.0,20.0], d=[0.45,0.45]):
         """
         This class defines the actions a gripper can take such as grasping a handle
         and executing PD control
@@ -48,11 +48,11 @@ class Gripper:
                     (stiffness) gain and the second entry is the angular position gain
         :param d: a vector of length 2 where the first entry is the linear derivative
                     (damping) gain and the second entry is the angular derivative gain
-        :param no_gripper: boolean, if True then apply forces directly to handle,
-                            if False then use grasping and apply force to gripper
+        :param use_gripper: boolean, if False then apply forces directly to handle,
+                            if True then use grasping and apply force to gripper
         """
-        self.no_gripper = no_gripper
-        if not self.no_gripper:
+        self.use_gripper = use_gripper
+        if self.use_gripper:
             self.id = p.loadSDF("models/gripper/gripper_high_fric.sdf")[0]
             self._left_finger_tip_id = 2
             self._right_finger_tip_id = 5
@@ -186,7 +186,7 @@ class Gripper:
         handle_base_ps = []
         for i in itertools.count():
             handle_base_ps.append(mech.get_pose_handle_base_world().p)
-            if not self.no_gripper:
+            if self.use_gripper:
                 self._control_fingers('close', debug=debug)
             if (not last_traj_p) and self._at_des_handle_base_pose(pose_handle_base_world_des, q_offset, mech, 0.01):
                 return handle_base_ps, False
@@ -200,7 +200,7 @@ class Gripper:
             # get position error of the handle base
             p_handle_base_world_err, e_handle_base_world_err = self._get_pose_handle_base_world_error(pose_handle_base_world_des, q_offset, mech)
             # use handle vel or gripper vel to calc velocity error
-            if self.no_gripper:
+            if not self.use_gripper:
                 lin_v_com_world_err = p.getLinkState(mech._get_bb_id(), \
                                                         mech._get_handle_id(),
                                                         computeLinkVelocity=1)[6]
@@ -212,13 +212,13 @@ class Gripper:
                 np.multiply(self.d[0], lin_v_com_world_err)
 
             # only apply torques if using gripper
-            if not self.no_gripper:
+            if self.use_gripper:
                 tau = np.multiply(self.k[1], e_handle_base_world_err) #+ np.multiply(self.d[1], omega_com_world_err)
             else:
                 tau = [0, 0, 0]
             self.errors += [(p_handle_base_world_err, lin_v_com_world_err)]
             self.forces += [(f, tau)]
-            if self.no_gripper:
+            if not self.use_gripper:
                 bb_id = mech._get_bb_id()
                 handle_id = mech._get_handle_id()
                 handle_pos = mech.get_pose_handle_base_world().p
@@ -238,17 +238,17 @@ class Gripper:
             p.stepSimulation()
 
     def set_control_params(self, policy_type):
-        if policy_type == 'Revolute' and self.no_gripper:
+        if policy_type == 'Revolute' and not self.use_gripper:
             # no torque control with no gripper
             self.k = [500.0, 0.0]
             self.d = [-15.0, 0.0]
-        elif policy_type == 'Revolute' and not self.no_gripper:
+        elif policy_type == 'Revolute' and self.use_gripper:
             self.k = [50000.0, 20.0]
             self.d = [0.45, 0.45]
-        elif policy_type == 'Prismatic' and not self.no_gripper:
+        elif policy_type == 'Prismatic' and self.use_gripper:
             self.k = [3000.0, 20.0]
             self.d = [250.0, 0.45]
-        elif policy_type == 'Prismatic' and self.no_gripper:
+        elif policy_type == 'Prismatic' and not self.use_gripper:
             self.k = [30.0, 0.0]
             self.d = [0.0, 0.0]
 
@@ -258,7 +258,7 @@ class Gripper:
 
         # offset between the initial trajectory orientation and the initial handle orientation
         q_offset = util.quat_math(traj[0].q, mech.get_pose_handle_base_world().q, True, False)
-        if not self.no_gripper:
+        if self.use_gripper:
             pose_handle_world_init = mech.get_handle_pose()
             p_tip_world_init = np.add(pose_handle_world_init.p, [0., .015, 0.]) # back up a little for better grasp
             pose_tip_world_init = util.Pose(p_tip_world_init, self.pose_tip_world_reset.q)
@@ -271,7 +271,7 @@ class Gripper:
             if finished:
                 break
         pose_handle_world_final = None
-        if self.no_gripper or self._in_contact(mech):
+        if not self.use_gripper or self._in_contact(mech):
             pose_handle_world_final = mech.get_handle_pose()
         net_motion = 0.0
         if pose_handle_world_final is not None:
@@ -301,5 +301,5 @@ class Gripper:
 
     def reset(self, mech):
         mech.reset()
-        if not self.no_gripper:
+        if self.use_gripper:
             self._set_pose_tip_world(self.pose_tip_world_reset)

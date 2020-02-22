@@ -149,7 +149,7 @@ if __name__ == '__main__':
         type=int,
         help='min max step of Ls')
     parser.add_argument(
-        '--no-gripper',
+        '--use-gripper',
         action='store_true')
     parser.add_argument(
         '--stochastic',

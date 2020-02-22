@@ -222,7 +222,7 @@ if __name__ == '__main__':
         '--nn-fname',
         help='path to model files')
     parser.add_argument(
-        '--no-gripper',
+        '--use-gripper',
         help='use to apply foce directly to handles')
     args = parser.parse_args()
 

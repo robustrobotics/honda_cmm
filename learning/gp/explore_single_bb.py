@@ -95,8 +95,8 @@ def test_model(sampler, args):
     # Execute the policy and observe the true motion.
     debug = False
     viz = False
-    no_gripper = True
-    _, gripper = setup_env(sampler.bb, viz, debug, no_gripper)
+    use_gripper = False
+    _, gripper = setup_env(sampler.bb, viz, debug, use_gripper)
     pose_handle_base_world = sampler.mech.get_pose_handle_base_world()
     traj = stop_policy.generate_trajectory(pose_handle_base_world, debug=debug)
     motion, _, _ = gripper.execute_trajectory(traj, sampler.mech, stop_policy.type, debug=debug)
@@ -472,11 +472,11 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
     dataset = []
     viz = False
     debug = False
-    no_gripper = True
+    use_gripper = False
     # interact with BB
     bb = BusyBox.bb_from_result(bb_result, urdf_num=args.urdf_num)
     mech = bb._mechanisms[0]
-    image_data, gripper = setup_env(bb, viz, debug, no_gripper)
+    image_data, gripper = setup_env(bb, viz, debug, use_gripper)
 
     pose_handle_base_world = mech.get_pose_handle_base_world()
     sampler = UCB_Interaction(bb, image_data, plot, args, nn_fname=nn_fname)
