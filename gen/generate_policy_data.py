@@ -69,7 +69,7 @@ def get_bb_dataset(bb_fname, n_bbs, mech_types, max_mech, urdf_num):
         print('BusyBoxes created.')
     else:
         # Load in a file with predetermined BusyBoxes.
-        bb_dataset = read_from_file(bb_fname)
+        bb_dataset = read_from_file(bb_fname)[:n_bbs]
     return bb_dataset
 
 

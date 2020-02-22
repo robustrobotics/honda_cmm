@@ -209,9 +209,9 @@ class GPOptimizer(object):
 
 
         # TODO: Make sure the policy appears correctly here.
-        x0, bounds = get_x_and_bounds_from_tuple(policy_params_max)
+        x, bounds = get_x_and_bounds_from_tuple(policy_params_max)
         policy = get_policy_from_tuple(policy_params_max)
-        return policy
+        return x, policy
 
     def optimize_gp(self, ucb):
         """
