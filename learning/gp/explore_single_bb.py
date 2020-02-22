@@ -683,7 +683,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--n-gp-samples',
         type=int,
-        default=500,# 500,
+        default=1000,# 500,
         help='number of samples to use when fitting a GP to data')
     parser.add_argument(
         '--M',

@@ -104,7 +104,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--n-gp-samples',
         type=int,
-        default=500,
+        default=1000,
         help='number of samples to use when fitting a GP to data')
     parser.add_argument(
         '--T',
@@ -159,10 +159,16 @@ if __name__ == '__main__':
         '--random-policies',
         action='store_true',
         help='use to try random policy classes on random mechanisms')
+    parser.add_argument(
+        'eval-method',
+        choices=['T', 'noT'],
+        required=True)
     args = parser.parse_args()
 
     if args.debug:
         import pdb; pdb.set_trace()
 
-    #evaluate_models(args.T, args.N, args)
-    evaluate_models_noT(args.N, args)
+    if args.eval_method == 'T':
+        evaluate_models(args.T, args.N, args)
+    elif args.eval_method == 'noT':
+        evaluate_models_noT(args.N, args)
