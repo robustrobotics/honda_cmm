@@ -121,7 +121,7 @@ def viz_circles(plot_mode, image_data, mech, beta=None, sample_points={}, opt_po
                             xpred_rowi += 1
 
                     Y_pred = np.zeros((X_pred.shape[0]))
-                    if plot_mode == util.GP_PLOT:
+                    if plot_mode == util.GP_PLOT or plot_mode == util.GP_NN_PLOT:
                         Y_pred_gp, Y_std = gp.predict(X_pred, return_std=True)
                         Y_pred = np.add(Y_pred, Y_pred_gp.squeeze())
                         Y_std = Y_std.squeeze()
@@ -137,7 +137,7 @@ def viz_circles(plot_mode, image_data, mech, beta=None, sample_points={}, opt_po
                                     PolicyParams(policy_type, None, all_param_data))
                     mean_colors = Y_pred.reshape(n_angular, n_linear)
 
-                    if plot_mode == util.GP_PLOT:
+                    if plot_mode == util.GP_PLOT or plot_mode == util.GP_NN_PLOT:
                         ucb = np.add(Y_pred, np.sqrt(beta) * Y_std)
                         ucb_colors = ucb.reshape(n_angular, n_linear)
 
