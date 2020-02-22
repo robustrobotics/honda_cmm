@@ -26,7 +26,7 @@ def get_result_file(type_name, results_path, regret_type):
     result_files = {}
     for root, subdir, files in all_files:
         for file in files:
-            if 'regret_results_'+regret_type+type_name in file:
+            if 'regret_results_'+type_name in file:
                 if regret_type == '':
                     T_result = re.search('regret_results_(.*)_(.*)T_(.*)N_(.*)M.pickle', file)
                     T, N = T_result.group(2,3)
@@ -137,7 +137,8 @@ if __name__ == '__main__':
         'active': ['k', 'Train-Active'],
         'gpucb': ['r', 'Train-GP-UCB'],
         'systematic': ['b', 'Systematic'],
-        'random': ['c', 'Train-Random']
+        'random': ['c', 'Train-Random'],
+        'voo': ['m', 'Train-VOO']
     }
     plt.ion()
     plt_axes = {}

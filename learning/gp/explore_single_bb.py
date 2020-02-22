@@ -496,10 +496,13 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
             # if done sampling n_interactions
             if (not n_interactions is None) and ix==n_interactions:
                 if plot:
-                    plot_points(image_data, mech, sample_points, dataset)
+                    #plot_points(image_data, mech, sample_points, dataset)
+                    if nn_fname != '':
+                        plot_mode = util.GP_NN_PLOT
+                    else:
+                        plot_mode = util.GP_PLOT
 
-                    '''
-                    viz_circles(util.GP_PLOT,
+                    viz_circles(plot_mode,
                                 image_data,
                                 mech,
                                 BETA,
@@ -512,7 +515,7 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
                     plt.show()
                     input('Enter to close')
                     plt.close()
-                    '''
+
                 if ret_regret:
                     return dataset, sampler.gps, regret
                 else:
@@ -683,8 +686,8 @@ def plot_points(image_data, mech, points, dataset):
     plt.ion()
 
     # below to add points to an existing mean_fig pickle
+    '''
     add_points_to_saved_ax(sample_points=points)
-
     from utils.plot_results import MechanismMotion
     #plot_voo(image_data, bb._mechanisms[0], evaled_x, bb_i, explr_p)
 
@@ -694,6 +697,7 @@ def plot_points(image_data, mech, points, dataset):
     plt.show()
     input('enter to close plots')
     plt.close('all')
+    '''
 
 # this executive is for generating GP-UCB interactions from no search_parent_directories
 # typically used to generate datasets for training, but can also be used in the L=0
