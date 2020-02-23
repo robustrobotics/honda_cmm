@@ -230,24 +230,30 @@ class GPOptimizer(object):
 
         # Find the sample that maximizes the distance.
         policy_params_max, max_disp = max(samples, key=operator.itemgetter(1))
+        policies = sorted(samples, key=operator.itemgetter(1))
 
         # Start optimization from here.
         if self.nn is None:
             images = None
         else:
             images = dataset.images[0].unsqueeze(0)
-        x0, bounds = get_x_and_bounds_from_tuple(policy_params_max)
 
-        start_policy = get_policy_from_tuple(policy_params_max)
-        opt_res = minimize(fun=self._objective_func, x0=x0,
-                            args=(policy_params_max.type, ucb, images),
-                            method='L-BFGS-B', options={'eps': 1e-3,
-                                                        'maxiter': 100000,
-                                                        'gtol': 1e-8}, bounds=bounds)
+        min_val, stop_policy, x_final = 0, None, None
+        for policy_params_max, max_disp in policies[-5:]:
+            x0, bounds = get_x_and_bounds_from_tuple(policy_params_max)
 
+            start_policy = get_policy_from_tuple(policy_params_max)
+            opt_res = minimize(fun=self._objective_func, x0=x0,
+                                args=(policy_params_max.type, ucb, images),
+                                method='L-BFGS-B', options={'eps': 1e-3,
+                                                            'maxiter': 100000,
+                                                            'gtol': 1e-8}, bounds=bounds)
 
-        x_final = opt_res['x']
-        stop_policy = get_policy_from_x(self.mech, x_final, policy_params_max)
+            val = opt_res['fun']
+            if val < min_val:
+                x_final = opt_res['x']
+                stop_policy = get_policy_from_x(self.mech, x_final, policy_params_max)
+                min_val = val
 
         # print('OPT:', opt_res['success'], opt_res['nit'], opt_res['message'])
         # print('------ Start')
@@ -277,9 +283,9 @@ class UCB_Interaction(object):
         self.image_data = image_data
         self.mech = self.bb._mechanisms[0]
         self.gps = {'Prismatic': GaussianProcessRegressor(kernel=self.get_kernel('Prismatic'),
-                                               n_restarts_optimizer=10),
+                                               n_restarts_optimizer=1),
                     'Revolute': GaussianProcessRegressor(kernel=self.get_kernel('Revolute'),
-                                                       n_restarts_optimizer=10)}
+                                                       n_restarts_optimizer=1)}
         self.optim = GPOptimizer(args.urdf_num, self.bb, self.image_data, \
                         args.n_gp_samples, BETA, self.gps, args.random_policies, nn=self.nn)
 
@@ -292,11 +298,11 @@ class UCB_Interaction(object):
                                 ('yaw', 0.10),
                                 ('goal_config', 0.10)])
         elif type == 'Revolute':
-            kernel_ls_params = OrderedDict([('rot_axis_roll', 0.10),
-                                ('rot_axis_pitch', 0.10),
-                                ('rot_axis_yaw', 0.10),
+            kernel_ls_params = OrderedDict([('rot_axis_roll', 0.5),
+                                ('rot_axis_pitch', 0.5),
+                                ('rot_axis_yaw', 0.5),
                                 ('radius_x', 0.04), # 0.09  # 0.05
-                                ('goal_config', 0.5)]) # Keep greater than 0.5
+                                ('goal_config', 0.25)]) # Keep greater than 0.5
         all_param_data = Policy.get_param_data(type)
 
         length_scale = []
@@ -683,7 +689,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--n-gp-samples',
         type=int,
-        default=1000,# 500,
+        default=500,# 500,
         help='number of samples to use when fitting a GP to data')
     parser.add_argument(
         '--M',
