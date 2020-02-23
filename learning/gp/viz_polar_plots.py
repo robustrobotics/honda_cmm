@@ -324,7 +324,7 @@ def get_plot_point(x, angular_name, linear_name, all_param_data, policy_type):
     for (param_name, param_data) in all_param_data.items():
         if param_data.varied:
             if param_name == angular_name or param_name == linear_name:
-                if policy_type == 'Prismatic and flipped:
+                if policy_type == 'Prismatic' and flipped:
                     if param_name == 'pitch':
                         point.append(x[xi] - np.pi)
                     if param_name == 'goal_config':
