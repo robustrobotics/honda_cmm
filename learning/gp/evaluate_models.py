@@ -160,7 +160,7 @@ if __name__ == '__main__':
         action='store_true',
         help='use to try random policy classes on random mechanisms')
     parser.add_argument(
-        'eval-method',
+        '--eval-method',
         choices=['T', 'noT'])
     args = parser.parse_args()
 
