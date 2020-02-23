@@ -23,7 +23,7 @@ import itertools
 from functools import reduce
 from learning.gp.viz_doors import viz_3d_plots
 
-BETA = 5 #5  # 5.0
+BETA = 2  #5  # 5.0
 
 
 # takes in an x and plot variables and returns the values to be plotted
@@ -249,7 +249,7 @@ def test_model(sampler, args):
 
 class GPOptimizer(object):
 
-    def __init__(self, urdf_num, bb, image_data, n_samples, beta, gps, dt, nn=None):
+    def __init__(self, urdf_num, bb, image_data, n_samples, beta, gps, gp_names, dt, nn=None):
         """
         Initialize one of these for each BusyBox.
         """
@@ -281,6 +281,7 @@ class GPOptimizer(object):
             else:
                 self.dataset = None
                 self.nn_samples.append(None)
+        self.gp_names = gp_names
         print('Done generating')
         # print('Max:', np.max(self.nn_samples))
 
@@ -382,10 +383,17 @@ class GPOptimizer(object):
         # Given the current DT, do a DFS. At each node do an optimization for the best policy.
         policy_data = Policy.get_plot_data(self.mech)
         bounds = [[p.range[0], p.range[1]] for p in policy_data]
-        best_policies = self.dt_dfs(0, bounds, ucb)
+
+        if len(self.gp_names) > 1:
+            best_policies = self.dt_dfs(0, bounds, ucb)
+        else:
+            stop_policy, stop_q, start_policy, start_q, min_val = self.optimize_gp_node(self.gp_names[0],
+                                                                                        bounds,
+                                                                                        ucb)
+            best_policies = [(0, bounds, stop_policy, stop_q, min_val)]
 
         # TODO: Find best policy from returned tuple.
-        print(best_policies)
+        # print(best_policies)
         (node, region, stop_p, stop_q, min_val) = min(best_policies, key=operator.itemgetter(4))
         return stop_p, stop_q, stop_p, stop_q
 
@@ -397,7 +405,7 @@ class GPOptimizer(object):
 
         if lefts[node_id] == rights[node_id]:
             x = [[np.random.uniform(l, h) for l, h in region]]
-            print(x)
+            # print(x)
             cls = self.dt['model'].predict(x)[0]
             if cls == 1:
                 stop_policy, stop_q, start_policy, start_q, min_val = self.optimize_gp_node('narrow', region, ucb)
@@ -464,7 +472,7 @@ class GPOptimizer(object):
                 stop_policy = get_policy_from_x(policy_type_max, x_final, self.mech)
                 stop_q = x_final[-1]
                 min_val = val
-            print('OPT:', opt_res['success'], opt_res['nit'], opt_res['message'], opt_res['fun'])
+            # print('OPT:', opt_res['success'], opt_res['nit'], opt_res['message'], opt_res['fun'])
         # print('------ Start')
         # print(x0)
         # print(x_final)
@@ -487,7 +495,9 @@ class UCB_Interaction(object):
         self.bb = bb
         self.image_data = image_data
         self.mech = self.bb._mechanisms[0]
-        self.dist_eps = 0.001
+        self.dist_eps = 0.02
+
+        self.gp_names = ['wide']
 
         # The models used to fit the data.
         self.gps = {
@@ -515,7 +525,7 @@ class UCB_Interaction(object):
             'model': DecisionTreeClassifier()
         }
 
-        self.optim = GPOptimizer(args.urdf_num, self.bb, self.image_data, args.n_gp_samples, beta, self.gps, self.dt, nn=self.nn)
+        self.optim = GPOptimizer(args.urdf_num, self.bb, self.image_data, args.n_gp_samples, beta, self.gps, self.gp_names, self.dt, nn=self.nn)
 
     def get_kernel(self, k_type):
         noise = 1e-5
@@ -533,33 +543,37 @@ class UCB_Interaction(object):
                 WhiteKernel(noise_level=noise,
                             noise_level_bounds=(1e-5, 1e2))
         elif self.mech.mechanism_type == 'Door' and k_type == 'wide':
-            variance = 0.005
-            l_roll = 1.
-            l_pitch = 1.
-            l_radius = 0.04  # 0.09  # 0.05
-            l_q = 1.  # Keep greater than 0.5.
-            return ConstantKernel(variance,
-                                  constant_value_bounds=(variance, variance)) \
-                * RBF(length_scale=(l_roll, l_pitch, l_radius, l_q),
-                      length_scale_bounds=((l_roll, l_roll),
-                                           (l_pitch, l_pitch),
-                                           (l_radius, l_radius),
-                                           (l_q, l_q))) \
-                + WhiteKernel(noise_level=noise,
+            variance = (0.005, 0.005)
+            l_roll = (1., 1.)  # (1., 1.)
+            l_pitch = (1., 1.)  # (1., 1.)
+            l_radius = (0.04, 0.04)  # (0.04, 0.04)  # 0.09  # 0.05
+            l_q = (1., 1.)  # (1., 1.)
+            # variance = (0.005, 0.005)
+            # l_roll = (0.1, 1.0)  # (1., 1.)
+            # l_pitch = (0.1, 1.0)  # (1., 1.)
+            # l_radius = (0.01, 0.04)  # (0.04, 0.04)  # 0.09  # 0.05
+            # l_q = (0.1, 1.0)  # (1., 1.)  # Keep greater than 0.5.  # Keep greater than 0.5.
+            return ConstantKernel(variance[0],
+                                  constant_value_bounds=variance) \
+                   * RBF(length_scale=(l_roll[0], l_pitch[0], l_radius[0], l_q[0]),
+                         length_scale_bounds=(l_roll, l_pitch, l_radius, l_q)) \
+                   + WhiteKernel(noise_level=noise,
                               noise_level_bounds=(1e-5, 1e2))
         elif self.mech.mechanism_type == 'Door' and k_type == 'narrow':
-            variance = 0.005
-            l_roll = 0.25
-            l_pitch = 0.25
-            l_radius = 0.01  # 0.09  # 0.05
-            l_q = 0.5  # Keep greater than 0.5.
-            return ConstantKernel(variance,
-                                  constant_value_bounds=(variance, variance)) \
-                * RBF(length_scale=(l_roll, l_pitch, l_radius, l_q),
-                      length_scale_bounds=((l_roll, l_roll),
-                                           (l_pitch, l_pitch),
-                                           (l_radius, l_radius),
-                                           (l_q, l_q))) \
+            variance = (0.005, 0.005)
+            l_roll = (0.25, 0.25)
+            l_pitch = (0.25, 0.25)
+            l_radius = (0.02, 0.02)  # 0.09  # 0.05
+            l_q = (0.125, 0.125)
+            # variance = (0.005, 0.005)
+            # l_roll = (0.1, 0.25)
+            # l_pitch = (0.1, 0.25)
+            # l_radius = (0.01, 0.04)  # 0.09  # 0.05
+            # l_q = (0.1, 0.25)  # Keep greater than 0.5.
+            return ConstantKernel(variance[0],
+                                  constant_value_bounds=variance) \
+                * RBF(length_scale=(l_roll[0], l_pitch[0], l_radius[0], l_q[0]),
+                      length_scale_bounds=(l_roll, l_pitch, l_radius, l_q)) \
                 + WhiteKernel(noise_level=noise,
                               noise_level_bounds=(1e-5, 1e2))
 
@@ -590,14 +604,19 @@ class UCB_Interaction(object):
         self.dt['data']['xs'].append(x)
         self.xs.append(x)
         if self.nn is None:
-            if y > self.dist_eps:
-                self.gps['narrow']['data']['xs'].append(x)
-                self.gps['narrow']['data']['ys'].append([y])
+            if len(self.gp_names) == 1:
+                self.gps[self.gp_names[0]]['data']['xs'].append(x)
+                self.gps[self.gp_names[0]]['data']['ys'].append([y])
                 self.dt['data']['ys'].append([1.0])
             else:
-                self.gps['wide']['data']['xs'].append(x)
-                self.gps['wide']['data']['ys'].append([y])
-                self.dt['data']['ys'].append([0.0])
+                if y > self.dist_eps:
+                    self.gps['narrow']['data']['xs'].append(x)
+                    self.gps['narrow']['data']['ys'].append([y])
+                    self.dt['data']['ys'].append([1.0])
+                else:
+                    self.gps['wide']['data']['xs'].append(x)
+                    self.gps['wide']['data']['ys'].append([y])
+                    self.dt['data']['ys'].append([0.0])
         else:
             # TODO: Make this work with mutliple GPs and NN.
             policy_type = result.policy_params.type
@@ -613,7 +632,7 @@ class UCB_Interaction(object):
 
         # Fit each of our models.
         self.dt['model'].fit(self.dt['data']['xs'], self.dt['data']['ys'])
-        for name in ['narrow', 'wide']:
+        for name in self.gp_names:
             if len(self.gps[name]['data']['xs']) > 0:
                 self.gps[name]['model'].fit(np.array(self.gps[name]['data']['xs']),
                                             np.array(self.gps[name]['data']['ys']))
@@ -1029,6 +1048,10 @@ def create_single_bb_gpucb_dataset(bb_result, n_interactions, nn_fname, plot, ar
                     bb_i=bb_i,
                     plot_dir_prefix=plot_dir_prefix)
         # viz_plots(sampler.xs, sampler.ys, sampler.gp)
+    # if 'narrow' in sampler.gp_names:
+    #     print(sampler.gps['narrow']['model'].kernel_)
+    # if 'wide' in sampler.gp_names:
+    #     print(sampler.gps['wide']['model'].kernel_)
 
     if ret_regret:
         return dataset, sampler.gps, regret
