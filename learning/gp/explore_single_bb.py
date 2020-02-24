@@ -99,7 +99,7 @@ def test_model(sampler, args):
     _, gripper = setup_env(sampler.bb, viz, debug, use_gripper)
     pose_handle_base_world = sampler.mech.get_pose_handle_base_world()
     traj = stop_policy.generate_trajectory(pose_handle_base_world, debug=debug)
-    motion, _, _ = gripper.execute_trajectory(traj, sampler.mech, stop_policy.type, debug=debug)
+    cmotion, motion, _ = gripper.execute_trajectory(traj, sampler.mech, stop_policy.type, debug=debug)
 
     # Calculate the regret.
     max_d = sampler.mech.get_max_net_motion()
@@ -239,7 +239,7 @@ class GPOptimizer(object):
             images = dataset.images[0].unsqueeze(0)
 
         min_val, stop_policy, x_final = 0, None, None
-        for policy_params_max, max_disp in policies[-5:]:
+        for policy_params_max, max_disp in policies[-10:]:
             x0, bounds = get_x_and_bounds_from_tuple(policy_params_max)
 
             start_policy = get_policy_from_tuple(policy_params_max)
@@ -247,7 +247,8 @@ class GPOptimizer(object):
                                 args=(policy_params_max.type, ucb, images),
                                 method='L-BFGS-B', options={'eps': 1e-3,
                                                             'maxiter': 100000,
-                                                            'gtol': 1e-8}, bounds=bounds)
+                                                            'gtol': 1e-8,
+                                                            'maxls': 50}, bounds=bounds)
 
             val = opt_res['fun']
             if val < min_val:
