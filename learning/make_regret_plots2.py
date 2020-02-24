@@ -21,17 +21,17 @@ def get_success(regrets, std=False):
 
     return p, p_std
 
-def get_result_file(type_name, results_path, regret_type):
+def get_result_file(type_name, results_path, noT):
     all_files = os.walk(results_path)
     result_files = {}
     for root, subdir, files in all_files:
         for file in files:
-            if 'regret_results_'+type_name in file:
-                if regret_type == '':
+            if 'regret_results_' in file:
+                if not noT:
                     T_result = re.search('regret_results_(.*)_(.*)T_(.*)N_(.*)M.pickle', file)
                     T, N = T_result.group(2,3)
                     result_files[(T, N)] = root + '/' + file
-                elif regret_type == 'noT_':
+                elif noT:
                     results = re.search('regret_results_noT_(.*)_(.*)N_(.*)M.pickle', file)
                     N = results.group(2)
                     result_files[N] = root + '/' + file
@@ -116,18 +116,18 @@ def make_regret_noT_plots(res_files):
         ax.plot(Ls, mean_mid, c=plot_params[0], label=plot_params[1])
         ax.fill_between(Ls, mean_bot, mean_top, facecolor=plot_params[0], alpha=0.2)
 
-        ax.set_ylim(0, 1)
+        plt.gca().set_ylim(bottom=0)
         ax.legend()
         ax.set_xlabel('L')
-        ax.set_ylabel(type)
-        ax.set_title('Average Interactions to Success on N=%s Mechanisms' % N)
+        ax.set_ylabel('Interactions')
+        ax.set_title('Average Number of Interactions to\nSuccess on N=%s Mechanisms' % N)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--types', nargs='+', help='list types of datasets to plot, pick from :[active, gpucb, systematic, random]')
     parser.add_argument('--results-path', type=str)
     parser.add_argument('--debug', action='store_true')
-    parser.add_argument('--regret-type', type=str, default='', choices=['', 'noT_'])
+    parser.add_argument('--noT', action='store_true')
     args = parser.parse_args()
 
     if args.debug:
@@ -142,10 +142,10 @@ if __name__ == '__main__':
     plt.ion()
     plt_axes = {}
     for name in args.types:
-        res_files = get_result_file(name, args.results_path, args.regret_type)
-        if args.regret_type == '':
+        res_files = get_result_file(name, args.results_path, args.noT)
+        if not args.noT:
             make_regret_T_plots(res_files)
-        elif args.regret_type == 'noT_':
+        elif args.noT:
             make_regret_noT_plots(res_files)
 
     plt.show()
