@@ -27,14 +27,15 @@ def get_result_file(type_name, results_path, noT):
     for root, subdir, files in all_files:
         for file in files:
             if 'regret_results_' in file:
-                if not noT:
-                    T_result = re.search('regret_results_(.*)_(.*)T_(.*)N_(.*)M.pickle', file)
-                    T, N = T_result.group(2,3)
-                    result_files[(T, N)] = root + '/' + file
-                elif noT:
-                    results = re.search('regret_results_noT_(.*)_(.*)N_(.*)M.pickle', file)
-                    N = results.group(2)
-                    result_files[N] = root + '/' + file
+                if type_name in file:
+                    if not noT:
+                        T_result = re.search('regret_results_(.*)_(.*)T_(.*)N_(.*)M.pickle', file)
+                        T, N = T_result.group(2,3)
+                        result_files[(T, N)] = root + '/' + file
+                    elif noT:
+                        results = re.search('regret_results_noT_(.*)_(.*)N_(.*)M.pickle', file)
+                        N = results.group(2)
+                        result_files[N] = root + '/' + file
     return result_files
 
 def make_regret_T_plots(res_files):
