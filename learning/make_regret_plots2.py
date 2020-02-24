@@ -93,34 +93,42 @@ def make_regret_T_plots(res_files):
             ax.set_title('Evaluated on T=%s Interactions on N=%s Mechanisms' % (T, N))
 
 def make_regret_noT_plots(res_files):
+    _, median_ax = plt.subplots()
+    _, mean_ax = plt.subplots()
     for N, res_file in res_files.items():
-        _, ax = plt.subplots()
         regret_results = util.read_from_file(res_file)
         Ls = sorted(regret_results.keys())
 
-        mean_steps = []
-        std_dev_steps = []
+        mean_steps, std_dev_steps = [], []
+        median_steps, q25_steps, q75_steps = [], [], []
         for L in Ls:
             all_L_steps = list(itertools.chain.from_iterable([regret_results[L][model] \
                                 for model in regret_results[L].keys()]))
             mean_steps += [np.mean(all_L_steps)]
             std_dev_steps += [np.std(all_L_steps)]
 
+            median_steps += [np.median(all_L_steps)]
+            q25_steps += [np.quantile(all_L_steps, 0.25)]
+            q75_steps += [np.quantile(all_L_steps, 0.75)]
+
+        med_bot, med_mid, med_top = q25_steps, median_steps, q75_steps  # Quantiles
         mean_bot, mean_mid, mean_top = np.subtract(mean_steps, std_dev_steps), \
                         mean_steps, \
                         np.add(mean_steps, std_dev_steps)  # Standard Deviation
 
-        for plot_type in plot_info:
-            if plot_type in name:
-                plot_params = plot_info[plot_type]
-        ax.plot(Ls, mean_mid, c=plot_params[0], label=plot_params[1])
-        ax.fill_between(Ls, mean_bot, mean_top, facecolor=plot_params[0], alpha=0.2)
+        for (bot, mid, top, type, ax) in ((med_bot, med_mid, med_top, 'Median Interactions', mean_ax),\
+                                (mean_bot, mean_mid, mean_top, 'Mean Interactions', median_ax)):
+            for plot_type in plot_info:
+                if plot_type in name:
+                    plot_params = plot_info[plot_type]
+            ax.plot(Ls, mid, c=plot_params[0], label=plot_params[1])
+            ax.fill_between(Ls, bot, top, facecolor=plot_params[0], alpha=0.2)
 
-        plt.gca().set_ylim(bottom=0)
-        ax.legend()
-        ax.set_xlabel('L')
-        ax.set_ylabel('Interactions')
-        ax.set_title('Average Number of Interactions to\nSuccess on N=%s Mechanisms' % N)
+            ax.set_ylim(bottom=0)
+            ax.legend()
+            ax.set_xlabel('L')
+            ax.set_ylabel(type)
+            ax.set_title('Interactions to Success on N=%s Mechanisms' % N)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
