@@ -33,9 +33,12 @@ def get_result_file(type_name, results_path, noT):
                         T, N = T_result.group(2,3)
                         result_files[(T, N)] = root + '/' + file
                     elif noT:
-                        results = re.search('regret_results_noT_(.*)_(.*)N_(.*)M.pickle', file)
+                        results = re.search('regret_results_noT_(.*)_(.*)N_(.*).pickle', file)
                         N = results.group(2)
-                        result_files[N] = root + '/' + file
+                        if not N in result_files:
+                            result_files[N] = [root + '/' + file]
+                        else:
+                            result_files[N] += [root + '/' + file]
     return result_files
 
 def make_regret_T_plots(res_files):
@@ -96,21 +99,24 @@ def make_regret_T_plots(res_files):
 def make_regret_noT_plots(res_files):
     _, median_ax = plt.subplots()
     _, mean_ax = plt.subplots()
-    for N, res_file in res_files.items():
-        regret_results = util.read_from_file(res_file)
-        Ls = sorted(regret_results.keys())
+    for N, res_files in res_files.items():
+        all_L_steps = {}
+        for res_file in res_files:
+            regret_results = util.read_from_file(res_file)
+            Ls = sorted(regret_results.keys())
+            for L in Ls:
+                L_steps = list(itertools.chain.from_iterable([regret_results[L][model] \
+                                    for model in regret_results[L].keys()]))
+                if L not in all_L_steps:
+                    all_L_steps[L] = L_steps
+                else:
+                    all_L_steps[L] += L_steps
+        mean_steps = [np.mean(L_steps) for L_steps in all_L_steps.values()]
+        std_dev_steps = [np.std(L_steps) for L_steps in all_L_steps.values()]
 
-        mean_steps, std_dev_steps = [], []
-        median_steps, q25_steps, q75_steps = [], [], []
-        for L in Ls:
-            all_L_steps = list(itertools.chain.from_iterable([regret_results[L][model] \
-                                for model in regret_results[L].keys()]))
-            mean_steps += [np.mean(all_L_steps)]
-            std_dev_steps += [np.std(all_L_steps)]
-
-            median_steps += [np.median(all_L_steps)]
-            q25_steps += [np.quantile(all_L_steps, 0.25)]
-            q75_steps += [np.quantile(all_L_steps, 0.75)]
+        median_steps = [np.median(L_steps) for L_steps in all_L_steps.values()]
+        q25_steps = [np.quantile(L_steps, 0.25) for L_steps in all_L_steps.values()]
+        q75_steps = [np.quantile(L_steps, 0.75) for L_steps in all_L_steps.values()]
 
         med_bot, med_mid, med_top = q25_steps, median_steps, q75_steps  # Quantiles
         mean_bot, mean_mid, mean_top = np.subtract(mean_steps, std_dev_steps), \
