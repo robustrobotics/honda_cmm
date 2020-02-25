@@ -12,18 +12,12 @@ SUCCESS_REGRET = 0.05
 def get_models(L, models_path):
     all_files = os.walk(models_path)
     models = []
-    M = None
     for root, subdir, files in all_files:
         for file in files:
             if (file[-3:] == '.pt') and ('_'+str(L)+'L_' in file):
-                M_result = re.search('(.*)/(.*)M/(.*)/(.*)', root)
-                M = M_result.group(2)
                 full_path = root+'/'+file
                 models.append(full_path)
-    if M is None:
-        raise Exception('make sure that the supplied L values (--Ls) correspond \
-                to the model file names in the --models-path directory')
-    return models, M
+    return models
 
 def evaluate_models(n_interactions, n_bbs, args, use_cuda=False):
     # this determines what BBs are in the evaluated mechanisms
@@ -32,7 +26,7 @@ def evaluate_models(n_interactions, n_bbs, args, use_cuda=False):
 
     all_results = {}
     for L in range(args.Ls[0], args.Ls[1]+1, args.Ls[2]):
-        models, M = get_models(L, args.models_path)
+        models = get_models(L, args.models_path)
         all_L_results = {}
         for model in models:
             all_model_test_regrets = []
@@ -57,7 +51,7 @@ def evaluate_models(n_interactions, n_bbs, args, use_cuda=False):
             all_L_results[model] = all_model_test_regrets
         if len(models) > 0:
             all_results[L] = all_L_results
-    util.write_to_file('regret_results_%s_%dT_%dN_%sM.pickle' % (args.type, n_interactions, n_bbs, M),
+    util.write_to_file('regret_results_%s_%dT_%dN.pickle' % (args.type, n_interactions, n_bbs),
                        all_results,
                        verbose=True)
 
@@ -71,7 +65,7 @@ def evaluate_models_noT(n_bbs, args, use_cuda=False):
 
     all_results = {}
     for L in range(args.Ls[0], args.Ls[1]+1, args.Ls[2]):
-        models, M = get_models(L, args.models_path)
+        models = get_models(L, args.models_path)
         all_L_results = {}
         for model in models:
             all_model_test_steps = []
@@ -95,7 +89,7 @@ def evaluate_models_noT(n_bbs, args, use_cuda=False):
             all_L_results[model] = all_model_test_steps
         if len(models) > 0:
             all_results[L] = all_L_results
-    util.write_to_file('regret_results_noT_%s_%dN_%sM.pickle' % (args.type, n_bbs, M),
+    util.write_to_file('regret_results_noT_%s_%dN.pickle' % (args.type, n_bbs),
                        all_results,
                        verbose=True)
 
