@@ -492,7 +492,7 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
             sys.stdout.write('\rProcessing sample %i' % ix)
         # if we are done sampling n_interactions OR we need to get regret after
         # each interaction
-        if ((not n_interactions is None) and ix==n_interactions) or \
+        if ((not n_interactions is None) and ix==n_interactions-1) or \
             (not success_regret is None):
 
             regret, start_x, stop_x, policy_type = test_model(sampler, args)
@@ -501,7 +501,7 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
             sample_points = {'Prismatic': [(sample, 'k') for sample in sampler.xs['Prismatic']],
                             'Revolute': [(sample, 'k') for sample in sampler.xs['Revolute']]}
             # if done sampling n_interactions
-            if (not n_interactions is None) and ix==n_interactions:
+            if (not n_interactions is None) and ix==n_interactions-1:
                 if plot:
                     viz_circles(util.GP_PLOT,
                                 image_data,
@@ -522,7 +522,7 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
                     return dataset, sampler.gps
             # if got successful interaction or timeout
             elif (not success_regret is None) and \
-                            ((regret < success_regret) or (ix > 100)):
+                            ((regret < success_regret) or (ix >= 100)):
                 if plot:
                     viz_circles(util.GP_PLOT,
                                 image_data,
