@@ -111,12 +111,13 @@ def make_regret_noT_plots(res_files):
                     all_L_steps[L] = L_steps
                 else:
                     all_L_steps[L] += L_steps
-        mean_steps = [np.mean(L_steps) for L_steps in all_L_steps.values()]
-        std_dev_steps = [np.std(L_steps) for L_steps in all_L_steps.values()]
+        Ls = sorted(all_L_steps.keys())
+        mean_steps = [np.mean(all_L_steps[L]) for L in Ls]
+        std_dev_steps = [np.std(all_L_steps[L]) for L in Ls]
 
-        median_steps = [np.median(L_steps) for L_steps in all_L_steps.values()]
-        q25_steps = [np.quantile(L_steps, 0.25) for L_steps in all_L_steps.values()]
-        q75_steps = [np.quantile(L_steps, 0.75) for L_steps in all_L_steps.values()]
+        median_steps = [np.median(all_L_steps[L]) for L in Ls]
+        q25_steps = [np.quantile(all_L_steps[L], 0.25) for L in Ls]
+        q75_steps = [np.quantile(all_L_steps[L], 0.75) for L in Ls]
 
         med_bot, med_mid, med_top = q25_steps, median_steps, q75_steps  # Quantiles
         mean_bot, mean_mid, mean_top = np.subtract(mean_steps, std_dev_steps), \
