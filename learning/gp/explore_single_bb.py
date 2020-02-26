@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm
 from mpl_toolkits.mplot3d import Axes3D
+import torch.nn.functional as F
 from collections import OrderedDict
 import pickle
 import os
@@ -23,6 +24,7 @@ from actions.policies import Policy, generate_policy, Revolute, Prismatic, \
                                     get_policy_from_tuple, get_policy_from_x
 from learning.gp.viz_doors import viz_3d_plots
 from learning.gp.viz_polar_plots import viz_circles
+import time
 
 BETA = 5
 
@@ -82,7 +84,7 @@ def get_nn_preds(results, model, ret_dataset=False, use_cuda=False):
     else:
         return pred_motions
 
-def test_model(sampler, args):
+def test_model(sampler, args, gripper=None):
     """
     Maximize the GP mean function to get the best policy.
     :param sampler: A GP fit to the current BusyBox.
@@ -96,7 +98,10 @@ def test_model(sampler, args):
     debug = False
     viz = False
     use_gripper = False
-    _, gripper = setup_env(sampler.bb, viz, debug, use_gripper)
+    if gripper is None:
+        _, gripper = setup_env(sampler.bb, viz, debug, use_gripper)
+    else:
+        gripper.reset(sampler.mech)
     pose_handle_base_world = sampler.mech.get_pose_handle_base_world()
     traj = stop_policy.generate_trajectory(pose_handle_base_world, debug=debug)
     cmotion, motion, _ = gripper.execute_trajectory(traj, sampler.mech, stop_policy.type, debug=debug)
@@ -121,6 +126,7 @@ class GPOptimizer(object):
         self.beta = beta
         self.gps = gps
         self.n_samples = n_samples
+        self.saved_im = None
 
         # Generate random policies.
         for _ in range(n_samples):
@@ -159,7 +165,15 @@ class GPOptimizer(object):
 
         if not self.nn is None:
             inputs = self._optim_result_to_torch(policy_type, x, image_tensor, False)
-            val, _ = self.nn.forward(*inputs)
+            nn_x = self.nn.policy_modules[policy_type].forward(inputs[1])
+            if self.saved_im is None:
+                self.saved_im, _ = self.nn.image_module(inputs[2])
+            nn_x = torch.cat([nn_x, self.saved_im], dim=1)
+            nn_x = F.relu(self.nn.fc1(nn_x))
+            nn_x = F.relu(self.nn.fc2(nn_x))
+            val = self.nn.fc5(nn_x)
+
+            # val, _ = self.nn.forward(*inputs)
             val = val.detach().numpy()
             Y_pred += val.squeeze()
 
@@ -198,7 +212,7 @@ class GPOptimizer(object):
             scores.append(sample_disps[0])
 
         # Sample a policy based on its score value.
-        scores = np.exp(np.array(scores)/temp)#[:, 0]
+        scores = np.exp(np.array(scores)/temp) #[:, 0]
         scores /= np.sum(scores)
 
         index = np.random.choice(np.arange(scores.shape[0]),
@@ -229,7 +243,6 @@ class GPOptimizer(object):
             samples.append((res[0].policy_params, sample_disps[0]))
 
         # Find the sample that maximizes the distance.
-        policy_params_max, max_disp = max(samples, key=operator.itemgetter(1))
         policies = sorted(samples, key=operator.itemgetter(1))
 
         # Start optimization from here.
@@ -239,23 +252,22 @@ class GPOptimizer(object):
             images = dataset.images[0].unsqueeze(0)
 
         min_val, stop_policy, x_final = 0, None, None
-        for policy_params_max, max_disp in policies[-5:]:
+        for policy_params_max, max_disp in policies[-10:]:
             x0, bounds = get_x_and_bounds_from_tuple(policy_params_max)
-
-            start_policy = get_policy_from_tuple(policy_params_max)
             opt_res = minimize(fun=self._objective_func, x0=x0,
                                 args=(policy_params_max.type, ucb, images),
                                 method='L-BFGS-B', options={'eps': 1e-3,
-                                                            'maxiter': 100000,
+                                                            'maxiter': 1000,
                                                             'gtol': 1e-8,
-                                                            'maxls': 50}, bounds=bounds)
+                                                            'maxls': 50,
+                                                            }, bounds=bounds)
 
             val = opt_res['fun']
             if val < min_val:
                 x_final = opt_res['x']
                 stop_policy = get_policy_from_x(self.mech, x_final, policy_params_max)
                 min_val = val
-
+        # print(opt_res)
         # print('OPT:', opt_res['success'], opt_res['nit'], opt_res['message'])
         # print('------ Start')
         # print(x0)
@@ -302,8 +314,8 @@ class UCB_Interaction(object):
             kernel_ls_params = OrderedDict([('rot_axis_roll', 0.5),
                                 ('rot_axis_pitch', 0.5),
                                 ('rot_axis_yaw', 0.5),
-                                ('radius_x', 0.04), # 0.09  # 0.05
-                                ('goal_config', 0.25)]) # Keep greater than 0.5
+                                ('radius_x', 0.01), # 0.09  # 0.05
+                                ('goal_config', 0.125)]) # Keep greater than 0.5
         all_param_data = Policy.get_param_data(type)
 
         length_scale = []
@@ -488,6 +500,7 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
     pose_handle_base_world = mech.get_pose_handle_base_world()
     sampler = UCB_Interaction(bb, image_data, plot, args, nn_fname=nn_fname)
     for ix in itertools.count():
+        gripper.reset(mech)
         if args.debug:
             sys.stdout.write('\rProcessing sample %i' % ix)
         # if we are done sampling n_interactions OR we need to get regret after
@@ -495,11 +508,14 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
         if ((not n_interactions is None) and ix==n_interactions-1) or \
             (not success_regret is None):
 
-            regret, start_x, stop_x, policy_type = test_model(sampler, args)
-            #print('Current regret', regret)
+            regret, start_x, stop_x, policy_type = test_model(sampler, args, gripper=gripper)
+            gripper.reset(mech)
+
+            # print('Current regret', regret)
             opt_points = (policy_type, [(start_x, 'g'), (stop_x, 'r')])
             sample_points = {'Prismatic': [(sample, 'k') for sample in sampler.xs['Prismatic']],
                             'Revolute': [(sample, 'k') for sample in sampler.xs['Revolute']]}
+
             # if done sampling n_interactions
             if (not n_interactions is None) and ix==n_interactions-1:
                 if plot:
@@ -537,13 +553,14 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
                 return dataset, sampler.gps, ix
 
         # sample a policy
+        # image_data, gripper = setup_env(bb, False, debug, use_gripper)
+
+        gripper.reset(mech)
         x, policy = sampler.sample(args.random_policies, stochastic=args.stochastic)
 
         # execute
         traj = policy.generate_trajectory(pose_handle_base_world, debug=debug)
         c_motion, motion, handle_pose_final = gripper.execute_trajectory(traj, mech, policy.type, False)
-        gripper.reset(mech)
-
         result = util.Result(policy.get_policy_tuple(), mech.get_mechanism_tuple(),
                              motion, c_motion, handle_pose_final, handle_pose_final,
                              image_data, None, True)
