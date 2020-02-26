@@ -239,7 +239,7 @@ class GPOptimizer(object):
             images = dataset.images[0].unsqueeze(0)
 
         min_val, stop_policy, x_final = 0, None, None
-        for policy_params_max, max_disp in policies[-10:]:
+        for policy_params_max, max_disp in policies[-5:]:
             x0, bounds = get_x_and_bounds_from_tuple(policy_params_max)
 
             start_policy = get_policy_from_tuple(policy_params_max)
