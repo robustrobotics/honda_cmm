@@ -263,7 +263,7 @@ class GPOptimizer(object):
                                                             }, bounds=bounds)
 
             val = opt_res['fun']
-            if val < min_val:
+            if val <= min_val:
                 x_final = opt_res['x']
                 stop_policy = get_policy_from_x(self.mech, x_final, policy_params_max)
                 min_val = val
