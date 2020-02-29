@@ -50,7 +50,7 @@ def make_regret_T_plots(res_files):
             _, mean_ax = plt.subplots()
             _, succ_ax = plt.subplots()
             plt_axes[T] = [median_ax, mean_ax, succ_ax]
-        regret_results = util.read_from_file(res_file)
+        regret_results = util.read_from_file(res_file, verbose=False)
         Ls = sorted(regret_results.keys())
 
         mean_regrets = []
@@ -96,47 +96,57 @@ def make_regret_T_plots(res_files):
             ax.set_ylabel(type)
             ax.set_title('Evaluated on T=%s Interactions on N=%s Mechanisms' % (T, N))
 
-def make_regret_noT_plots(res_files):
+def make_regret_noT_plots(types, res_path):
     _, median_ax = plt.subplots()
     _, mean_ax = plt.subplots()
-    for N, res_files in res_files.items():
-        all_L_steps = {}
-        for res_file in res_files:
-            regret_results = util.read_from_file(res_file)
-            Ls = sorted(regret_results.keys())
-            for L in Ls:
-                L_steps = list(itertools.chain.from_iterable([regret_results[L][model] \
-                                    for model in regret_results[L].keys()]))
-                if L not in all_L_steps:
-                    all_L_steps[L] = L_steps
-                else:
-                    all_L_steps[L] += L_steps
-        Ls = sorted(all_L_steps.keys())
-        mean_steps = [np.mean(all_L_steps[L]) for L in Ls]
-        std_dev_steps = [np.std(all_L_steps[L]) for L in Ls]
+    N_plot = None
+    for name in types:
+        res_files = get_result_file(name, res_path, True)
+        print(res_files)
+        for N, res_files in res_files.items():
+            print(N)
+            if N_plot is None:
+                N_plot = N
+            assert N_plot == N, \
+                    'You are trying to plot results with different N values. Please \
+check that all results on the results path have the same N value'
+            all_L_steps = {}
+            for res_file in res_files:
+                regret_results = util.read_from_file(res_file, verbose=False)
+                Ls = sorted(regret_results.keys())
+                for L in Ls:
+                    L_steps = list(itertools.chain.from_iterable([regret_results[L][model] \
+                                        for model in regret_results[L].keys()]))
+                    if L not in all_L_steps:
+                        all_L_steps[L] = L_steps
+                    else:
+                        all_L_steps[L] += L_steps
+            Ls = sorted(all_L_steps.keys())
+            mean_steps = [np.mean(all_L_steps[L]) for L in Ls]
+            std_dev_steps = [np.std(all_L_steps[L]) for L in Ls]
 
-        median_steps = [np.median(all_L_steps[L]) for L in Ls]
-        q25_steps = [np.quantile(all_L_steps[L], 0.25) for L in Ls]
-        q75_steps = [np.quantile(all_L_steps[L], 0.75) for L in Ls]
+            median_steps = [np.median(all_L_steps[L]) for L in Ls]
+            q25_steps = [np.quantile(all_L_steps[L], 0.25) for L in Ls]
+            q75_steps = [np.quantile(all_L_steps[L], 0.75) for L in Ls]
 
-        med_bot, med_mid, med_top = q25_steps, median_steps, q75_steps  # Quantiles
-        mean_bot, mean_mid, mean_top = np.subtract(mean_steps, std_dev_steps), \
-                        mean_steps, \
-                        np.add(mean_steps, std_dev_steps)  # Standard Deviation
+            med_bot, med_mid, med_top = q25_steps, median_steps, q75_steps  # Quantiles
+            mean_bot, mean_mid, mean_top = np.subtract(mean_steps, std_dev_steps), \
+                            mean_steps, \
+                            np.add(mean_steps, std_dev_steps)  # Standard Deviation
 
-        for (bot, mid, top, type, ax) in ((med_bot, med_mid, med_top, 'Median Interactions', mean_ax),\
-                                (mean_bot, mean_mid, mean_top, 'Mean Interactions', median_ax)):
-            for plot_type in plot_info:
-                if plot_type in name:
-                    plot_params = plot_info[plot_type]
-            ax.plot(Ls, mid, c=plot_params[0], label=plot_params[1])
-            ax.fill_between(Ls, bot, top, facecolor=plot_params[0], alpha=0.2)
+            for (bot, mid, top, type, ax) in ((med_bot, med_mid, med_top, 'Median Interactions', mean_ax),\
+                                    (mean_bot, mean_mid, mean_top, 'Mean Interactions', median_ax)):
+                for plot_type in plot_info:
+                    if plot_type in name:
+                        plot_params = plot_info[plot_type]
+                ax.plot(Ls, mid, c=plot_params[0], label=plot_params[1])
+                ax.fill_between(Ls, bot, top, facecolor=plot_params[0], alpha=0.2)
 
-            ax.set_ylim(bottom=0)
-            ax.legend()
-            ax.set_xlabel('L')
-            ax.set_ylabel(type)
-            ax.set_title('Interactions to Success on N=%s Mechanisms' % N)
+                ax.set_ylim(bottom=0)
+                ax.legend()
+                ax.set_xlabel('L')
+                ax.set_ylabel(type)
+                ax.set_title('Interactions to Success on N=%s Mechanisms' % N)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -156,13 +166,12 @@ if __name__ == '__main__':
         'random': ['c', 'Train-Random']
     }
     plt.ion()
-    plt_axes = {}
-    for name in args.types:
-        res_files = get_result_file(name, args.results_path, args.noT)
-        if not args.noT:
-            make_regret_T_plots(res_files)
-        elif args.noT:
-            make_regret_noT_plots(res_files)
+    #plt_axes = {}
+
+    if not args.noT:
+        make_regret_T_plots(res_files)
+    elif args.noT:
+        make_regret_noT_plots(args.types, args.results_path)
 
     plt.show()
     input('enter to close')
