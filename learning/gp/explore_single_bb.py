@@ -250,7 +250,6 @@ class GPOptimizer(object):
             images = None
         else:
             images = dataset.images[0].unsqueeze(0)
-
         min_val, stop_policy, x_final = 0, None, None
         for policy_params_max, max_disp in policies[-10:]:
             x0, bounds = get_x_and_bounds_from_tuple(policy_params_max)
@@ -263,7 +262,7 @@ class GPOptimizer(object):
                                                             }, bounds=bounds)
 
             val = opt_res['fun']
-            if val < min_val:
+            if val <= min_val:
                 x_final = opt_res['x']
                 stop_policy = get_policy_from_x(self.mech, x_final, policy_params_max)
                 min_val = val
@@ -295,14 +294,14 @@ class UCB_Interaction(object):
         self.bb = bb
         self.image_data = image_data
         self.mech = self.bb._mechanisms[0]
-        self.gps = {'Prismatic': GaussianProcessRegressor(kernel=self.get_kernel('Prismatic'),
+        self.gps = {'Prismatic': GaussianProcessRegressor(kernel=self.get_kernel('Prismatic', args.type),
                                                n_restarts_optimizer=1),
-                    'Revolute': GaussianProcessRegressor(kernel=self.get_kernel('Revolute'),
+                    'Revolute': GaussianProcessRegressor(kernel=self.get_kernel('Revolute', args.type),
                                                        n_restarts_optimizer=1)}
         self.optim = GPOptimizer(args.urdf_num, self.bb, self.image_data, \
                         args.n_gp_samples, BETA, self.gps, args.random_policies, nn=self.nn)
 
-    def get_kernel(self, type):
+    def get_kernel(self, type, explore_type):
         noise = 1e-5
         variance = 0.005
 
@@ -311,11 +310,17 @@ class UCB_Interaction(object):
                                 ('yaw', 0.10),
                                 ('goal_config', 0.10)])
         elif type == 'Revolute':
-            kernel_ls_params = OrderedDict([('rot_axis_roll', 0.5),
-                                ('rot_axis_pitch', 0.5),
-                                ('rot_axis_yaw', 0.5),
-                                ('radius_x', 0.01), # 0.09  # 0.05
-                                ('goal_config', 0.125)]) # Keep greater than 0.5
+            if 'random' in explore_type:
+                ps = (1.256, 0.018, 0.314)
+            else:
+                ps = (0.628, 0.009, 0.157)
+            # ps = (0.628, 0.009, 0.157)
+            print('Using Kernel:', ps)
+            kernel_ls_params = OrderedDict([('rot_axis_roll', ps[0]),
+                                ('rot_axis_pitch', ps[0]),
+                                ('rot_axis_yaw', ps[0]),
+                                ('radius_x', ps[1]), # 0.09  # 0.05
+                                ('goal_config', ps[2])]) # Keep greater than 0.5
         all_param_data = Policy.get_param_data(type)
 
         length_scale = []
@@ -511,7 +516,7 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
             regret, start_x, stop_x, policy_type = test_model(sampler, args, gripper=gripper)
             gripper.reset(mech)
 
-            # print('Current regret', regret)
+            print('Current regret', regret)
             opt_points = (policy_type, [(start_x, 'g'), (stop_x, 'r')])
             sample_points = {'Prismatic': [(sample, 'k') for sample in sampler.xs['Prismatic']],
                             'Revolute': [(sample, 'k') for sample in sampler.xs['Revolute']]}
@@ -588,22 +593,22 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
             plt.close()
 
         '''
-        '''
+
         # this code has not been updated since refactor
-        if ix % 10 == 0:
+        if ix % 10 == 0 and False:
             if len(nn_fname) > 0:
                 model = util.load_model(nn_fname, args.hdim, use_cuda=use_cuda)
 
             def _gp_callback(new_xs, bb_result):
-                ys, std = sampler.gps[bb_result.policy_params.type].predict(new_xs, return_std=True)
+                ys, std = sampler.gps['Revolute'].predict(new_xs, return_std=True)
                 ys = ys.flatten()
 
                 if len(nn_fname) > 0:
                     data = []
-                    for roll, pitch, radius, q in new_xs:
+                    for pitch, radius, q in new_xs:
                         data.append({
                             'type': 'Revolute',
-                            'params': [roll, pitch, radius],
+                            'params': [pitch, radius, q],
                             'goal_config': q,
                             'image': bb_result.image_data,
                             'y': 0.,
@@ -616,16 +621,16 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
                         policy_type = dataset.items[i]['type']
                         policy_type_tensor = torch.Tensor([util.name_lookup[policy_type]])
                         policy_tensor = dataset.tensors[i].unsqueeze(0)
-                        config_tensor = dataset.configs[i].unsqueeze(0)
+                        # config_tensor = dataset.configs[i].unsqueeze(0)
                         image_tensor = dataset.images[i].unsqueeze(0)
                         if use_cuda:
                             policy_type_tensor = policy_type_tensor.cuda()
                             policy_tensor = policy_tensor.cuda()
-                            config_tensor = config_tensor.cuda()
+                            # config_tensor = config_tensor.cuda()
                             image_tensor = image_tensor.cuda()
                         pred_motion, _ = model.forward(policy_type_tensor,
                                                        policy_tensor,
-                                                       config_tensor,
+                                                       # config_tensor,
                                                        image_tensor)
                         if True:
                             pred_motion_float = pred_motion.cpu().detach().numpy()[0][0]
@@ -634,10 +639,10 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
                         nn_ys += [pred_motion_float]
                     ys += np.array(nn_ys)
                 return ys, std, ys + np.sqrt(BETA)*std
-        '''
-            # viz_3d_plots(xs=sampler.xs,
-            #              callback=_gp_callback,
-            #              bb_result=bb_result)
+
+            viz_3d_plots(xs=sampler.xs[policy_type],
+                         callback=_gp_callback,
+                         bb_result=bb_result)
         #     viz_radius_plots(sampler.xs, sampler.gp)
         #     viz_plots(sampler.xs, sampler.gp)
 
