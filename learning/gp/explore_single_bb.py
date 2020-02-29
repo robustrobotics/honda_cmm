@@ -251,7 +251,7 @@ class GPOptimizer(object):
         else:
             images = dataset.images[0].unsqueeze(0)
 
-        min_val, stop_policy, x_final = 0, None, None
+        min_val, stop_policy, x_final = float("inf"), None, None
         for policy_params_max, max_disp in policies[-10:]:
             x0, bounds = get_x_and_bounds_from_tuple(policy_params_max)
             opt_res = minimize(fun=self._objective_func, x0=x0,
@@ -263,7 +263,7 @@ class GPOptimizer(object):
                                                             }, bounds=bounds)
 
             val = opt_res['fun']
-            if val <= min_val:
+            if val < min_val:
                 x_final = opt_res['x']
                 stop_policy = get_policy_from_x(self.mech, x_final, policy_params_max)
                 min_val = val
