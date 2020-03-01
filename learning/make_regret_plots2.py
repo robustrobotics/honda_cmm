@@ -96,9 +96,27 @@ def make_regret_T_plots(res_files):
             ax.set_ylabel(type)
             ax.set_title('Evaluated on T=%s Interactions on N=%s Mechanisms' % (T, N))
 
+def add_baseline_to_ax(fname, type, mean_ax, median_ax):
+    plot_params = plot_info[type]
+    steps = util.read_from_file(fname)
+    mean = [np.mean(steps)]*10
+    std = [np.std(steps)]*10
+    median = [np.median(steps)]*10
+    q25 = [np.quantile(steps, 0.25)]*10
+    q75 = [np.quantile(steps, 0.75)]*10
+    Ls = list(range(10,101,10))
+    mean_ax.plot(Ls, mean, c=plot_params[0], label=plot_params[1])
+    mean_ax.fill_between(Ls, np.subtract(mean, std), np.add(mean,std), facecolor=plot_params[0], alpha=0.2)
+    median_ax.plot(Ls, median, c=plot_params[0], label=plot_params[1])
+    median_ax.fill_between(Ls, q25, q75, facecolor=plot_params[0], alpha=0.2)
+
 def make_regret_noT_plots(types, res_path):
     _, median_ax = plt.subplots()
     _, mean_ax = plt.subplots()
+
+    add_baseline_to_ax(args.results_path+'/random_sliders_50N.pickle', 'systematic', mean_ax, median_ax)
+    add_baseline_to_ax(args.results_path+'/gpucb_sliders_50N.pickle', 'gpucb_baseline', mean_ax, median_ax)
+
     N_plot = None
     for name in types:
         res_files = get_result_file(name, res_path, True)
@@ -142,7 +160,8 @@ check that all results on the results path have the same N value'
                 ax.plot(Ls, mid, c=plot_params[0], label=plot_params[1])
                 ax.fill_between(Ls, bot, top, facecolor=plot_params[0], alpha=0.2)
 
-                ax.set_ylim(bottom=0)
+                ax.set_ylim(top=110, bottom=0)
+                ax.set_xlim(left=10.0, right=100.0)
                 ax.legend()
                 ax.set_xlabel('L')
                 ax.set_ylabel(type)
@@ -162,8 +181,9 @@ if __name__ == '__main__':
     plot_info = {
         'active': ['k', 'Train-Active'],
         'gpucb': ['r', 'Train-GP-UCB'],
-        'systematic': ['b', 'Systematic'],
-        'random': ['c', 'Train-Random']
+        'systematic': ['b', 'Random'],
+        'random': ['c', 'Train-Random'],
+        'gpucb_baseline': ['g', 'GP-UCB']
     }
     plt.ion()
     #plt_axes = {}
