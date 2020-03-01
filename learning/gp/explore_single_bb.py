@@ -26,7 +26,7 @@ from learning.gp.viz_doors import viz_3d_plots
 from learning.gp.viz_polar_plots import viz_circles
 import time
 
-BETA = 5
+BETA = 2
 
 # takes in a policy and returns and optimization x and the variable bounds
 def get_x_and_bounds_from_tuple(policy_params):
@@ -307,9 +307,9 @@ class UCB_Interaction(object):
         variance = 0.005
 
         if type == 'Prismatic':
-            kernel_ls_params = OrderedDict([('pitch', 0.10),
-                                ('yaw', 0.10),
-                                ('goal_config', 0.10)])
+            kernel_ls_params = OrderedDict([('pitch', 0.1),
+                                ('yaw', 0.1),
+                                ('goal_config', 0.1)])
         elif type == 'Revolute':
             if 'random' in explore_type:
                 ps = (1.256, 0.018, 0.314)
