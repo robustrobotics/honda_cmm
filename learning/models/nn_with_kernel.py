@@ -23,7 +23,7 @@ class DistanceGP(gpytorch.models.ExactGP):
         # Note: Should probably make kernel dims smaller by adding a learned Linear layer on top?
         self.covar_module = GridInterpolationKernel(
                                 ScaleKernel(RBFKernel(ard_num_dims=2)),
-                                num_dims=2, grid_size=10)
+                                num_dims=2, grid_size=100)
         self.pretrained_model = load_model(model_fname=pretrained_nn_path,
                                            hdim=16)
         self.lin = nn.Linear(32, 2)
@@ -75,12 +75,13 @@ def convert_training_data(train_set):
 if __name__ == '__main__':
     #  Load dataset.
     raw_results = read_from_file('/home/mnosew/workspace/honda_cmm/data/doors_gpucb_100L_100M_set0.pickle')
-    results = [bb[::10] for bb in raw_results]  # For now just grab every 10th interaction with each bbb.
+    results = [bb[::50] for bb in raw_results]  # For now just grab every 10th interaction with each bbb.
     results = [item for sublist in results for item in sublist]
 
     data = parse_pickle_file(results)
-    train_set, _, _ = setup_data_loaders(data=data, batch_size=16)
+    train_set, val_set, _ = setup_data_loaders(data=data, batch_size=16)
     train_x, train_y = convert_training_data(train_set)
+    val_x, val_y = convert_training_data(val_set)
     print('Data Size:', train_x.shape, train_y.shape)
     print(train_x.size(0), train_y.size(0))
     likelihood = gpytorch.likelihoods.GaussianLikelihood()
@@ -90,10 +91,11 @@ if __name__ == '__main__':
                     pretrained_nn_path='/home/mnosew/workspace/honda_cmm/pretrained_models/doors/model_100L_100M.pt')
     gp.train()
     likelihood.train()
-    optimizer = torch.optim.Adam([{'params': gp.covar_module.parameters()}], lr=0.1)
+    optimizer = torch.optim.Adam([{'params': gp.covar_module.parameters()},
+                                  {'params': gp.lin.parameters()}], lr=0.1)
     mll = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, gp)
     
-    for _ in range(25):
+    for _ in range(10):
         optimizer.zero_grad()
         output = gp(train_x)
         loss = -mll(output, train_y)
@@ -102,6 +104,6 @@ if __name__ == '__main__':
 
         print(loss.item())
     gp.eval()
-    print(train_x[0:1, :].shape)
-    pred = gp(train_x[0:1, :])
-    print(pred)
+    print(val_x[0:1, :].shape)
+    pred = gp(val_x[0:1, :])
+    print(pred, pred.confidence_region(), val_y[0])
