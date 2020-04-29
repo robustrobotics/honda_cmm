@@ -1,3 +1,4 @@
+import argparse
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -43,14 +44,17 @@ class DistanceGP(gpytorch.models.ExactGP):
         #self.covar_module = GridInterpolationKernel(
         #                        ScaleKernel(RBFKernel(ard_num_dims=num_gp_dims)),
         #                        num_dims=num_gp_dims, grid_size=200)
-        self.covar_module = ScaleKernel(RBFKernel(ard_num_dims=num_gp_dims, lengthscale_constraint=gpytorch.constraints.Interval(0.001, 1.)))
+        self.covar_module = ScaleKernel(RBFKernel(ard_num_dims=num_gp_dims, lengthscale_constraint=gpytorch.constraints.Interval(0.0001, 1.)))
         self.lin = nn.Linear(32, num_gp_dims)
 
-    def forward(self, x):
+    def forward(self, x, disp=False):
         x = self.lin(x)
         #print(x.min(0)[0], x.max(0)[0])
         x = x - x.min(0)[0]
         x = 2*(x/x.max(0)[0])-1
+        if disp:
+            print(x.shape)
+            print(x)
         #x += torch.randn(x.shape).cuda()*1e-2
         mean_x = self.mean_module(x)
         covar_x = self.covar_module(x)
@@ -87,29 +91,31 @@ def extract_feature_dataset(dataset, extractor, use_cuda=False):
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--save-path', default='')
+    parser.add_argument('--pretrained-nn', type=str, required=True)
+    args = parser.parse_args()
+    print(args)
+    # '/home/mnosew/workspace/honda_cmm/pretrained_models/doors/model_80L_100M.pt'
     CUDA = True
     #  Load dataset.
     raw_results = read_from_file('/home/mnosew/workspace/honda_cmm/data/doors_gpucb_100L_100M_set0.pickle')
-    results = [bb[::] for bb in raw_results[:90]]  # For now just grab every 10th interaction with each bbb.
-    val_results = [bb[::10] for bb in raw_results[90:]]
+    results = [bb[::] for bb in raw_results[:80]]  # For now just grab every 10th interaction with each bbb.
+    val_results = [bb[::] for bb in raw_results[80:]]
     results = [item for sublist in results for item in sublist]
     val_results = [item for sublist in val_results for item in sublist]
     data = parse_pickle_file(results)
     val_data = parse_pickle_file(val_results)
     train_set, _, _ = setup_data_loaders(data=data, batch_size=16)
     val_set, _, _ = setup_data_loaders(data=val_data, batch_size=16)
-    extractor = FeatureExtractor(pretrained_nn_path='/home/mnosew/workspace/honda_cmm/pretrained_models/doors/model_100L_100M.pt')
+    extractor = FeatureExtractor(pretrained_nn_path=args.pretrained_nn)
     if CUDA:
         extractor.cuda()
     print('Extracting Features')
     train_x, train_y = extract_feature_dataset(train_set, extractor, use_cuda=CUDA)
     mu = torch.mean(train_x, dim=0, keepdims=True)
     std = torch.std(train_x, dim=0, keepdims=True)+1e-3
-    print(std)
-    print('Mu:', mu.shape)
     train_xs = ((train_x-mu)/std).detach().clone()
-    print(train_xs[:10,:])
-    print(train_x.shape)
     print('Features Extracted')
     print(train_x.shape, train_y.shape)
     val_x, val_y = extract_feature_dataset(val_set, extractor, use_cuda=CUDA)
@@ -117,7 +123,7 @@ if __name__ == '__main__':
     del extractor, train_set, val_set
     print('Data Size:', train_x.shape, train_y.shape)
     print(train_x.size(0), train_y.size(0))
-    likelihood = gpytorch.likelihoods.GaussianLikelihood(noise_constraint=gpytorch.constraints.GreaterThan(0.000025))
+    likelihood = gpytorch.likelihoods.GaussianLikelihood(noise_constraint=gpytorch.constraints.GreaterThan(0.0001))  # 0.000025
     gp = DistanceGP(train_x=train_xs,
                     train_y=train_y,
                     likelihood=likelihood)
@@ -131,7 +137,7 @@ if __name__ == '__main__':
                                   {'params': gp.likelihood.parameters()}], lr=0.1)
     mll = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, gp)
     #with gpytorch.settings.max_cg_iterations(2000):
-    for _ in range(250):
+    for _ in range(500):
         optimizer.zero_grad()
         output = gp(train_xs)
         loss = -mll(output, train_y)
@@ -139,20 +145,37 @@ if __name__ == '__main__':
         optimizer.step()
 
         print(loss.item(), gp.likelihood.noise.item(), gp.covar_module.base_kernel.lengthscale, gp.covar_module.outputscale)
+    if args.save_path != '':
+        torch.save((gp.state_dict(), train_xs, train_y, mu, std), args.save_path)
+         
     gp.eval()
     print('Val Predictions')
-    for ix in range(0, 20):
+    for ix in range(0, 20):#val_x.shape[0]):
         pred = likelihood(gp(val_x[ix:ix+1, :]))
-        print(pred.mean.cpu().detach().numpy(), 
-              pred.confidence_region()[0].cpu().detach().numpy(),
-              pred.confidence_region()[1].cpu().detach().numpy(),
-              val_y[ix])
+        lower, upper = pred.confidence_region()
+        lower = lower.cpu().detach().numpy()
+        upper = upper.cpu().detach().numpy()
+        true = val_y[ix].item()
+        
+        p = pred.mean.cpu().detach().numpy()[0]
+        if p < lower or p > upper:
+            print('INCORRECT:', pred.mean.cpu().detach().numpy(), 
+                (lower[0], upper[0]), upper - lower,
+                val_y[ix])
+        elif upper[0]-lower[0] > 0.05:
+            print('UNSURE:', pred.mean.cpu().detach().numpy(), 
+                (lower[0], upper[0]), upper - lower,
+                val_y[ix])
+        else:
+            print('CORRECT')
 
     print('Train Predictions')
     for ix in range(0, 20):
         pred = likelihood(gp(train_xs[ix:ix+1, :]))
+        lower, upper = pred.confidence_region()
+        lower = lower.cpu().detach().numpy()
+        upper = upper.cpu().detach().numpy()
         print(pred.mean.cpu().detach().numpy(), 
-              pred.confidence_region()[0].cpu().detach().numpy(),
-              pred.confidence_region()[1].cpu().detach().numpy(), 
+              (lower[0], upper[0]), upper - lower,
               train_y[ix])
 

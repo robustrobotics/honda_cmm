@@ -5,17 +5,17 @@ from utils import util
 from utils.setup_pybullet import setup_env
 from gen.generator_busybox import BusyBox
 import matplotlib.pyplot as plt
-from actions.policies import Revolute
+from actions.policies import Policy, Revolute, PolicyParams, get_policy_from_tuple
 from matplotlib import cm
 from mpl_toolkits.mplot3d import Axes3D
 from learning.dataloaders import PolicyDataset
 import torch
-
+from collections import OrderedDict
 
 def viz_3d_plots(xs,
                  callback,
                  bb_result,
-                 n_rows=4):
+                 n_rows=2):
     """
     :param xs: A list policy tuples of form (roll, pitch, radius, q) to appear in the
         data scatterplot.
@@ -25,20 +25,8 @@ def viz_3d_plots(xs,
     """
     fig = plt.figure()
 
-    # For the first plot, plot the policies we have tried.
-    ax0 = fig.add_subplot(n_rows, n_rows, 1, projection='3d')
-    for x in xs:
-        ax0.scatter(x[0], x[2], x[3], s=2)
-
-    ax0.set_xlim(0, 2*np.pi)
-    ax0.set_ylim(0.08-0.025, 0.15)
-    ax0.set_zlim(-np.pi/2.0, 0)
-    ax0.set_xlabel('roll')
-    ax0.set_ylabel('radius')
-    ax0.set_zlabel('q')
-
     # Bin the config parameter.
-    configs = np.linspace(-np.pi/2.0, 0, num=n_rows**2-1)
+    configs = np.linspace(-np.pi/2.0, 0, num=n_rows**2)
     bb = BusyBox.bb_from_result(bb_result)
     mech = bb._mechanisms[0]
     setup_env(bb, False, False, True)
@@ -55,19 +43,19 @@ def viz_3d_plots(xs,
                     pitch = 0.0
                 else:
                     pitch = np.pi
-                new_xs.append([ro, pitch, ra, q])
+                new_xs.append([0, ro, ra, q])
 
         # Get the true values for this Busybox.
         ys, std, aq = callback(new_xs, bb_result)
 
         lookup = {}
         for jx in range(len(new_xs)):
-            ro, _, ra, _ = new_xs[jx]
+            _, ro, ra, _ = new_xs[jx]
             if ro not in lookup:
                 lookup[ro] = {}
             lookup[ro][ra] = [ys[jx], 0, 0]
             if std is not None:
-                lookup[ro][ra][1] = ys[jx] + std[jx]
+                lookup[ro][ra][1] =  2*std[jx] #ys[jx]
             if aq is not None:
                 lookup[ro][ra][2] = aq[jx]
 
@@ -81,57 +69,67 @@ def viz_3d_plots(xs,
                 z_std_grid[i, j] = lookup[x_grid[i, j]][y_grid[i, j]][1]
                 z_aq_grid[i, j] = lookup[x_grid[i, j]][y_grid[i, j]][2]
 
-        ax = fig.add_subplot(n_rows, n_rows, ix+2, projection='3d')
+        ax = fig.add_subplot(1, 1, 1, projection='3d')
         ax.plot_surface(x_grid, y_grid, z_grid, cmap=cm.coolwarm, vmax=0.2)
+        #if std is not None:
+        #    ax.plot_surface(x_grid, y_grid, z_std_grid, color='r', alpha=0.5)
         if aq is not None:
-            ax.plot_surface(x_grid, y_grid, z_std_grid, color='r', alpha=0.5)
             ax.plot_surface(x_grid, y_grid, z_aq_grid, color='g', alpha=0.5)
 
         # Plot the true radius and maximum distance.
         ax.plot([0, 2*np.pi], [true_rad, true_rad], [0, 0], c='k')
-        ax.plot_surface(x_grid, y_grid, np.ones(x_grid.shape)*max_dist, color='y', alpha=0.3)
-        # ax.plot(X[:, 0], X[:, 2], ys+std, c='r', alpha=0.5)
+        #ax.plot_surface(x_grid, y_grid, np.ones(x_grid.shape)*max_dist, color='y', alpha=0.3)
+        #ax.plot_surface(x_grid, y_grid, ys+2*std, c='r', alpha=0.5)
         # ax.plot(qs, ys + np.sqrt(BETA)*std, c='g')
         # ax.plot(qs, ys-std, c='r')
         ax.set_xlim(0, 2*np.pi)
         ax.set_ylim(0.08-0.025, 0.15)
-        ax.set_title('q=%.2f' % q)
-        ax.set_zlim(0, 0.2)
-    plt.show()
+        #ax.set_title('q=%.2f' % q)
+        ax.set_zlim(0, 0.15)
+        ax.set_xlabel('pitch')
+        ax.set_ylabel('radius')
+        ax.set_zlabel('dist')
+    plt.savefig('doors.png')
 
+
+def _true_callback(policies, bb_result):
+    # Setup the BusyBox.
+    bb = BusyBox.bb_from_result(bb_result)
+    mech = bb._mechanisms[0]
+    image_data, gripper = setup_env(bb, False, False, True)
+    pose_handle_base_world = mech.get_pose_handle_base_world()
+
+    ys = []
+    for jx, (roll, pitch, radius_x, q) in enumerate(policies):
+        if jx % 50 == 0:
+            print(jx)
+        gripper.reset(mech)
+        #rot_axis_world = util.quaternion_from_euler(roll, pitch, 0.0)
+        #radius = [-radius_x, 0.0, 0.0]
+        #p_handle_base_world = mech.get_pose_handle_base_world().p
+        #p_rot_center_world = p_handle_base_world + util.transformation(radius, [0., 0., 0.], rot_axis_world)
+        #params = OrderedDict([('rot_center', p_rot_center_world),
+        #                      ('rot_axis_roll', roll),
+        #                      ('rot_axis_pitch', pitch),
+        #                      ('rot_axis_yaw', 0.0),
+        #                      ('radius_x', radius_x),
+        #                      ('goal_config', q)])
+        #policy_params = PolicyParams('Revolute', params, Policy.get_param_data('Revolute')) 
+        #policy = get_policy_from_tuple(policy_params)
+        policy = Revolute._gen(mech, x_dict={'goal_config': q,
+                                             'rot_axis_yaw': 0.,
+                                             'rot_axis_roll': roll,
+                                             'rot_axis_pitch': pitch,
+                                             'radius_x': radius_x})
+        # execute
+        traj = policy.generate_trajectory(pose_handle_base_world, debug=False)
+        c_motion, motion, handle_pose_final = gripper.execute_trajectory(traj, mech, policy.type, False)
+        gripper.reset(mech)
+        ys.append(c_motion)
+
+    return np.array(ys), None, None
 
 def plot_true_motion(args):
-    def _true_callback(policies, bb_result):
-        # Setup the BusyBox.
-        bb = BusyBox.bb_from_result(bb_result)
-        mech = bb._mechanisms[0]
-        image_data, gripper = setup_env(bb, False, False, True)
-        pose_handle_base_world = mech.get_pose_handle_base_world()
-
-        ys = []
-        for jx, (roll, pitch, radius_x, q) in enumerate(policies):
-            if jx % 50 == 0:
-                print(jx)
-            rot_axis_world = util.quaternion_from_euler(roll, pitch, 0.0)
-            radius = [-radius_x, 0.0, 0.0]
-            p_handle_base_world = mech.get_pose_handle_base_world().p
-            p_rot_center_world = p_handle_base_world + util.transformation(radius, [0., 0., 0.], rot_axis_world)
-
-            policy = Revolute(p_rot_center_world,
-                              roll,
-                              pitch,
-                              rot_axis_world,
-                              radius_x,
-                              [0., 0., 0., 1.])
-
-            # execute
-            traj = policy.generate_trajectory(pose_handle_base_world, q, debug=False)
-            c_motion, motion, handle_pose_final = gripper.execute_trajectory(traj, mech, policy.type, False)
-            gripper.reset(mech)
-            ys.append(c_motion)
-
-        return np.array(ys), None, None
-
     with open(args.bb_fname, 'rb') as handle:
         busybox_data = pickle.load(handle)
     busybox_data = [bb_results[0] for bb_results in busybox_data]
