@@ -26,7 +26,10 @@ def evaluate_models(n_interactions, n_bbs, args, use_cuda=False):
 
     all_results = {}
     for L in range(args.Ls[0], args.Ls[1]+1, args.Ls[2]):
-        models = get_models(L, args.models_path)
+        # models = get_models(L, args.models_path)
+        # TODO: Get GP Models
+        models = [args.nn_fname]
+
         all_L_results = {}
         for model in models:
             all_model_test_regrets = []
@@ -34,13 +37,13 @@ def evaluate_models(n_interactions, n_bbs, args, use_cuda=False):
                 if args.debug:
                     print('BusyBox', ix)
                 dataset, gps, regret = create_single_bb_gpucb_dataset(bb_result[0],
-                                                                     model,
-                                                                     args.plot,
-                                                                     args,
-                                                                     ix,
-                                                                     n_interactions=n_interactions,
-                                                                     plot_dir_prefix='L'+str(L),
-                                                                     ret_regret=True)
+                                                                      model,
+                                                                      args.plot,
+                                                                      args,
+                                                                      ix,
+                                                                      n_interactions=n_interactions,
+                                                                      plot_dir_prefix='L'+str(L),
+                                                                      ret_regret=True)
                 all_model_test_regrets.append(regret)
                 if args.debug:
                     print('Test Regret   :', regret)
@@ -156,6 +159,10 @@ if __name__ == '__main__':
     parser.add_argument(
         '--eval-method',
         choices=['T', 'noT'])
+    parser.add_argument('--nn-fname',
+                        default='')
+    parser.add_argument('--gp-fname',
+                        default='')
     args = parser.parse_args()
 
     if args.debug:

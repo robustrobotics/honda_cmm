@@ -32,6 +32,14 @@ class FeatureExtractor(nn.Module):
         x = F.relu(self.pretrained_model.fc2(x))
         return x
 
+    def forward_cached(self, policy_type, im, theta):
+        policy_type = 'Revolute'
+        pol = self.pretrained_model.policy_modules[policy_type].forward(theta)
+        x = torch.cat([pol, im], dim=1)
+        x = F.relu(self.pretrained_model.fc1(x))
+        x = F.relu(self.pretrained_model.fc2(x))
+        return x
+
 
 class DistanceGP(gpytorch.models.ExactGP):
     def __init__(self, train_x, train_y, likelihood):

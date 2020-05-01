@@ -25,6 +25,9 @@ from actions.policies import Policy, generate_policy, Revolute, Prismatic, \
 from learning.gp.viz_doors import viz_3d_plots
 from learning.gp.viz_polar_plots import viz_circles
 import time
+import gpytorch
+from learning.models.nn_with_kernel import FeatureExtractor, DistanceGP
+from learning.dataloaders import setup_data_loaders, parse_pickle_file
 
 BETA = 2
 
@@ -115,7 +118,7 @@ def test_model(sampler, args, gripper=None):
 
 class GPOptimizer(object):
 
-    def __init__(self, urdf_num, bb, image_data, n_samples, beta, gps, random_policies, nn=None):
+    def __init__(self, urdf_num, bb, image_data, n_samples, beta, gps, random_policies, nn=None, learned_kernel=None):
         """
         Initialize one of these for each BusyBox.
         """
@@ -127,6 +130,7 @@ class GPOptimizer(object):
         self.gps = gps
         self.n_samples = n_samples
         self.saved_im = None
+        self.learned_kernel = learned_kernel
 
         # Generate random policies.
         for _ in range(n_samples):
@@ -144,7 +148,15 @@ class GPOptimizer(object):
             else:
                 self.dataset = None
                 self.nn_samples.append(None)
-        # print('Max:', np.max(self.nn_samples))
+        
+        # Preprocess image to use by the learned kernel.
+        if learned_kernel is not None:
+            print('Caching processed image')
+            val_data = parse_pickle_file(results)
+            dataset = setup_data_loaders(data=val_data, single_set=True)
+            for _, _, im, _, _ in dataset:
+                self.cached_im = learned_kernel['extractor'].pretrained_model.image_module(im)
+                break
 
         self.log = []
 
@@ -182,8 +194,19 @@ class GPOptimizer(object):
         else:
             obj = -Y_pred[0]
         return obj
-
+    
     def _get_pred_motions(self, data, ucb, nn_preds=None):
+        if self.learned_kernel is None:
+            return self._get_pred_motions_fixed_kernel(data, ucb, nn_preds)
+        else:
+            return self._get_pred_motions_learned_kernel(data, ucb)
+
+    def _get_pred_motions_learned_kernel(self, data, ucb):
+        # TODO: Extract features from the dataset.
+        X_pol, Y = process_data(data, len(data))
+        print(X_pol.shape) 
+
+    def _get_pred_motions_fixed_kernel(self, data, ucb, nn_preds=None):
         X, Y = process_data(data, len(data))
         y_pred, y_std = np.zeros(len(data)), np.zeros(len(data))
         for i, res in enumerate(data):
@@ -233,6 +256,7 @@ class GPOptimizer(object):
         :param ucb: If True use the GP-UCB criterion
         :return: x_final, the optimal policy according to the current model.
         """
+        # TODO: Update to use a learned GP.
         samples = []
 
         # Generate random policies.
@@ -279,7 +303,7 @@ class GPOptimizer(object):
 
 class UCB_Interaction(object):
 
-    def __init__(self, bb, image_data, plot, args, nn_fname=''):
+    def __init__(self, bb, image_data, plot, args, nn_fname='', gp_fname=''):
         # Pretrained Kernel (for Sliders)
         # kernel = ConstantKernel(0.005, constant_value_bounds=(0.005, 0.005)) * RBF(length_scale=(0.247, 0.084, 0.0592), length_scale_bounds=(0.0592, 0.247)) + WhiteKernel(noise_level=1e-5, noise_level_bounds=(1e-5, 1e2))
         # Pretrained Kernel (for Doors)
@@ -289,18 +313,45 @@ class UCB_Interaction(object):
                                         {'Prismatic': [], 'Revolute': []}
 
         self.plot = plot
-        self.nn = None
-        if nn_fname != '':
+        self.nn, self.learned_kernel = None, None
+        if gp_fname != '':
+            self.load_learned_kernel(nn_fname, gp_fname)
+        elif nn_fname != '':
             self.nn = util.load_model(nn_fname, args.hdim, use_cuda=False)
         self.bb = bb
         self.image_data = image_data
         self.mech = self.bb._mechanisms[0]
-        self.gps = {'Prismatic': GaussianProcessRegressor(kernel=self.get_kernel('Prismatic', args.type),
-                                               n_restarts_optimizer=1),
-                    'Revolute': GaussianProcessRegressor(kernel=self.get_kernel('Revolute', args.type),
-                                                       n_restarts_optimizer=1)}
+        
+        if gp_fname == '':
+            self.gps = {'Prismatic': GaussianProcessRegressor(kernel=self.get_kernel('Prismatic', args.type),
+                                                   n_restarts_optimizer=1),
+                        'Revolute': GaussianProcessRegressor(kernel=self.get_kernel('Revolute', args.type),
+                                                           n_restarts_optimizer=1)}
+        else:
+            self.gps = {}
+        # TODO: Pass trained gp/feature extractor to the GPOptimizer.
         self.optim = GPOptimizer(args.urdf_num, self.bb, self.image_data, \
-                        args.n_gp_samples, BETA, self.gps, args.random_policies, nn=self.nn)
+                        args.n_gp_samples, BETA, self.gps, args.random_policies, nn=self.nn, learned_kernel=self.learned_kernel)
+    
+    def load_learned_kernel(self, nn_fname, gp_fname):
+        print('Loading a learned kernel.')
+        gp_state, train_xs, train_ys, mu, std = torch.load(gp_fname)
+        likelihood = gpytorch.likelihoods.GaussianLikelihood()
+        gp = DistanceGP(train_x=train_xs,
+                        train_y=train_ys,
+                        likelihood=likelihood)
+        extractor = FeatureExtractor(pretrained_nn_path=nn_fname)
+        gp.load_state_dict(gp_state)
+
+        self.learned_kernel = {
+            'gp': gp,
+            'extractor': extractor,
+            'mu': mu,
+            'std': std,
+            'train_xs': train_xs,
+            'train_ys': train_ys
+        }
+        print('Learned kernel loaded.')
 
     def get_kernel(self, type, explore_type):
         noise = 1e-5
@@ -343,7 +394,7 @@ class UCB_Interaction(object):
     def sample(self, random_policies, stochastic=False):
         # If self.nn is None then make sure each policy type has been
         # attempted at least once
-        if self.nn is None and random_policies:
+        if self.learned_kernel is None and self.nn is None and random_policies:
             for policy_class, policy_type in zip([Prismatic, Revolute], \
                                                 ['Prismatic', 'Revolute']):
                 if len(self.xs[policy_type]) < 1:
@@ -358,10 +409,14 @@ class UCB_Interaction(object):
         else:
             x_final, policy_final = self.optim.stochastic_gp(ucb)
         return x_final, policy_final
-
+    
     def update(self, result, x):
-        # TODO: Update without the NN.
+        if self.learned_kernel is None:
+            self.update_fixed_kernel(result, x)
+        else:
+            self.update_learned_kernel(result, x)
 
+    def update_learned_kernel(self, result, x):
         # Update GP.
         policy_type = result.policy_params.type
         self.xs[policy_type].append(x)
@@ -375,26 +430,13 @@ class UCB_Interaction(object):
             nn_pred = self.nn.forward(*inputs)[0]
             nn_pred = nn_pred.detach().numpy().squeeze()
             self.ys[policy_type].append([result.net_motion - nn_pred])
-
+        
         self.moves[policy_type].append([result.net_motion])
-        self.gps[policy_type].fit(np.array(self.xs[policy_type]), np.array(self.ys[policy_type]))
-        # Visualize GP.
-        # if self.ix % 1 == 0 and self.plot:
-        #     params = mech.get_mechanism_tuple().params
-        #     print('Range:', params.range/2.0)
-        #     print('Angle:', np.arctan2(params.axis[1], params.axis[0]))
-        #     print('GP:', gp.kernel_)
-        #
-        #     #plt.clf()
-        #     plt.figure(figsize=(15, 15))
-        #     for x, y in zip(xs, ys):
-        #         plt.scatter(x[0], x[2], s=200)
-        #     plt.title('policy samples')
-        #     plt.xlabel('pitch')
-        #     plt.ylabel('q')
-        #     #plt.savefig('gp_samples_%d.png' % ix)
-        #     plt.show()
-        #     viz_gp(gp, result, ix, bb, nn=nn)
+
+    def update_learned_kernel(self, result, x):
+        # TODO: Update the trained GP.
+        print('Updating the learned kernel with a new datapoint.')
+        pass
 
     def calc_avg_regret(self):
         regrets = []
@@ -504,7 +546,7 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
     image_data, gripper = setup_env(bb, viz, debug, use_gripper)
 
     pose_handle_base_world = mech.get_pose_handle_base_world()
-    sampler = UCB_Interaction(bb, image_data, plot, args, nn_fname=nn_fname)
+    sampler = UCB_Interaction(bb, image_data, plot, args, nn_fname=nn_fname, gp_fname=args.gp_fname)
     for ix in itertools.count():
         gripper.reset(mech)
         if args.debug:
@@ -752,7 +794,11 @@ if __name__ == '__main__':
     parser.add_argument(
         '--nn-fname',
         default='',
-        help='path to save resulting dataset to')
+        help='path to a pretrained neural mean function')
+    parser.add_argument(
+        '--gp-fname',
+        default='',
+        help='path to a pretrained neural GP')
     parser.add_argument(
         '--debug',
         action='store_true',
