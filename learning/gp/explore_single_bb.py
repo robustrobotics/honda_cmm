@@ -155,7 +155,8 @@ class GPOptimizer(object):
             val_data = parse_pickle_file(results)
             dataset = setup_data_loaders(data=val_data, single_set=True)
             for _, _, im, _, _ in dataset:
-                self.cached_im = learned_kernel['extractor'].pretrained_model.image_module(im)
+                im = im.cuda()
+                self.cached_im = learned_kernel['extractor'].pretrained_model.image_module(im)[0]
                 break
 
         self.log = []
@@ -169,8 +170,14 @@ class GPOptimizer(object):
             image_tensor = image_tensor.cuda()
 
         return [policy_type_tensor, policy_tensor, image_tensor]
-
+    
     def _objective_func(self, x, policy_type, ucb, image_tensor=None):
+        if self.learned_kernel is None:
+            return self._objective_func_fixed_kernel(x, policy_type, ucb, image_tensor)
+        else:
+            return self._objective_func_learned_kernel(x, policy_type, ucb, image_tensor)
+
+    def _objective_func_fixed_kernel(self, x, policy_type, ucb, image_tensor=None):
         X = np.expand_dims(x, axis=0)
 
         Y_pred, Y_std = self.gps[policy_type].predict(X, return_std=True)
@@ -195,6 +202,21 @@ class GPOptimizer(object):
             obj = -Y_pred[0]
         return obj
     
+    def _objective_func_learned_kernel(self, x, policy_type, ucb, image_tensor=None):
+        X = np.expand_dims(x, axis=0)
+        pol_type, theta, im = self._optim_result_to_torch(policy_type, x, self.cached_im, True) 
+        feats = self.learned_kernel['extractor'].forward_cached(policy_type='Revolute',
+                                                                im=im,
+                                                                theta=theta)
+        feats = (feats - self.learned_kernel['mu'])/self.learned_kernel['std']
+        pred = self.learned_kernel['likelihood'](self.learned_kernel['gp'](feats))
+        pred_motion = pred.mean.cpu().detach().numpy()
+        pred_std = pred.stddev.cpu().detach().numpy()
+        if ucb:
+            return -pred_motion[0] - np.sqrt(self.beta)*pred_std[0]
+        else:
+            return -pred_motion[0]
+
     def _get_pred_motions(self, data, ucb, nn_preds=None):
         if self.learned_kernel is None:
             return self._get_pred_motions_fixed_kernel(data, ucb, nn_preds)
@@ -204,7 +226,19 @@ class GPOptimizer(object):
     def _get_pred_motions_learned_kernel(self, data, ucb):
         # TODO: Extract features from the dataset.
         X_pol, Y = process_data(data, len(data))
-        print(X_pol.shape) 
+        X_pol = torch.tensor(X_pol, dtype=torch.float32).cuda()
+        feats = self.learned_kernel['extractor'].forward_cached(policy_type='Revolute',
+                                                                im=self.cached_im,
+                                                                theta=X_pol)
+        feats = (feats - self.learned_kernel['mu'])/self.learned_kernel['std']
+        pred = self.learned_kernel['likelihood'](self.learned_kernel['gp'](feats))
+        pred_motion = pred.mean.cpu().detach().numpy()
+        pred_std = pred.stddev.cpu().detach().numpy()
+        if ucb:
+            return pred_motion + np.sqrt(self.beta)*pred_std, None
+        else:
+            return pred_motion, None
+
 
     def _get_pred_motions_fixed_kernel(self, data, ucb, nn_preds=None):
         X, Y = process_data(data, len(data))
@@ -256,7 +290,6 @@ class GPOptimizer(object):
         :param ucb: If True use the GP-UCB criterion
         :return: x_final, the optimal policy according to the current model.
         """
-        # TODO: Update to use a learned GP.
         samples = []
 
         # Generate random policies.
@@ -276,7 +309,9 @@ class GPOptimizer(object):
             images = dataset.images[0].unsqueeze(0)
 
         min_val, stop_policy, x_final = float("inf"), None, None
-        for policy_params_max, max_disp in policies[-10:]:
+        # TODO: Change this back to 10.
+        for policy_params_max, max_disp in policies[-5:]:
+            print('New Pol')
             x0, bounds = get_x_and_bounds_from_tuple(policy_params_max)
             opt_res = minimize(fun=self._objective_func, x0=x0,
                                 args=(policy_params_max.type, ucb, images),
@@ -342,17 +377,18 @@ class UCB_Interaction(object):
                         likelihood=likelihood)
         extractor = FeatureExtractor(pretrained_nn_path=nn_fname)
         gp.load_state_dict(gp_state)
+        gp.eval()
 
         self.learned_kernel = {
-            'gp': gp,
-            'extractor': extractor,
-            'mu': mu,
-            'std': std,
+            'gp': gp.cuda(),
+            'likelihood': likelihood.cuda(),
+            'extractor': extractor.cuda(),
+            'mu': mu.cuda(),
+            'std': std.cuda(),
             'train_xs': train_xs,
             'train_ys': train_ys
         }
         print('Learned kernel loaded.')
-
     def get_kernel(self, type, explore_type):
         noise = 1e-5
         variance = 0.005
@@ -416,7 +452,7 @@ class UCB_Interaction(object):
         else:
             self.update_learned_kernel(result, x)
 
-    def update_learned_kernel(self, result, x):
+    def update_fixed_kernel(self, result, x):
         # Update GP.
         policy_type = result.policy_params.type
         self.xs[policy_type].append(x)
@@ -436,7 +472,23 @@ class UCB_Interaction(object):
     def update_learned_kernel(self, result, x):
         # TODO: Update the trained GP.
         print('Updating the learned kernel with a new datapoint.')
-        pass
+        print(type(self.learned_kernel['train_xs']))
+        print(self.learned_kernel['train_xs'].shape, self.learned_kernel['train_xs'].dtype) 
+        _, theta, _ = self.optim._optim_result_to_torch('Revolute', x, self.optim.cached_im, True)
+        feats = self.learned_kernel['extractor'].forward_cached(policy_type='Revolute',
+                                                                im=self.optim.cached_im,
+                                                                theta=theta)
+        feats = (feats - self.learned_kernel['mu'])/self.learned_kernel['std']
+        feats = feats.detach()
+        new_y = torch.tensor([result.net_motion], dtype=torch.float32).cuda()
+        xs, ys = self.learned_kernel['train_xs'], self.learned_kernel['train_ys']
+        
+        self.learned_kernel['train_xs'] = torch.cat([xs, feats], axis=0)
+        self.learned_kernel['train_ys'] = torch.cat([ys, new_y], axis=0)
+        self.learned_kernel['gp'].set_train_data(inputs=self.learned_kernel['train_xs'],
+                                                 targets=self.learned_kernel['train_ys'],
+                                                 strict=False)
+
 
     def calc_avg_regret(self):
         regrets = []
@@ -448,49 +500,6 @@ class UCB_Interaction(object):
         else:
             return 'n/a'
 
-
-
-'''
-def viz_gp(gp, result, num, bb, nn=None):
-    n_pitch = 10
-    # plt.clf()
-    fig, axes = plt.subplots(nrows=1, ncols=10, sharey=True, sharex=True, figsize=(40, 4))
-
-    axes = axes.flatten()
-    for ix, pitch in enumerate(np.linspace(-np.pi, 0, n_pitch)):
-        x_preds = []
-        for q in np.linspace(-0.25, 0.25, num=100):
-            x_preds.append([pitch, 0, q])
-        X_pred = np.array(x_preds)
-
-        Y_pred, Y_std = gp.predict(X_pred, return_std=True)
-        if not nn is None:
-            loader = format_batch(X_pred, bb, type)
-            k, x, q, im, _, _ = next(iter(loader))
-            pol = torch.Tensor([util.name_lookup[k[0]]])
-            nn_preds = nn(pol, x, q, im).detach().numpy()
-            Y_pred += nn_preds
-            axes[ix].plot(X_pred[:, 2], nn_preds[:, 0], c='b', ls='-')
-
-        # print(Y_pred)
-        if len(Y_pred.shape) == 1:
-            Y_pred = Y_pred.reshape(-1, 1)
-        axes[ix].plot(X_pred[:, 2], Y_pred[:, 0], c='r', ls='-')
-        axes[ix].plot(X_pred[:, 2], Y_pred[:, 0] + Y_std, c='r', ls='--')
-        axes[ix].plot(X_pred[:, 2], Y_pred[:, 0] - Y_std, c='r', ls='--')
-        axes[ix].plot(X_pred[:, 2], Y_pred[:, 0] + np.sqrt(40)*Y_std, c='g')
-        fs = 8
-        axes[ix].set_xlabel('q', fontsize=fs)
-        axes[ix].set_ylabel('d', fontsize=fs)
-        axes[ix].set_ylim(0, 0.15)
-        x0, x1 = axes[ix].get_xlim()
-        y0, y1 = axes[ix].get_ylim()
-        axes[ix].set_aspect((x1 - x0) / (y1 - y0))
-        axes[ix].set(adjustable='box')
-        axes[ix].set_title('pitch=%.2f' % pitch, fontsize=fs)
-    plt.show()
-    # plt.savefig('gp_estimates_tuned_%d.png' % num)
-'''
 
 def create_gpucb_dataset(n_interactions, n_bbs, args):
     """
