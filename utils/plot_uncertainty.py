@@ -45,12 +45,15 @@ def get_callback(gp_model, likelihood, feature_extractor, p_mu, p_std):
                                                  image_tensor,                 
                                                  policy_tensor)
             features = (features - p_mu)/p_std
-            pred = likelihood(gp_model(features))
+
+            #print(gp_model.get_gp_inputs(features))
+            with gpytorch.settings.fast_pred_var():
+                pred = gp_model(features)
             pred_motion_float = pred.mean.cpu().detach().numpy()[0]
             pred_std = pred.stddev.cpu().detach().numpy()[0]
             nn_ys += [pred_motion_float]
             nn_std += [pred_std]
-            print(pred_std)
+            # print(pred_std)
         ys = np.array(nn_ys)
         std = np.array(nn_std)
         return ys, std, None
@@ -106,13 +109,14 @@ if __name__ == '__main__':
         likelihood.cuda()
         gp.cuda()
     gp.load_state_dict(gp_state)
+    print(gp.covar_module.base_kernel.lengthscale)
 
     # Load validation dataset.
     raw_results = read_from_file('/home/mnosew/workspace/honda_cmm/data/doors_gpucb_100L_100M_set0.pickle')
     val_results = [bb[::] for bb in raw_results[80:]]
     val_results = [item for sublist in val_results for item in sublist]
     val_data = parse_pickle_file(val_results)
-    val_set, _, _ = setup_data_loaders(data=val_data, batch_size=16)
+    val_set  = setup_data_loaders(data=val_data, batch_size=16, single_set=True)
     val_x, val_y = extract_feature_dataset(val_set, extractor, use_cuda=CUDA)
     val_x = (val_x - mu)/std
     
@@ -136,8 +140,10 @@ if __name__ == '__main__':
                 val_y[ix])
         else:
             print('CORRECT')
+    
+    #viz_interaction()
 
     viz_3d_plots(xs=[],
-                 callback=_true_callback,#get_callback(gp, likelihood, extractor, mu, std),
+                 callback=get_callback(gp, likelihood, extractor, mu, std),
                  bb_result=val_results[0],
                  n_rows=1)

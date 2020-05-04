@@ -7,7 +7,7 @@ from learning.gp.explore_single_bb import create_single_bb_gpucb_dataset, GPOpti
 from utils import util, setup_pybullet
 from gen.generate_policy_data import get_bb_dataset
 
-SUCCESS_REGRET = 0.05
+SUCCESS_REGRET = 1
 
 def get_models(L, models_path):
     all_files = os.walk(models_path)
@@ -68,7 +68,8 @@ def evaluate_models_noT(n_bbs, args, use_cuda=False):
 
     all_results = {}
     for L in range(args.Ls[0], args.Ls[1]+1, args.Ls[2]):
-        models = get_models(L, args.models_path)
+        # models = get_models(L, args.models_path)
+        models = [args.nn_fname]
         all_L_results = {}
         for model in models:
             all_model_test_steps = []

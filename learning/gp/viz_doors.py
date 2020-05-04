@@ -15,7 +15,8 @@ from collections import OrderedDict
 def viz_3d_plots(xs,
                  callback,
                  bb_result,
-                 n_rows=2):
+                 n_rows=2,
+                 fname=''):
     """
     :param xs: A list policy tuples of form (roll, pitch, radius, q) to appear in the
         data scatterplot.
@@ -55,7 +56,7 @@ def viz_3d_plots(xs,
                 lookup[ro] = {}
             lookup[ro][ra] = [ys[jx], 0, 0]
             if std is not None:
-                lookup[ro][ra][1] =  2*std[jx] #ys[jx]
+                lookup[ro][ra][1] =  2*std[jx] + ys[jx]
             if aq is not None:
                 lookup[ro][ra][2] = aq[jx]
 
@@ -71,8 +72,8 @@ def viz_3d_plots(xs,
 
         ax = fig.add_subplot(1, 1, 1, projection='3d')
         ax.plot_surface(x_grid, y_grid, z_grid, cmap=cm.coolwarm, vmax=0.2)
-        #if std is not None:
-        #    ax.plot_surface(x_grid, y_grid, z_std_grid, color='r', alpha=0.5)
+        if std is not None:
+            ax.plot_surface(x_grid, y_grid, z_std_grid, color='r', alpha=0.5)
         if aq is not None:
             ax.plot_surface(x_grid, y_grid, z_aq_grid, color='g', alpha=0.5)
 
@@ -89,7 +90,10 @@ def viz_3d_plots(xs,
         ax.set_xlabel('pitch')
         ax.set_ylabel('radius')
         ax.set_zlabel('dist')
-    plt.savefig('doors.png')
+    
+    if fname == '':
+        fname = 'doors.png'
+    plt.savefig(fname)
 
 
 def _true_callback(policies, bb_result):

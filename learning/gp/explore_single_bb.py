@@ -28,8 +28,10 @@ import time
 import gpytorch
 from learning.models.nn_with_kernel import FeatureExtractor, DistanceGP
 from learning.dataloaders import setup_data_loaders, parse_pickle_file
+from utils.plot_uncertainty import get_callback
 
-BETA = 2
+
+BETA = 4
 
 # takes in a policy and returns and optimization x and the variable bounds
 def get_x_and_bounds_from_tuple(policy_params):
@@ -96,7 +98,7 @@ def test_model(sampler, args, gripper=None):
     # Optimize the GP to get the best policy.
     ucb = False
     stop_x, stop_policy, start_x = sampler.optim.optimize_gp(ucb)
-
+    
     # Execute the policy and observe the true motion.
     debug = False
     viz = False
@@ -137,7 +139,6 @@ class GPOptimizer(object):
             random_policy = generate_policy(self.mech, random_policies)
             policy_type = random_policy.type
             policy_tuple = random_policy.get_policy_tuple()
-
             results = [util.Result(policy_tuple, None, 0.0, None, None, None, \
                                     image_data, None, None)]
             self.sample_policies.append(results)
@@ -209,7 +210,10 @@ class GPOptimizer(object):
                                                                 im=im,
                                                                 theta=theta)
         feats = (feats - self.learned_kernel['mu'])/self.learned_kernel['std']
-        pred = self.learned_kernel['likelihood'](self.learned_kernel['gp'](feats))
+        with gpytorch.settings.fast_pred_var():
+            # pred = self.learned_kernel['likelihood'](self.learned_kernel['gp'](feats))
+            pred = self.learned_kernel['gp'](feats)
+
         pred_motion = pred.mean.cpu().detach().numpy()
         pred_std = pred.stddev.cpu().detach().numpy()
         if ucb:
@@ -227,11 +231,14 @@ class GPOptimizer(object):
         # TODO: Extract features from the dataset.
         X_pol, Y = process_data(data, len(data))
         X_pol = torch.tensor(X_pol, dtype=torch.float32).cuda()
+        
         feats = self.learned_kernel['extractor'].forward_cached(policy_type='Revolute',
                                                                 im=self.cached_im,
                                                                 theta=X_pol)
         feats = (feats - self.learned_kernel['mu'])/self.learned_kernel['std']
-        pred = self.learned_kernel['likelihood'](self.learned_kernel['gp'](feats))
+        with gpytorch.settings.fast_pred_var():
+            #pred = self.learned_kernel['likelihood'](self.learned_kernel['gp'](feats))
+            pred = self.learned_kernel['gp'](feats)
         pred_motion = pred.mean.cpu().detach().numpy()
         pred_std = pred.stddev.cpu().detach().numpy()
         if ucb:
@@ -310,7 +317,7 @@ class GPOptimizer(object):
 
         min_val, stop_policy, x_final = float("inf"), None, None
         # TODO: Change this back to 10.
-        for policy_params_max, max_disp in policies[-5:]:
+        for policy_params_max, max_disp in policies[-10:]:
             print('New Pol')
             x0, bounds = get_x_and_bounds_from_tuple(policy_params_max)
             opt_res = minimize(fun=self._objective_func, x0=x0,
@@ -322,8 +329,13 @@ class GPOptimizer(object):
                                                             }, bounds=bounds)
 
             val = opt_res['fun']
+            print(val)
             if val <= min_val:
                 x_final = opt_res['x']
+                # TODO: Remove this is just for debugging.
+                #print(x_final)
+                #x_final = [0.0, np.random.uniform(0.055, 0.15), -1.57]
+
                 stop_policy = get_policy_from_x(self.mech, x_final, policy_params_max)
                 min_val = val
         # print(opt_res)
@@ -356,7 +368,7 @@ class UCB_Interaction(object):
         self.bb = bb
         self.image_data = image_data
         self.mech = self.bb._mechanisms[0]
-        
+        self.im_id = 0 
         if gp_fname == '':
             self.gps = {'Prismatic': GaussianProcessRegressor(kernel=self.get_kernel('Prismatic', args.type),
                                                    n_restarts_optimizer=1),
@@ -385,10 +397,17 @@ class UCB_Interaction(object):
             'extractor': extractor.cuda(),
             'mu': mu.cuda(),
             'std': std.cuda(),
-            'train_xs': train_xs,
-            'train_ys': train_ys
+            'train_xs': train_xs[::50],
+            'train_ys': train_ys[::50]
         }
+        self.learned_kernel['gp'](train_xs)
+        self.learned_kernel['gp'].set_train_data(inputs=self.learned_kernel['train_xs'],
+                                                 targets=self.learned_kernel['train_ys'],
+                                                 strict=False)
         print('Learned kernel loaded.')
+        #print(likelihood.raw_noise)
+        #print(gp.likelihood.noise)
+        #print(gp.state_dict()) 
     def get_kernel(self, type, explore_type):
         noise = 1e-5
         variance = 0.005
@@ -472,8 +491,6 @@ class UCB_Interaction(object):
     def update_learned_kernel(self, result, x):
         # TODO: Update the trained GP.
         print('Updating the learned kernel with a new datapoint.')
-        print(type(self.learned_kernel['train_xs']))
-        print(self.learned_kernel['train_xs'].shape, self.learned_kernel['train_xs'].dtype) 
         _, theta, _ = self.optim._optim_result_to_torch('Revolute', x, self.optim.cached_im, True)
         feats = self.learned_kernel['extractor'].forward_cached(policy_type='Revolute',
                                                                 im=self.optim.cached_im,
@@ -483,11 +500,37 @@ class UCB_Interaction(object):
         new_y = torch.tensor([result.net_motion], dtype=torch.float32).cuda()
         xs, ys = self.learned_kernel['train_xs'], self.learned_kernel['train_ys']
         
+        # Print updated prediction. 
+        with gpytorch.settings.fast_pred_var():
+            #pred = self.learned_kernel['likelihood'](self.learned_kernel['gp'](feats))
+            pred = self.learned_kernel['gp'](feats)
+        pred_motion = pred.mean.cpu().detach().numpy()
+        pred_std = pred.stddev.cpu().detach().numpy()
+        print('Before:', pred_motion, pred_std)
         self.learned_kernel['train_xs'] = torch.cat([xs, feats], axis=0)
         self.learned_kernel['train_ys'] = torch.cat([ys, new_y], axis=0)
         self.learned_kernel['gp'].set_train_data(inputs=self.learned_kernel['train_xs'],
                                                  targets=self.learned_kernel['train_ys'],
                                                  strict=False)
+        # Print updated prediction. 
+        with gpytorch.settings.fast_pred_var():
+            #pred = self.learned_kernel['likelihood'](self.learned_kernel['gp'](feats))
+            pred = self.learned_kernel['gp'](feats)
+        pred_motion = pred.mean.cpu().detach().numpy()
+        pred_std = pred.stddev.cpu().detach().numpy()
+        print('After:', pred_motion, pred_std)
+        # Visualize the kernel after the update.
+        print('Sampled:', x, result.net_motion)
+        viz_3d_plots(xs=[],
+                     callback=get_callback(self.learned_kernel['gp'],
+                                           self.learned_kernel['likelihood'],
+                                           self.learned_kernel['extractor'],
+                                           self.learned_kernel['mu'],
+                                           self.learned_kernel['std']),
+                              bb_result=result,
+                              n_rows=1,
+                              fname='learned_kernel_viz_%d.png' % self.im_id)
+        self.im_id += 1
 
 
     def calc_avg_regret(self):
@@ -557,17 +600,17 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
     pose_handle_base_world = mech.get_pose_handle_base_world()
     sampler = UCB_Interaction(bb, image_data, plot, args, nn_fname=nn_fname, gp_fname=args.gp_fname)
     for ix in itertools.count():
-        gripper.reset(mech)
+        gripper.reset(sampler.mech)
         if args.debug:
             sys.stdout.write('\rProcessing sample %i' % ix)
-        # if we are done sampling n_interactions OR we need to get regret after
+        # if we are done sampling n_interactions OR we need to get regrNoner
         # each interaction
         if ((not n_interactions is None) and ix==n_interactions) or \
             (not success_regret is None):
 
-            regret, start_x, stop_x, policy_type = test_model(sampler, args, gripper=gripper)
+            regret, start_x, stop_x, policy_type = test_model(sampler, args, gripper=None)
             gripper.reset(mech)
-
+            print('Best x:', stop_x)
             print('Current regret', regret)
             opt_points = (policy_type, [(start_x, 'g'), (stop_x, 'r')])
             sample_points = {'Prismatic': [(sample, 'k') for sample in sampler.xs['Prismatic']],
@@ -610,10 +653,11 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
                 return dataset, sampler.gps, ix
 
         # sample a policy
-        # image_data, gripper = setup_env(bb, False, debug, use_gripper)
+        image_data, gripper = setup_env(bb, False, debug, use_gripper)
 
         gripper.reset(mech)
         x, policy = sampler.sample(args.random_policies, stochastic=args.stochastic)
+        
 
         # execute
         traj = policy.generate_trajectory(pose_handle_base_world, debug=debug)
@@ -622,84 +666,9 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
                              motion, c_motion, handle_pose_final, handle_pose_final,
                              image_data, None, True)
         dataset.append(result)
-
+        gripper.reset(mech)
         # update GP
         sampler.update(result, x)
-        # uncomment to generate a plot after each sample (WARNING: VERY SLOW!)
-        '''
-        if plot:
-            sample_points = {'Prismatic': [(sample, 'k') for sample in sampler.xs['Prismatic']],
-                            'Revolute': [(sample, 'k') for sample in sampler.xs['Revolute']]}
-            viz_circles(util.GP_PLOT,
-                        image_data,
-                        mech,
-                        BETA,
-                        sample_points=sample_points,
-                        opt_points=[],
-                        gps=sampler.gps,
-                        nn=sampler.nn,
-                        bb_i=bb_i,
-                        plot_dir_prefix=plot_dir_prefix)
-            plt.show()
-            input('Enter to close')
-            plt.close()
-
-        '''
-
-        # this code has not been updated since refactor
-        if ix % 10 == 0 and False:
-            if len(nn_fname) > 0:
-                model = util.load_model(nn_fname, args.hdim, use_cuda=use_cuda)
-
-            def _gp_callback(new_xs, bb_result):
-                ys, std = sampler.gps['Revolute'].predict(new_xs, return_std=True)
-                ys = ys.flatten()
-
-                if len(nn_fname) > 0:
-                    data = []
-                    for pitch, radius, q in new_xs:
-                        data.append({
-                            'type': 'Revolute',
-                            'params': [pitch, radius, q],
-                            'goal_config': q,
-                            'image': bb_result.image_data,
-                            'y': 0.,
-                            # 'mech': mech_params,
-                        })
-
-                    dataset = PolicyDataset(data)
-                    nn_ys = []
-                    for i in range(len(dataset.items)):
-                        policy_type = dataset.items[i]['type']
-                        policy_type_tensor = torch.Tensor([util.name_lookup[policy_type]])
-                        policy_tensor = dataset.tensors[i].unsqueeze(0)
-                        # config_tensor = dataset.configs[i].unsqueeze(0)
-                        image_tensor = dataset.images[i].unsqueeze(0)
-                        if use_cuda:
-                            policy_type_tensor = policy_type_tensor.cuda()
-                            policy_tensor = policy_tensor.cuda()
-                            # config_tensor = config_tensor.cuda()
-                            image_tensor = image_tensor.cuda()
-                        pred_motion, _ = model.forward(policy_type_tensor,
-                                                       policy_tensor,
-                                                       # config_tensor,
-                                                       image_tensor)
-                        if True:
-                            pred_motion_float = pred_motion.cpu().detach().numpy()[0][0]
-                        else:
-                            pred_motion_float = pred_motion.detach().numpy()[0][0]
-                        nn_ys += [pred_motion_float]
-                    ys += np.array(nn_ys)
-                return ys, std, ys + np.sqrt(BETA)*std
-
-            viz_3d_plots(xs=sampler.xs[policy_type],
-                         callback=_gp_callback,
-                         bb_result=bb_result)
-        #     viz_radius_plots(sampler.xs, sampler.gp)
-        #     viz_plots(sampler.xs, sampler.gp)
-
-    #with open('log_%d.pickle' % bb_i, 'wb') as handle:
-    #    pickle.dump(sampler.optim.log, handle)
 
 
 def viz_radius_plots(xs, gp):
