@@ -42,7 +42,7 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
     net = NNPolVis(policy_names=policy_types,
                    policy_dims=Policy.get_param_dims(policy_types),
                    hdim=hdim,
-                   im_h=53,  # 154, Note thiese aren't important for the SpatialAutoencoder
+                   im_h=53,  # 154, Note these aren't important for the SpatialAutoencoder
                    im_w=115,  # 205,
                    image_encoder=args.image_encoder)
 
