@@ -7,7 +7,6 @@ import learning.viz as viz
 from collections import namedtuple
 from utils import util
 import os
-import random
 import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
 from actions.policies import Policy
@@ -26,7 +25,7 @@ def view_points(img, points):
     axes.imshow(np.transpose(npimg, (1, 2, 0)))
     cmap = plt.get_cmap('viridis')
 
-    for ix in range(0, points.sxhape[0]):
+    for ix in range(0, points.shape[0]):
         axes.scatter((points[ix, 0]+1)/2.0*w, (points[ix, 1]+1)/2.0*h,
                      s=5, c=[cmap(ix/points.shape[0])])
 
@@ -60,32 +59,20 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
     for ex in range(1, args.n_epochs+1):
         train_losses = []
         net.train()
-
-        # Start changes for experience replay
-        buffer = []
         for bx, (k, x, im, y, _) in enumerate(train_set):
             pol = name_lookup[k[0]]
             if args.use_cuda:
                 x = x.cuda()
                 im = im.cuda()
                 y = y.cuda()
-
-            # Add each sample from the batch into the replay buffer
-            for i in range(batch_size):
-                # Cap the buffer size at 100
-                if len(buffer) > 100:
-                    buffer.pop(random.randint(0, len(buffer)-1))
-                buffer.append(im[i])
-
-            # Select a random batch from the buffer
-            batch = random.sample(buffer, batch_size)
-            batch = torch.stack(batch)
-
             optim.zero_grad()
-            yhat, points = net.forward(pol, x, batch)
+            yhat, points = net.forward(pol, x, im)
+
             loss = loss_fn(yhat, y)
             loss.backward()
+
             optim.step()
+
             train_losses.append(loss.item())
 
             if bx == 0 and args.debug:
@@ -93,7 +80,6 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
                     fig = view_points(im[kx, :, :, :].cpu(),
                                       points[kx, :, :].cpu().detach().numpy())
                     writer.add_figure('features_%d' % kx, fig, global_step=ex)
-        # End changes for experience replay
 
         train_loss_ex = np.mean(train_losses)
         writer.add_scalar('Train-loss/'+fname, train_loss_ex, ex)

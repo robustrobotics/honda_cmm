@@ -114,8 +114,8 @@ def make_regret_noT_plots(types, res_path):
     _, median_ax = plt.subplots()
     _, mean_ax = plt.subplots()
 
-    add_baseline_to_ax(args.results_path+'/random_sliders_50N.pickle', 'systematic', mean_ax, median_ax)
-    add_baseline_to_ax(args.results_path+'/gpucb_sliders_50N.pickle', 'gpucb_baseline', mean_ax, median_ax)
+    # add_baseline_to_ax(args.results_path+'/random_sliders_50N.pickle', 'systematic', mean_ax, median_ax)
+    # add_baseline_to_ax(args.results_path+'/gpucb_sliders_50N.pickle', 'gpucb_baseline', mean_ax, median_ax)
 
     N_plot = None
     for name in types:
@@ -188,10 +188,10 @@ if __name__ == '__main__':
     plt.ion()
     #plt_axes = {}
 
-    if not args.noT:
-        make_regret_T_plots(res_files)
-    elif args.noT:
-        make_regret_noT_plots(args.types, args.results_path)
+    # if not args.noT:
+    #     make_regret_T_plots(res_files)
+    # elif args.noT:
+    make_regret_noT_plots(args.types, args.results_path)
 
     plt.show()
     input('enter to close')

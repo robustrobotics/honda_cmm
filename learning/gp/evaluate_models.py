@@ -124,7 +124,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--plot',
         action='store_true',
-        help='use to generate polar plots durin GP-UCB interactions')
+        help='use to generate polar plots during GP-UCB interactions')
     parser.add_argument(
         '--debug',
         action='store_true',
@@ -155,6 +155,7 @@ if __name__ == '__main__':
         help='use to try random policy classes on random mechanisms')
     parser.add_argument(
         '--eval-method',
+        default='noT',
         choices=['T', 'noT'])
     args = parser.parse_args()
 
