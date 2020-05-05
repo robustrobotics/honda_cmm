@@ -14,7 +14,7 @@ from utils.util import load_model, read_from_file
 
 class PretrainedFeatureExtractor(nn.Module):
     def __init__(self, pretrained_nn_path):
-        super(FeatureExtractor, self).__init__()
+        super(PretrainedFeatureExtractor, self).__init__()
         self.pretrained_model = load_model(model_fname=pretrained_nn_path,
                                            hdim=16)
         
@@ -26,56 +26,33 @@ class PretrainedFeatureExtractor(nn.Module):
             policy_type = 'Revolute'
         pol = self.pretrained_model.policy_modules[policy_type].forward(theta)
         im, points = self.pretrained_model.image_module(im)
-        x = torch.cat([im, theta], dim=1)
-        #x = F.relu(self.pretrained_model.fc1(x))
-        #x = F.relu(self.pretrained_model.fc2(x))
+        x = torch.cat([im, pol], dim=1)
+        x = F.relu(self.pretrained_model.fc1(x))
+        x = F.relu(self.pretrained_model.fc2(x))
         return x
 
     def forward_cached(self, policy_type, im, theta):
         policy_type = 'Revolute'
         pol = self.pretrained_model.policy_modules[policy_type].forward(theta)
-        x = torch.cat([im, theta], dim=1)
-        # x = F.relu(self.pretrained_model.fc1(x))
-        #x = F.relu(self.pretrained_model.fc2(x))
+        x = torch.cat([im, pol], dim=1)
+        x = F.relu(self.pretrained_model.fc1(x))
+        x = F.relu(self.pretrained_model.fc2(x))
         return x
 
 
 class PretrainedDistanceGP(gpytorch.models.ExactGP):
     def __init__(self, train_x, train_y, likelihood):
-        super(DistanceGP, self).__init__(train_x, train_y, likelihood)
+        super(PretrainedDistanceGP, self).__init__(train_x, train_y, likelihood)
         num_gp_dims = 3
         self.mean_module = gpytorch.means.ConstantMean()
         self.covar_module = ScaleKernel(RBFKernel(ard_num_dims=num_gp_dims, lengthscale_constraint=gpytorch.constraints.Interval(0.0001, 1.)), outputscale_constraint=gpytorch.constraints.Interval(0.00001, 1.))
         pol_dim, im_dim, h_dim = 16, 32, 32
-        self.pol_embed = nn.Linear(3, pol_dim)
-        self.im_embed = nn.Linear(im_dim, pol_dim)
-        self.lin = nn.Linear(pol_dim, h_dim)
-        self.lin2 = nn.Linear(pol_dim+h_dim, h_dim)
-        self.lin3 = nn.Linear(pol_dim+h_dim, num_gp_dims)
         
-        self.cuda()
-        self.init_minmax(train_x)
+        self.lin = nn.Linear(h_dim, num_gp_dims)
+        
     
-    def init_minmax(self, train_x):
-        x = self.embed_input(train_x)
-        self.xmin = x.min(0)[0]
-        x = x - self.xmin
-        self.xmax = x.max(0)[0]
-
     def embed_input(self, x): 
-        theta, im = x[:, -3:], x[:,:-3]
-
-        # First embed the policy and image.
-        pol = self.pol_embed(theta)
-        im = torch.sigmoid(self.im_embed(im))
-        
-        # Use skip connections to encourage the kernel to pay attention to the policy.
-        x = pol+im
-        x = torch.sigmoid(self.lin(x))
-        x = torch.cat([x, pol], dim=1)
-        x = torch.sigmoid(self.lin2(x))
-        x = torch.cat([x, pol], dim=1)
-        x = self.lin3(x)
+        x = self.lin(x)
         return x
 
     def forward(self, x):
@@ -234,7 +211,7 @@ if __name__ == '__main__':
         extractor.cuda()
     train_x, train_y = extract_feature_dataset(train_set, extractor, use_cuda=CUDA)
     mu = torch.mean(train_x, dim=0, keepdims=True)
-    std = torch.std(train_x, dim=0, keepdims=True)*1e-3
+    std = torch.std(train_x, dim=0, keepdims=True)+1e-3
     train_xs = ((train_x-mu)/std).detach().clone()
     print('Features Extracted')
     print(train_x.shape, train_y.shape)
@@ -244,7 +221,7 @@ if __name__ == '__main__':
     print(train_x.size(0), train_y.size(0))
     #noise = torch.ones(1)*2e-5
     #likelihood = gpytorch.likelihoods.FixedNoiseGaussianLikelihood(noise)
-    likelihood = gpytorch.likelihoods.GaussianLikelihood(noise_constraint=gpytorch.constraints.GreaterThan(2.5e-5))  # 0.0001, 4e-6
+    likelihood = gpytorch.likelihoods.GaussianLikelihood(noise_constraint=gpytorch.constraints.GreaterThan(4e-6))  # 0.0001, 4e-6
     gp = DistanceGP(train_x=train_xs,
                     train_y=train_y,
                     likelihood=likelihood)
@@ -253,7 +230,7 @@ if __name__ == '__main__':
         gp = gp.cuda()
     gp.train()
     likelihood.train()
-    optimizer = torch.optim.Adam([{'params': gp.parameters()}], lr=0.01)
+    optimizer = torch.optim.Adam([{'params': gp.parameters()}], lr=0.1)
     #optimizer = torch.optim.Adam([{'params':gp.covar_module.parameters(), 'lr':0.1},
     #                              {'params':gp.lin.parameters()},
     #                              {'params':gp.lin3.parameters()},
