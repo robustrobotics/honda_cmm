@@ -397,13 +397,13 @@ class UCB_Interaction(object):
             'extractor': extractor.cuda(),
             'mu': mu.cuda(),
             'std': std.cuda(),
-            'train_xs': train_xs[::50],
-            'train_ys': train_ys[::50]
+            'train_xs': train_xs,
+            'train_ys': train_ys
         }
-        self.learned_kernel['gp'](train_xs)
-        self.learned_kernel['gp'].set_train_data(inputs=self.learned_kernel['train_xs'],
-                                                 targets=self.learned_kernel['train_ys'],
-                                                 strict=False)
+        #self.learned_kernel['gp'](train_xs)
+        #self.learned_kernel['gp'].set_train_data(inputs=self.learned_kernel['train_xs'],
+        #                                         targets=self.learned_kernel['train_ys'],
+        #                                         strict=False)
         print('Learned kernel loaded.')
         #print(likelihood.raw_noise)
         #print(gp.likelihood.noise)

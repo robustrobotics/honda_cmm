@@ -113,7 +113,7 @@ if __name__ == '__main__':
 
     # Load validation dataset.
     raw_results = read_from_file('/home/mnosew/workspace/honda_cmm/data/doors_gpucb_100L_100M_set0.pickle')
-    val_results = [bb[::] for bb in raw_results[80:]]
+    val_results = [bb[::] for bb in raw_results[82:]]
     val_results = [item for sublist in val_results for item in sublist]
     val_data = parse_pickle_file(val_results)
     val_set  = setup_data_loaders(data=val_data, batch_size=16, single_set=True)
@@ -142,7 +142,6 @@ if __name__ == '__main__':
             print('CORRECT')
     
     #viz_interaction()
-
     viz_3d_plots(xs=[],
                  callback=get_callback(gp, likelihood, extractor, mu, std),
                  bb_result=val_results[0],

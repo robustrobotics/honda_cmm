@@ -105,7 +105,7 @@ class DistanceGP(gpytorch.models.ExactGP):
         num_gp_dims = 3
         self.mean_module = gpytorch.means.ConstantMean()
         self.covar_module = ScaleKernel(RBFKernel(ard_num_dims=num_gp_dims, lengthscale_constraint=gpytorch.constraints.Interval(0.0001, 1.)), outputscale_constraint=gpytorch.constraints.Interval(0.00001, 1.))
-        pol_dim, im_dim, h_dim = 16, 32, 32
+        pol_dim, im_dim, h_dim = 16, 32, 8
         self.pol_embed = nn.Linear(3, pol_dim)
         self.im_embed = nn.Linear(im_dim, pol_dim)
         self.lin = nn.Linear(pol_dim, h_dim)
@@ -131,8 +131,8 @@ class DistanceGP(gpytorch.models.ExactGP):
         # Use skip connections to encourage the kernel to pay attention to the policy.
         x = pol+im
         x = torch.sigmoid(self.lin(x))
-        x = torch.cat([x, pol], dim=1)
-        x = torch.sigmoid(self.lin2(x))
+        #x = torch.cat([x, pol], dim=1)
+        #x = torch.sigmoid(self.lin2(x))
         x = torch.cat([x, pol], dim=1)
         x = self.lin3(x)
         return x
@@ -194,10 +194,10 @@ if __name__ == '__main__':
     #  Load dataset.
     raw_results = read_from_file('/home/mnosew/workspace/honda_cmm/data/doors_gpucb_100L_100M_set0.pickle')
     results = [bb[::] for bb in raw_results[:args.L]]  
-    results = [item for sublist in results for item in sublist][::2]
+    results = [item for sublist in results for item in sublist][::]
     data = parse_pickle_file(results)
     
-    val_results = [bb[::] for bb in raw_results[80:]]
+    val_results = [bb[::] for bb in raw_results[81:]]
     val_results = [item for sublist in val_results for item in sublist]
     val_data = parse_pickle_file(val_results)
     
@@ -212,6 +212,7 @@ if __name__ == '__main__':
     train_x, train_y = extract_feature_dataset(train_set, extractor, use_cuda=CUDA)
     mu = torch.mean(train_x, dim=0, keepdims=True)
     std = torch.std(train_x, dim=0, keepdims=True)+1e-3
+    print(std)
     train_xs = ((train_x-mu)/std).detach().clone()
     print('Features Extracted')
     print(train_x.shape, train_y.shape)
@@ -221,7 +222,7 @@ if __name__ == '__main__':
     print(train_x.size(0), train_y.size(0))
     #noise = torch.ones(1)*2e-5
     #likelihood = gpytorch.likelihoods.FixedNoiseGaussianLikelihood(noise)
-    likelihood = gpytorch.likelihoods.GaussianLikelihood(noise_constraint=gpytorch.constraints.GreaterThan(4e-6))  # 0.0001, 4e-6
+    likelihood = gpytorch.likelihoods.GaussianLikelihood(noise_constraint=gpytorch.constraints.GreaterThan(9e-6))  # 0.0001, 4e-6
     gp = DistanceGP(train_x=train_xs,
                     train_y=train_y,
                     likelihood=likelihood)
@@ -240,8 +241,8 @@ if __name__ == '__main__':
     #                              {'params':gp.likelihood.parameters(), 'lr':0.1}])
     mll = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, gp)
     val_loss_fn = torch.nn.MSELoss()
-    with gpytorch.settings.max_preconditioner_size(200), gpytorch.settings.max_cg_iterations(5000):#, gpytorch.settings.fast_computations(log_prob=False, solves=False):
-        for tx in range(1500):
+    with gpytorch.settings.max_preconditioner_size(200), gpytorch.settings.max_cg_iterations(10000), gpytorch.settings.fast_computations(log_prob=False, solves=True):
+        for tx in range(2000):
             optimizer.zero_grad()
             output = gp(train_xs)
             loss = -mll(output, train_y)
@@ -250,16 +251,16 @@ if __name__ == '__main__':
 
             if tx % 50 == 0:
                 print(loss.item(), gp.likelihood.noise.item(), gp.covar_module.base_kernel.lengthscale, gp.covar_module.outputscale.item())
-            #    gp.eval()
-            #    likelihood.eval()
-            #    output = gp(val_x)
-            #    val_loss = val_loss_fn(output.mean, val_y)
-            #    output = gp(train_xs)
-            #    train_loss = val_loss_fn(output.mean, train_y)
-            #    print('Train Loss:', train_loss.item())
-            #    print('Val Loss:', val_loss.item())
-            #    gp.train()
-            #    likelihood.train()
+                gp.eval()
+                likelihood.eval()
+                output = gp(val_x)
+                val_loss = val_loss_fn(output.mean, val_y)
+                output = gp(train_xs)
+                train_loss = val_loss_fn(output.mean, train_y)
+                print('Train Loss:', train_loss.item())
+                print('Val Loss:', val_loss.item())
+                gp.train()
+                likelihood.train()
 
         torch.save((gp.state_dict(), train_xs, train_y, mu, std), args.save_path)
     gp.eval()
