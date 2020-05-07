@@ -8,7 +8,7 @@ from learning.modules.image_encoder import ImageEncoder as CNNEncoder
 from learning.models.nn_disp_pol_vis import DistanceRegressor
 from learning.dataloaders import setup_data_loaders, parse_pickle_file
 import gpytorch
-from gpytorch.kernels import GridInterpolationKernel, ScaleKernel, RBFKernel
+from gpytorch.kernels import GridInterpolationKernel, ScaleKernel, RBFKernel, MaternKernel
 from utils.util import load_model, read_from_file
 
 
@@ -45,28 +45,26 @@ class PretrainedDistanceGP(gpytorch.models.ExactGP):
         super(PretrainedDistanceGP, self).__init__(train_x, train_y, likelihood)
         num_gp_dims = 3
         self.mean_module = gpytorch.means.ConstantMean()
-        self.covar_module = ScaleKernel(RBFKernel(ard_num_dims=num_gp_dims, lengthscale_constraint=gpytorch.constraints.Interval(0.0001, 1.)), outputscale_constraint=gpytorch.constraints.Interval(0.00001, 1.))
-        pol_dim, im_dim, h_dim = 16, 32, 32
+        self.covar_module = ScaleKernel(RBFKernel(ard_num_dims=num_gp_dims, lengthscale_constraint=gpytorch.constraints.Interval(0.0001, 1.)), outputscale_constraint=gpytorch.constraints.Interval(1e-8, 1.e-6))
+        pol_dim, im_dim, h_dim = 8, 32,32
         
-        self.lin = nn.Linear(h_dim, num_gp_dims)
+        self.lin = nn.Linear(h_dim, h_dim)
+        self.lin2 = nn.Linear(h_dim, num_gp_dims)
         
     
     def embed_input(self, x): 
-        x = self.lin(x)
+        x = torch.tanh(self.lin(x))
+        x = self.lin2(x)
         return x
 
     def forward(self, x):
         x = self.embed_input(x)
 
         # The standardization shouldn't change at test time.
-        if self.training:
-            self.xmin = x.min(0)[0]
-            x = x - self.xmin
-            self.xmax = x.max(0)[0]
-            x = 2*(x/self.xmax)-1
-        else:
-            x = x - self.xmin
-            x = 2*(x/self.xmax)-1
+        self.xmin = x.min(0)[0]
+        x = x - self.xmin
+        self.xmax = x.max(0)[0]
+        x = 2*(x/self.xmax)-1
         mean_x = self.mean_module(x)
         covar_x = self.covar_module(x)
         return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
@@ -102,16 +100,18 @@ class FeatureExtractor(nn.Module):
 class DistanceGP(gpytorch.models.ExactGP):
     def __init__(self, train_x, train_y, likelihood):
         super(DistanceGP, self).__init__(train_x, train_y, likelihood)
-        num_gp_dims = 3
-        self.mean_module = gpytorch.means.ConstantMean()
-        self.covar_module = ScaleKernel(RBFKernel(ard_num_dims=num_gp_dims, lengthscale_constraint=gpytorch.constraints.Interval(0.0001, 1.)), outputscale_constraint=gpytorch.constraints.Interval(0.00001, 1.))
-        pol_dim, im_dim, h_dim = 16, 32, 8
+        num_gp_dims = 4
+        self.mean_module = gpytorch.means.ZeroMean()
+        self.covar_module = ScaleKernel(RBFKernel(ard_num_dims=num_gp_dims, 
+                                                  lengthscale_constraint=gpytorch.constraints.Interval(1.e-6, 1.)), 
+                                        outputscale_constraint=gpytorch.constraints.Interval(0.0225, 1.e-1))
+        pol_dim, im_dim, h_dim = 32, 32, 128
         self.pol_embed = nn.Linear(3, pol_dim)
         self.im_embed = nn.Linear(im_dim, pol_dim)
-        self.lin = nn.Linear(pol_dim, h_dim)
-        self.lin2 = nn.Linear(pol_dim+h_dim, h_dim)
-        self.lin3 = nn.Linear(pol_dim+h_dim, num_gp_dims)
-        
+        self.lin = nn.Linear(2*pol_dim, h_dim)
+        self.lin2 = nn.Linear(h_dim, h_dim)
+        self.lin3 = nn.Linear(h_dim, num_gp_dims)
+        self.dropout = nn.Dropout(0.2) 
         #self.cuda()
         #self.init_minmax(train_x)
     
@@ -126,31 +126,35 @@ class DistanceGP(gpytorch.models.ExactGP):
 
         # First embed the policy and image.
         pol = self.pol_embed(theta)
-        im = torch.sigmoid(self.im_embed(im))
+        im = self.im_embed(im)
         
+        embed = torch.tanh(torch.cat([pol, im], dim=1))
+        x = self.dropout(embed)
         # Use skip connections to encourage the kernel to pay attention to the policy.
-        x = pol+im
-        x = torch.sigmoid(self.lin(x))
-        #x = torch.cat([x, pol], dim=1)
-        #x = torch.sigmoid(self.lin2(x))
-        x = torch.cat([x, pol], dim=1)
+        x = torch.tanh(self.lin(embed))
+        x = self.dropout(x)
+        #x = torch.cat([x, embed], dim=1)
+        x = torch.tanh(self.lin2(x))
+        x = self.dropout(x)
+        #x = torch.cat([x, embed], dim=1)
         x = self.lin3(x)
         return x
+
 
     def forward(self, x):
         x = self.embed_input(x)
 
         # The standardization shouldn't change at test time.
-        if True:#self.training: # self.training:
-            # self.xmin = x.min(0)[0]
-            x = x - x.min(0)[0]
-            # self.xmax = x.max(0)[0]
-            x = 2*(x/x.max(0)[0])-1
-        else:
-            x = x - self.xmin
-            x = 2*(x/self.xmax)-1
+        x = x - x.min(0)[0]
+        x = 2*(x/x.max(0)[0])-1
+        
         mean_x = self.mean_module(x)
         covar_x = self.covar_module(x)
+        #import pickle
+        #with open('debug.pickle', 'wb') as handle:
+        #    pickle.dump([mean_x.clone().cpu().detach().numpy(), 
+        #                 covar_x.clone().cpu().detach().numpy()], handle)
+        #print(mean_x.shape, covar_x.shape)
         return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
 
 
@@ -201,7 +205,7 @@ if __name__ == '__main__':
     val_results = [item for sublist in val_results for item in sublist]
     val_data = parse_pickle_file(val_results)
     
-    train_set, _, _ = setup_data_loaders(data=data, batch_size=16)
+    train_set = setup_data_loaders(data=data, batch_size=16, single_set=True)
     val_set = setup_data_loaders(data=val_data, batch_size=16, single_set=True)
     
     # Extract features for this dataset.
@@ -220,9 +224,12 @@ if __name__ == '__main__':
     val_x = (val_x - mu)/std
     print('Data Size:', train_x.shape, train_y.shape)
     print(train_x.size(0), train_y.size(0))
-    #noise = torch.ones(1)*2e-5
-    #likelihood = gpytorch.likelihoods.FixedNoiseGaussianLikelihood(noise)
-    likelihood = gpytorch.likelihoods.GaussianLikelihood(noise_constraint=gpytorch.constraints.GreaterThan(9e-6))  # 0.0001, 4e-6
+    print(train_y)
+    #mu_y, std_y = torch.mean(train_y), torch.std(train_y)
+    #train_y = (train_y - mu_y)/std_y
+    # noise = torch.ones(1)*1e-7
+    # likelihood = gpytorch.likelihoods.FixedNoiseGaussianLikelihood(noise)
+    likelihood = gpytorch.likelihoods.GaussianLikelihood(noise_constraint=gpytorch.constraints.Interval(1e-8, 6.25e-6))  # 0.0001, 4e-6
     gp = DistanceGP(train_x=train_xs,
                     train_y=train_y,
                     likelihood=likelihood)
@@ -231,7 +238,7 @@ if __name__ == '__main__':
         gp = gp.cuda()
     gp.train()
     likelihood.train()
-    optimizer = torch.optim.Adam([{'params': gp.parameters()}], lr=0.1)
+    optimizer = torch.optim.Adam([{'params': gp.parameters()}], lr=0.01)
     #optimizer = torch.optim.Adam([{'params':gp.covar_module.parameters(), 'lr':0.1},
     #                              {'params':gp.lin.parameters()},
     #                              {'params':gp.lin3.parameters()},
@@ -241,28 +248,31 @@ if __name__ == '__main__':
     #                              {'params':gp.likelihood.parameters(), 'lr':0.1}])
     mll = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, gp)
     val_loss_fn = torch.nn.MSELoss()
-    with gpytorch.settings.max_preconditioner_size(200), gpytorch.settings.max_cg_iterations(10000), gpytorch.settings.fast_computations(log_prob=False, solves=True):
-        for tx in range(2000):
+    best = 1000
+    with gpytorch.settings.max_preconditioner_size(200), gpytorch.settings.max_cg_iterations(10000), gpytorch.settings.fast_computations(log_prob=False, solves=False, covar_root_decomposition=False):
+        for tx in range(6000):
             optimizer.zero_grad()
             output = gp(train_xs)
             loss = -mll(output, train_y)
             loss.backward()
             optimizer.step()
 
-            if tx % 50 == 0:
-                print(loss.item(), gp.likelihood.noise.item(), gp.covar_module.base_kernel.lengthscale, gp.covar_module.outputscale.item())
-                gp.eval()
-                likelihood.eval()
-                output = gp(val_x)
-                val_loss = val_loss_fn(output.mean, val_y)
-                output = gp(train_xs)
-                train_loss = val_loss_fn(output.mean, train_y)
-                print('Train Loss:', train_loss.item())
-                print('Val Loss:', val_loss.item())
-                gp.train()
-                likelihood.train()
-
-        torch.save((gp.state_dict(), train_xs, train_y, mu, std), args.save_path)
+            if tx % 100 == 0:
+                print(tx, loss.item(), gp.likelihood.noise.item(), gp.covar_module.base_kernel.lengthscale, gp.covar_module.outputscale.item())
+                #gp.eval()
+                #likelihood.eval()
+                #output = gp(val_x)
+                #val_loss = val_loss_fn(output.mean, val_y)
+                #output = gp(train_xs)
+                #train_loss = val_loss_fn(output.mean, train_y)
+                #print('Train Loss:', train_loss.item())
+                #print('Val Loss:', val_loss.item())
+                #gp.train()
+                #likelihood.train()
+                
+                #if loss.item() < best:
+            best = loss.item()
+            torch.save((gp.state_dict(), train_xs, train_y, mu, std), args.save_path)
     gp.eval()
     print('Val Predictions')
     for ix in range(0, 20):#val_x.shape[0]):
@@ -273,7 +283,7 @@ if __name__ == '__main__':
         true = val_y[ix].item()
         
         p = pred.mean.cpu().detach().numpy()[0]
-        if p < lower or p > upper:
+        if true < lower or true > upper:
             print('INCORRECT:', pred.mean.cpu().detach().numpy(), 
                 (lower[0], upper[0]), upper - lower,
                 val_y[ix])

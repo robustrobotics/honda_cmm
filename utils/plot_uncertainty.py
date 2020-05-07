@@ -46,8 +46,9 @@ def get_callback(gp_model, likelihood, feature_extractor, p_mu, p_std):
                                                  policy_tensor)
             features = (features - p_mu)/p_std
 
-            #print(gp_model.get_gp_inputs(features))
-            with gpytorch.settings.fast_pred_var():
+            #print(gp_model.embed_input(features))
+            with gpytorch.settings.max_preconditioner_size(200), gpytorch.settings.max_cg_iterations(10000),  gpytorch.settings.fast_computations(log_prob=False, solves=False, covar_root_decomposition=False):
+            #with gpytorch.settings.fast_pred_var():
                 pred = gp_model(features)
             pred_motion_float = pred.mean.cpu().detach().numpy()[0]
             pred_std = pred.stddev.cpu().detach().numpy()[0]
@@ -99,7 +100,7 @@ if __name__ == '__main__':
 
     # Load the GP and Feature Extractor.
     gp_state, train_xs, train_ys, mu, std = torch.load(args.gp_path)
-    likelihood = gpytorch.likelihoods.GaussianLikelihood()
+    likelihood = gpytorch.likelihoods.GaussianLikelihood(noise_constraint=gpytorch.constraints.Interval(1e-8, 6.25e-6))
     gp = DistanceGP(train_x=train_xs,
                     train_y=train_ys,
                     likelihood=likelihood)
@@ -110,9 +111,12 @@ if __name__ == '__main__':
         gp.cuda()
     gp.load_state_dict(gp_state)
     print(gp.covar_module.base_kernel.lengthscale)
-
+    print(gp.likelihood.noise)
     # Load validation dataset.
     raw_results = read_from_file('/home/mnosew/workspace/honda_cmm/data/doors_gpucb_100L_100M_set0.pickle')
+    #raw_results = read_from_file('100_eval_doors.pickle')
+    #val_results = [bb[::] for bb in raw_results]
+    #val_results = [item for sublist in val_results for item in sublist]
     val_results = [bb[::] for bb in raw_results[82:]]
     val_results = [item for sublist in val_results for item in sublist]
     val_data = parse_pickle_file(val_results)
@@ -121,26 +125,30 @@ if __name__ == '__main__':
     val_x = (val_x - mu)/std
     
     gp.eval()
+    likelihood.eval()
     print('Val Predictions')
-    for ix in range(0, 20):#val_x.shape[0]):
-        pred = likelihood(gp(val_x[ix:ix+1, :]))
-        lower, upper = pred.confidence_region()
-        lower = lower.cpu().detach().numpy()
-        upper = upper.cpu().detach().numpy()
-        true = val_y[ix].item()
-        
-        p = pred.mean.cpu().detach().numpy()[0]
-        if p < lower or p > upper:
-            print('INCORRECT:', pred.mean.cpu().detach().numpy(), 
-                (lower[0], upper[0]), upper - lower,
-                val_y[ix])
-        elif upper[0]-lower[0] > 0.05:
-            print('UNSURE:', pred.mean.cpu().detach().numpy(), 
-                (lower[0], upper[0]), upper - lower,
-                val_y[ix])
-        else:
-            print('CORRECT')
+    with gpytorch.settings.max_preconditioner_size(200), gpytorch.settings.max_cg_iterations(10000), gpytorch.settings.fast_computations(log_prob=False, solves=False, covar_root_decomposition=False):
+        for ix in range(0, 20):#val_x.shape[0]):
+            #print(gp.likelihood.noise)
+            pred = likelihood(gp(val_x[ix:ix+1, :]))
+            lower, upper = pred.confidence_region()
+            lower = lower.cpu().detach().numpy()
+            upper = upper.cpu().detach().numpy()
+            true = val_y[ix].item()
+            
+            p = pred.mean.cpu().detach().numpy()[0]
+            if true < lower or true > upper:
+                print('INCORRECT:', pred.mean.cpu().detach().numpy(), 
+                    (lower[0], upper[0]), upper - lower,
+                    val_y[ix])
+            elif upper[0]-lower[0] > 0.05:
+                print('UNSURE:', pred.mean.cpu().detach().numpy(), 
+                    (lower[0], upper[0]), upper - lower,
+                    val_y[ix])
+            else:
+                print('CORRECT')
     
+        #print('COMP:',(upper-lower)/4., pred.stddev.cpu().detach().numpy())
     #viz_interaction()
     viz_3d_plots(xs=[],
                  callback=get_callback(gp, likelihood, extractor, mu, std),

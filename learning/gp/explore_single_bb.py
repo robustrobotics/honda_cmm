@@ -210,9 +210,9 @@ class GPOptimizer(object):
                                                                 im=im,
                                                                 theta=theta)
         feats = (feats - self.learned_kernel['mu'])/self.learned_kernel['std']
-        with gpytorch.settings.fast_pred_var():
-            # pred = self.learned_kernel['likelihood'](self.learned_kernel['gp'](feats))
-            pred = self.learned_kernel['gp'](feats)
+        with gpytorch.settings.max_cg_iterations(10000), gpytorch.settings.max_preconditioner_size(200), gpytorch.settings.fast_computations(solves=False):
+            pred = self.learned_kernel['likelihood'](self.learned_kernel['gp'](feats))
+            #pred = self.learned_kernel['gp'](feats)
 
         pred_motion = pred.mean.cpu().detach().numpy()
         pred_std = pred.stddev.cpu().detach().numpy()
@@ -231,14 +231,13 @@ class GPOptimizer(object):
         # TODO: Extract features from the dataset.
         X_pol, Y = process_data(data, len(data))
         X_pol = torch.tensor(X_pol, dtype=torch.float32).cuda()
-        
         feats = self.learned_kernel['extractor'].forward_cached(policy_type='Revolute',
                                                                 im=self.cached_im,
                                                                 theta=X_pol)
         feats = (feats - self.learned_kernel['mu'])/self.learned_kernel['std']
-        with gpytorch.settings.fast_pred_var():
-            #pred = self.learned_kernel['likelihood'](self.learned_kernel['gp'](feats))
-            pred = self.learned_kernel['gp'](feats)
+        with gpytorch.settings.max_cg_iterations(10000), gpytorch.settings.max_preconditioner_size(200), gpytorch.settings.fast_computations(solves=False):
+            pred = self.learned_kernel['likelihood'](self.learned_kernel['gp'](feats))
+            #pred = self.learned_kernel['gp'](feats)
         pred_motion = pred.mean.cpu().detach().numpy()
         pred_std = pred.stddev.cpu().detach().numpy()
         if ucb:
@@ -383,13 +382,15 @@ class UCB_Interaction(object):
     def load_learned_kernel(self, nn_fname, gp_fname):
         print('Loading a learned kernel.')
         gp_state, train_xs, train_ys, mu, std = torch.load(gp_fname)
-        likelihood = gpytorch.likelihoods.GaussianLikelihood()
+        likelihood = gpytorch.likelihoods.GaussianLikelihood(noise_constraint=gpytorch.constraints.Interval(1e-8, 6.25e-6))
         gp = DistanceGP(train_x=train_xs,
                         train_y=train_ys,
                         likelihood=likelihood)
         extractor = FeatureExtractor(pretrained_nn_path=nn_fname)
         gp.load_state_dict(gp_state)
+        #gp.likelihood.noise = 4.82e-7
         gp.eval()
+        print(likelihood.noise)
 
         self.learned_kernel = {
             'gp': gp.cuda(),
@@ -400,6 +401,7 @@ class UCB_Interaction(object):
             'train_xs': train_xs,
             'train_ys': train_ys
         }
+        print(self.learned_kernel['likelihood'].noise)
         #self.learned_kernel['gp'](train_xs)
         #self.learned_kernel['gp'].set_train_data(inputs=self.learned_kernel['train_xs'],
         #                                         targets=self.learned_kernel['train_ys'],
@@ -501,9 +503,9 @@ class UCB_Interaction(object):
         xs, ys = self.learned_kernel['train_xs'], self.learned_kernel['train_ys']
         
         # Print updated prediction. 
-        with gpytorch.settings.fast_pred_var():
-            #pred = self.learned_kernel['likelihood'](self.learned_kernel['gp'](feats))
-            pred = self.learned_kernel['gp'](feats)
+        with gpytorch.settings.max_cg_iterations(10000), gpytorch.settings.max_preconditioner_size(200), gpytorch.settings.fast_computations(solves=False, covar_root_decomposition=False, log_prob=False):
+            pred = self.learned_kernel['likelihood'](self.learned_kernel['gp'](feats))
+        #pred = self.learned_kernel['gp'](feats)
         pred_motion = pred.mean.cpu().detach().numpy()
         pred_std = pred.stddev.cpu().detach().numpy()
         print('Before:', pred_motion, pred_std)
@@ -512,10 +514,11 @@ class UCB_Interaction(object):
         self.learned_kernel['gp'].set_train_data(inputs=self.learned_kernel['train_xs'],
                                                  targets=self.learned_kernel['train_ys'],
                                                  strict=False)
+        #self.learned_kernel['gp'] = self.learned_kernel['gp'].get_fantasy_model(feats, new_y)
         # Print updated prediction. 
-        with gpytorch.settings.fast_pred_var():
-            #pred = self.learned_kernel['likelihood'](self.learned_kernel['gp'](feats))
-            pred = self.learned_kernel['gp'](feats)
+        with gpytorch.settings.max_preconditioner_size(200), gpytorch.settings.max_cg_iterations(10000), gpytorch.settings.fast_computations(solves=False, covar_root_decomposition=False, log_prob=False):
+            pred = self.learned_kernel['likelihood'](self.learned_kernel['gp'](feats))
+        #pred = self.learned_kernel['gp'](feats)
         pred_motion = pred.mean.cpu().detach().numpy()
         pred_std = pred.stddev.cpu().detach().numpy()
         print('After:', pred_motion, pred_std)
