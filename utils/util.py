@@ -286,7 +286,7 @@ def write_to_file(file_name, data, verbose=True):
     with open(file_name, 'wb') as handle:
         pickle.dump(data, handle)
     if verbose:
-        print('wrote dataset to '+file_name)
+        print('wrote file to '+file_name)
 
 def read_from_file(file_name, verbose=True):
     print('reading in '+file_name)
