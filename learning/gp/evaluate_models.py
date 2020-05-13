@@ -60,8 +60,7 @@ def evaluate_models(n_interactions, n_bbs, args, use_cuda=False):
 # find successful parameters
 
 def evaluate_models_noT(n_bbs, args, use_cuda=False):
-    mech_types = ['slider', 'door']
-    bb_data = get_bb_dataset(args.bb_fname, n_bbs, mech_types, 1, args.urdf_num)
+    bb_data = get_bb_dataset(args.bb_fname, n_bbs, args.mech_types, 1, args.urdf_num)
 
     all_results = {}
     for L in range(args.Ls[0], args.Ls[1]+1, args.Ls[2]):
@@ -89,7 +88,7 @@ def evaluate_models_noT(n_bbs, args, use_cuda=False):
             all_L_results[model] = all_model_test_steps
         if len(models) > 0:
             all_results[L] = all_L_results
-    util.write_to_file('regret_results_noT_%s_%dN.pickle' % (args.type, n_bbs),
+    util.write_to_file('regret_results_noT_%s_%dN_%s.pickle' % (args.type, n_bbs, args.mech_types[0]),
                        all_results,
                        verbose=True)
 
@@ -156,6 +155,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--eval-method',
         choices=['T', 'noT'])
+    parser.add_argument('--mech-types', nargs='+', default=['slider'], type=str)
     args = parser.parse_args()
 
     if args.debug:
