@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+
+# run this script with the command:
+#   ./run_tests slider  (to test sliders)
+#   ./run_tests door    (to test doors)
+MECH_TYPE=$1
+coverage erase
+
+echo "===> Generating datasets for $MECH_TYPE"
+
+echo "==> random"
+rm ${MECH_TYPE}_random_dataset_test
+coverage run -m gen.generate_policy_data --n-samples 10 --n-bbs 2 --mech-types $MECH_TYPE --fname ${MECH_TYPE}_random_dataset_test
+
+echo "==> gpucb"
+rm ${MECH_TYPE}_gpucb_dataset_test
+coverage run --append -m learning.gp.explore_single_bb --n-gp-samples 5 --M 10 --L 2 --mech-types $MECH_TYPE --fname ${MECH_TYPE}_gpucb_dataset_test
+
+echo "===> Generating non-CPP baseline results for $MECH_TYPE"
+
+echo "==> random"
+rm ${MECH_TYPE}_random_baseline
+coverage run --append -m actions.evaluate_noncpp_baselines --n-gp-samples 5 --N 2 --type random --fname ${MECH_TYPE}_random_baseline
+
+echo "==> gpucb"
+rm ${MECH_TYPE}_gpucb_baseline
+coverage run --append -m actions.evaluate_noncpp_baselines --n-gp-samples 5 --N 2 --type gpucb --fname ${MECH_TYPE}_gpucb_baseline
+
+echo "===> Training models for $MECH_TYPE"
+
+echo "==> random"
+rm -rf ${MECH_TYPE}_cpp_random
+coverage run --append -m learning.train --batch-size 5 --hdim 5 --n-epochs 3 --val-freq 1 --data-fname ${MECH_TYPE}_random_dataset_test --save-dir ${MECH_TYPE}_cpp_random --L-min 1 --L-max 2 --L-step 1 --M 10
+
+echo "==> gpucb"
+rm -rf ${MECH_TYPE}_cpp_gpucb
+coverage run --append -m learning.train --batch-size 5 --hdim 5 --n-epochs 3 --val-freq 1 --data-fname ${MECH_TYPE}_gpucb_dataset_test --save-dir ${MECH_TYPE}_cpp_gpucb --L-min 1 --L-max 2 --L-step 1 --M 10
+
+echo "===> Evaluating models for $MECH_TYPE"
+
+echo "==> random"
+rm regret_results_noT_random_3N_${MECH_TYPE}.pickle
+coverage run --append -m learning.gp.evaluate_models --n-gp-samples 5 --N 3 --type random --hdim 5 --models-path ${MECH_TYPE}_cpp_random --Ls 1 2 1 --eval-method noT
+
+echo "==> gpucb"
+rm regret_results_noT_gpucb_3N_${MECH_TYPE}.pickle
+coverage run --append -m learning.gp.evaluate_models --n-gp-samples 5 --N 3 --type gpucb --hdim 5 --models-path ${MECH_TYPE}_cpp_gpucb --Ls 1 2 1 --eval-method noT
+
+echo "===> Making regret plots for $MECH_TYPE"
+coverage run --append -m learning.make_regret_plots2 --types gpucb random --results-path . --noT --nonCPP ${MECH_TYPE}_random_baseline ${MECH_TYPE}_gpucb_baseline
