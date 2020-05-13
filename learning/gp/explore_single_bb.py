@@ -295,14 +295,14 @@ class UCB_Interaction(object):
         self.bb = bb
         self.image_data = image_data
         self.mech = self.bb._mechanisms[0]
-        self.gps = {'Prismatic': GaussianProcessRegressor(kernel=self.get_kernel('Prismatic', args.type),
+        self.gps = {'Prismatic': GaussianProcessRegressor(kernel=self.get_kernel('Prismatic'), #args.type),
                                                n_restarts_optimizer=1),
-                    'Revolute': GaussianProcessRegressor(kernel=self.get_kernel('Revolute', args.type),
+                    'Revolute': GaussianProcessRegressor(kernel=self.get_kernel('Revolute'), #args.type),
                                                        n_restarts_optimizer=1)}
         self.optim = GPOptimizer(args.urdf_num, self.bb, self.image_data, \
                         args.n_gp_samples, BETA, self.gps, args.random_policies, nn=self.nn)
 
-    def get_kernel(self, type, explore_type):
+    def get_kernel(self, type):#, explore_type):
         noise = 1e-5
         variance = 0.005
 
@@ -311,11 +311,11 @@ class UCB_Interaction(object):
                                 ('yaw', 0.1),
                                 ('goal_config', 0.1)])
         elif type == 'Revolute':
-            if 'random' in explore_type:
-                ps = (1.256, 0.018, 0.314)
-            else:
-                ps = (0.628, 0.009, 0.157)
-            # ps = (0.628, 0.009, 0.157)
+            #if 'random' in explore_type:
+            #    ps = (1.256, 0.018, 0.314)
+            #else:
+            #    ps = (0.628, 0.009, 0.157)
+            ps = (0.628, 0.009, 0.157)
             print('Using Kernel:', ps)
             kernel_ls_params = OrderedDict([('rot_axis_roll', ps[0]),
                                 ('rot_axis_pitch', ps[0]),
@@ -486,9 +486,9 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
         #print('Regret:', np.mean(regrets))
 
     # Save the dataset.
+    
     if args.fname != '':
-        with open(args.fname, 'wb') as handle:
-            pickle.dump(dataset, handle)
+        util.write_to_file(args.fname, dataset)
 
 def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
                                    n_interactions=None, plot_dir_prefix='',
@@ -517,7 +517,7 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
             regret, start_x, stop_x, policy_type = test_model(sampler, args, gripper=gripper)
             gripper.reset(mech)
 
-            print('Current regret', regret)
+            #print('Current regret', regret)
             opt_points = (policy_type, [(start_x, 'g'), (stop_x, 'r')])
             sample_points = {'Prismatic': [(sample, 'k') for sample in sampler.xs['Prismatic']],
                             'Revolute': [(sample, 'k') for sample in sampler.xs['Revolute']]}
@@ -545,6 +545,10 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
             # if got successful interaction or timeout
             elif (not success_regret is None) and \
                             ((regret < success_regret) or (ix >= 100)):
+                if ix >= 100:
+                    print('timeout interactions')
+                elif regret < success_regret:
+                    print('succcessful interaction!')
                 if plot:
                     viz_circles(util.GP_PLOT,
                                 image_data,
