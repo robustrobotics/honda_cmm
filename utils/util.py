@@ -6,9 +6,7 @@ import math
 from collections import namedtuple
 import os
 import torch
-#from learning.models.nn_disp_pol import DistanceRegressor as NNPol
 from learning.models.nn_disp_pol_vis import DistanceRegressor as NNPolVis
-#from learning.models.nn_disp_pol_mech import DistanceRegressor as NNPolMech
 #from actions import policies
 import matplotlib.pyplot as plt
 import matplotlib.pyplot as plt
