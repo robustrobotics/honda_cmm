@@ -22,23 +22,23 @@ def get_success(regrets, std=False):
     return p, p_std
 
 def get_result_file(type_name, results_path, noT):
-    all_files = os.walk(results_path)
+    all_files = os.listdir(results_path)
     result_files = {}
-    for root, subdir, files in all_files:
-        for file in files:
-            if 'regret_results_' in file:
-                if type_name in file:
-                    if not noT:
-                        T_result = re.search('regret_results_(.*)_(.*)T_(.*)N_(.*)M.pickle', file)
-                        T, N = T_result.group(2,3)
-                        result_files[(T, N)] = root + '/' + file
-                    elif noT:
-                        results = re.search('regret_results_noT_(.*)_(.*)N_(.*).pickle', file)
-                        N = results.group(2)
-                        if not N in result_files:
-                            result_files[N] = [root + '/' + file]
-                        else:
-                            result_files[N] += [root + '/' + file]
+    for file in all_files:
+        if 'regret_results_' in file:
+            if type_name in file:
+                if not noT:
+                    T_result = re.search('regret_results_(.*)_(.*)T_(.*)N_(.*)M.pickle', file)
+                    T, N = T_result.group(2,3)
+                    result_files[(T, N)] = root + '/' + file
+                elif noT:
+                    print(results_path, file)
+                    results = re.search('regret_results_noT_(.*)_(.*)N_(.*).pickle', file)
+                    N = results.group(2)
+                    if not N in result_files:
+                        result_files[N] = [results_path + '/' + file]
+                    else:
+                        result_files[N] += [results_path + '/' + file]
     return result_files
 
 def make_regret_T_plots(res_files):
@@ -110,12 +110,23 @@ def add_baseline_to_ax(fname, type, mean_ax, median_ax):
     median_ax.plot(Ls, median, c=plot_params[0], label=plot_params[1])
     median_ax.fill_between(Ls, q25, q75, facecolor=plot_params[0], alpha=0.2)
 
-def make_regret_noT_plots(types, res_path):
+def make_regret_noT_plots(types, res_path, nonCPP):
     _, median_ax = plt.subplots()
     _, mean_ax = plt.subplots()
 
-    add_baseline_to_ax(args.results_path+'/random_sliders_50N.pickle', 'systematic', mean_ax, median_ax)
-    add_baseline_to_ax(args.results_path+'/gpucb_sliders_50N.pickle', 'gpucb_baseline', mean_ax, median_ax)
+    # add nonCPP baselines to plots
+    if nonCPP:
+        for file in nonCPP:
+            if 'random' in file:
+                type = 'noncpp_random'
+            elif 'gpucb' in file:
+                type = 'noncpp_gpucb'
+            else:
+                print("could not detect data type of nonCPP baseline from filename. Should have random or gpucb in file name.")
+            if args.results_path != '.':
+                add_baseline_to_ax(args.results_path+'/'+file, type, mean_ax, median_ax)
+            else:
+                add_baseline_to_ax(file, type, mean_ax, median_ax)
 
     N_plot = None
     for name in types:
@@ -161,7 +172,7 @@ check that all results on the results path have the same N value'
                 ax.fill_between(Ls, bot, top, facecolor=plot_params[0], alpha=0.2)
 
                 ax.set_ylim(top=110, bottom=0)
-                ax.set_xlim(left=10.0, right=100.0)
+                ax.set_xlim(left=0.0, right=100.0)
                 ax.legend()
                 ax.set_xlabel('L')
                 ax.set_ylabel(type)
@@ -173,17 +184,17 @@ if __name__ == '__main__':
     parser.add_argument('--results-path', type=str)
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--noT', action='store_true')
+    parser.add_argument('--nonCPP', nargs='+', help='list nonCPP baseline files')
     args = parser.parse_args()
 
     if args.debug:
         import pdb; pdb.set_trace()
 
     plot_info = {
-        'active': ['k', 'Train-Active'],
         'gpucb': ['r', 'Train-GP-UCB'],
-        'systematic': ['b', 'Random'],
+        'noncpp_random': ['b', 'Random'],
         'random': ['c', 'Train-Random'],
-        'gpucb_baseline': ['g', 'GP-UCB']
+        'noncpp_gpucb': ['g', 'GP-UCB']
     }
     plt.ion()
     #plt_axes = {}
@@ -191,7 +202,7 @@ if __name__ == '__main__':
     if not args.noT:
         make_regret_T_plots(res_files)
     elif args.noT:
-        make_regret_noT_plots(args.types, args.results_path)
+        make_regret_noT_plots(args.types, args.results_path, args.nonCPP)
 
     plt.show()
     input('enter to close')
