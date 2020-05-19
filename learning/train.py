@@ -61,7 +61,7 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
     new_samples = []
     count = 0  # Count number of samples seen so far
 
-    for i in range(50, len(data)):
+    for i in range(0, len(data)):
         # Cap buffer size at 500
         new_samples.append(data[i])
         count += 1
