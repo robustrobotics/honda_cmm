@@ -7,6 +7,7 @@ import learning.viz as viz
 from collections import namedtuple
 from utils import util
 import os
+import random
 import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
 from actions.policies import Policy
@@ -25,7 +26,7 @@ def view_points(img, points):
     axes.imshow(np.transpose(npimg, (1, 2, 0)))
     cmap = plt.get_cmap('viridis')
 
-    for ix in range(0, points.shape[0]):
+    for ix in range(0, points.sxhape[0]):
         axes.scatter((points[ix, 0]+1)/2.0*w, (points[ix, 1]+1)/2.0*h,
                      s=5, c=[cmap(ix/points.shape[0])])
 
@@ -36,15 +37,12 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
     # Load data
     data = parse_pickle_file(results)
 
-    train_set, val_set, _ = setup_data_loaders(data=data,
-                                               batch_size=batch_size)
-
     # Setup Model
     policy_types = ['Prismatic', 'Revolute']
     net = NNPolVis(policy_names=policy_types,
                    policy_dims=Policy.get_param_dims(policy_types),
                    hdim=hdim,
-                   im_h=53,  # 154, Note thiese aren't important for the SpatialAutoencoder
+                   im_h=53,  # 154, Note these aren't important for the SpatialAutoencoder
                    im_w=115,  # 205,
                    image_encoder=args.image_encoder)
 
@@ -54,73 +52,96 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
     loss_fn = torch.nn.MSELoss()
     optim = torch.optim.Adam(net.parameters())
 
-    best_val = 1000
-    # Training loop.
-    for ex in range(1, args.n_epochs+1):
-        train_losses = []
-        net.train()
-        for bx, (k, x, im, y, _) in enumerate(train_set):
-            pol = name_lookup[k[0]]
-            if args.use_cuda:
-                x = x.cuda()
-                im = im.cuda()
-                y = y.cuda()
-            optim.zero_grad()
-            yhat, points = net.forward(pol, x, im)
+    buffer = data[:50] # Replay buffer
+    train_losses = []
+    new_samples = []
+    count = 0 # Count number of samples seen so far
 
-            loss = loss_fn(yhat, y)
-            loss.backward()
+    for i in range(50, len(data)):
+        # Cap buffer size at 500
+        new_samples.append(data[i])
+        count += 1
+        # Load 50 new samples into the buffer at a time
+        if len(new_samples) == 50:
+            samples = []
+            while len(buffer) > 450:
+                buffer.pop(random.randint(0, len(buffer) - 1))
+            while len(samples) < 50:
+                samples.append(buffer[random.randint(0, len(buffer) - 1)])
+            buffer.extend(new_samples)
+            samples.extend(new_samples)
+            train_set, val_set, _ = setup_data_loaders(data=samples, batch_size=batch_size)
+            new_samples = []
 
-            optim.step()
+            best_val = 1000
+            # Training loop.
+            for ex in range(1, args.n_epochs+1):
+                net.train()
+                for bx, (k, x, im, y, _) in enumerate(train_set):
+                    pol = name_lookup[k[0]]
+                    if args.use_cuda:
+                        x = x.cuda()
+                        im = im.cuda()
+                        y = y.cuda()
+                    optim.zero_grad()
+                    yhat, points = net.forward(pol, x, im)
 
-            train_losses.append(loss.item())
+                    loss = loss_fn(yhat, y)
+                    loss.backward()
 
-            if bx == 0 and args.debug:
-                for kx in range(0, yhat.shape[0]//2):
-                    fig = view_points(im[kx, :, :, :].cpu(),
-                                      points[kx, :, :].cpu().detach().numpy())
-                    writer.add_figure('features_%d' % kx, fig, global_step=ex)
+                    optim.step()
 
-        train_loss_ex = np.mean(train_losses)
-        writer.add_scalar('Train-loss/'+fname, train_loss_ex, ex)
-        print('[Epoch {}] - Training Loss: {}'.format(ex, train_loss_ex))
+                    train_losses.append(loss.item())
 
-        if ex % args.val_freq == 0:
-            val_losses = []
-            net.eval()
+                    if bx == 0 and args.debug:
+                        for kx in range(0, yhat.shape[0]//2):
+                            fig = view_points(im[kx, :, :, :].cpu(),
+                                              points[kx, :, :].cpu().detach().numpy())
+                            writer.add_figure('features_%d' % kx, fig, global_step=ex)
 
-            ys, yhats, types = [], [], []
-            for bx, (k, x, im, y, _) in enumerate(val_set):
-                pol = torch.Tensor([name_lookup[k[0]]])
-                if args.use_cuda:
-                    x = x.cuda()
-                    im = im.cuda()
-                    y = y.cuda()
+                train_loss_ex = np.mean(train_losses)
+                writer.add_scalar('Train-loss/'+fname, train_loss_ex, ex)
+                # Only print for every 5 busyboxes (500 samples)
+                if count % 500 == 0:
+                    print('[Epoch {}] - Training Loss: {}'.format(ex, train_loss_ex))
 
-                yhat, _ = net.forward(pol, x, im)
+                # Do this part on a held out test set
+                # if ex % args.val_freq == 0:
+                    val_losses = []
+                    net.eval()
 
-                loss = loss_fn(yhat, y)
-                val_losses.append(loss.item())
+                    ys, yhats, types = [], [], []
+                    for bx, (k, x, im, y, _) in enumerate(val_set):
+                        pol = torch.Tensor([name_lookup[k[0]]])
+                        if args.use_cuda:
+                            x = x.cuda()
+                            im = im.cuda()
+                            y = y.cuda()
 
-                types += k
-                if args.use_cuda:
-                    y = y.cpu()
-                    yhat = yhat.cpu()
-                ys += y.numpy().tolist()
-                yhats += yhat.detach().numpy().tolist()
+                        yhat, _ = net.forward(pol, x, im)
 
-            curr_val = np.mean(val_losses)
-            writer.add_scalar('Val-loss/'+fname, curr_val, ex)
-            print('[Epoch {}] - Validation Loss: {}'.format(ex, curr_val))
-            # if best epoch so far, save model
-            if curr_val < best_val:
-                best_val = curr_val
-                full_path = fname+'.pt'
-                torch.save(net.state_dict(), full_path)
+                        loss = loss_fn(yhat, y)
+                        val_losses.append(loss.item())
 
-                # save plot of prediction error
-                if pviz:
-                    viz.plot_y_yhat(ys, yhats, types, ex, fname, title='PolVis')
+                        types += k
+                        if args.use_cuda:
+                            y = y.cpu()
+                            yhat = yhat.cpu()
+                        ys += y.numpy().tolist()
+                        yhats += yhat.detach().numpy().tolist()
+
+                    curr_val = np.mean(val_losses)
+                    writer.add_scalar('Val-loss/'+fname, curr_val, ex)
+                    print('[Epoch {}] - Validation Loss: {}'.format(ex, curr_val))
+                    # if best epoch so far, save model
+                    if curr_val < best_val:
+                        best_val = curr_val
+                        full_path = fname+'.pt'
+                        torch.save(net.state_dict(), full_path)
+
+                        # save plot of prediction error
+                        if pviz:
+                            viz.plot_y_yhat(ys, yhats, types, ex, fname, title='PolVis')
 
 def get_train_params(args):
     return {'batch_size': args.batch_size,

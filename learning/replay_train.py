@@ -56,12 +56,12 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
     train_losses = []
     new_samples = []
     for i in range(15, len(data)):
-        # Cap buffer size at 300
+        # Cap buffer size at 305
         new_samples.append(data[i])
 
         # Load 15 new samples into the buffer at a time
         if len(new_samples) == 15:
-            while len(buffer) > 290:
+            while len(buffer) > 285:
                 buffer.pop(random.randint(0, len(buffer) - 1))
             buffer.extend(new_samples)
             train_set, val_set, _ = setup_data_loaders(data=buffer, batch_size=batch_size)
@@ -97,6 +97,7 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
                 writer.add_scalar('Train-loss/'+fname, train_loss_ex, ex)
                 print('[Epoch {}] - Training Loss: {}'.format(ex, train_loss_ex))
 
+                # Do this part on a held out test set
                 if ex % args.val_freq == 0:
                     val_losses = []
                     net.eval()
