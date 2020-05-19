@@ -90,19 +90,8 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
                     loss.backward()
 
                     optim.step()
-                    # Modify to reevaluate train loss on all previous examples, don't average
-                #     train_losses.append(loss.item())
-                #
-                #     if bx == 0 and args.debug:
-                #         for kx in range(0, yhat.shape[0]//2):
-                #             fig = view_points(im[kx, :, :, :].cpu(),
-                #                               points[kx, :, :].cpu().detach().numpy())
-                #             writer.add_figure('features_%d' % kx, fig, global_step=ex)
-                #
-                # train_loss_ex = np.mean(train_losses)
-                # writer.add_scalar('Train-loss/'+fname, train_loss_ex, ex)
 
-                # Calculate training loss after each busybox is added
+                # Calculate training loss after each busybox is added (average on all previously seen samples)
                 if count % 100 == 0 and ex == args.n_epochs:
                     train_losses = []
                     seen_samples = data[:i]
@@ -131,34 +120,39 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
                     writer.add_scalar('Train-loss/'+fname, curr_val, ex)
                     print('[Busybox {}] - Training Loss: {}'.format(count/100, curr_val))
 
-                # Do this part on a held out test set
-                # if ex % args.val_freq == 0:
-                #     val_losses = []
-                #     net.eval()
-                #     # Create a fixed validation set
-                #     ys, yhats, types = [], [], []
-                #     for bx, (k, x, im, y, _) in enumerate(val_set):
-                #         pol = torch.Tensor([name_lookup[k[0]]])
-                #         if args.use_cuda:
-                #             x = x.cuda()
-                #             im = im.cuda()
-                #             y = y.cuda()
-                #
-                #         yhat, _ = net.forward(pol, x, im)
-                #
-                #         loss = loss_fn(yhat, y)
-                #         val_losses.append(loss.item())
-                #
-                #         types += k
-                #         if args.use_cuda:
-                #             y = y.cpu()
-                #             yhat = yhat.cpu()
-                #         ys += y.numpy().tolist()
-                #         yhats += yhat.detach().numpy().tolist()
-                #
-                #     curr_val = np.mean(val_losses)
-                #     writer.add_scalar('Val-loss/'+fname, curr_val, ex)
-                #     print('[Epoch {}] - Validation Loss: {}'.format(ex, curr_val))
+                # Calculate validation error on held out test set
+                    test_results = util.read_from_file('test20.pickle')
+                    for num in range(args.L_min, args.L_max + 1, args.L_step):
+                        new_results = []
+                        for res in test_results[0:num]:
+                            new_results += res[0:args.M]
+                    test_data = parse_pickle_file(new_results)
+                    test_set = setup_data_loaders(data=test_data, batch_size=batch_size, single_set=True)
+                    val_losses = []
+                    net.eval()
+                    ys, yhats, types = [], [], []
+                    for bx, (k, x, im, y, _) in enumerate(test_set):
+                        pol = torch.Tensor([name_lookup[k[0]]])
+                        if args.use_cuda:
+                            x = x.cuda()
+                            im = im.cuda()
+                            y = y.cuda()
+
+                        yhat, _ = net.forward(pol, x, im)
+
+                        loss = loss_fn(yhat, y)
+                        val_losses.append(loss.item())
+
+                        types += k
+                        if args.use_cuda:
+                            y = y.cpu()
+                            yhat = yhat.cpu()
+                        ys += y.numpy().tolist()
+                        yhats += yhat.detach().numpy().tolist()
+
+                    curr_val_error = np.mean(val_losses)
+                    writer.add_scalar('Val-loss/'+fname, curr_val_error, ex)
+                    print('[Busybox {}] - Validation Loss: {}'.format(count/100, curr_val_error))
                 #     # if best epoch so far, save model
                 #     if curr_val < best_val:
                 #         best_val = curr_val

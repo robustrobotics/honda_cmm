@@ -155,7 +155,7 @@ def setup_data_loaders(data, batch_size=128, use_cuda=True, small_train=0, singl
         return loader
     else:
         # Create datasplits.
-        train_data, val_data, test_data = create_data_splits(data, val_pct=.2)
+        train_data, val_data, test_data = create_data_splits(data, val_pct=0)
         random.Random(0).shuffle(train_data)
         random.Random(0).shuffle(val_data)
         random.Random(0).shuffle(test_data)
