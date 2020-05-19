@@ -36,7 +36,13 @@ def view_points(img, points):
 def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
     # Load data
     data = parse_pickle_file(results)
-
+    test_results = util.read_from_file('test20.pickle')
+    for num in range(args.L_min, args.L_max + 1, args.L_step):
+        new_results = []
+        for res in test_results[0:num]:
+            new_results += res[0:args.M]
+    test_data = parse_pickle_file(new_results)
+    test_set = setup_data_loaders(data=test_data, batch_size=batch_size, single_set=True)
     # Setup Model
     policy_types = ['Prismatic', 'Revolute']
     net = NNPolVis(policy_names=policy_types,
@@ -53,7 +59,6 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
     optim = torch.optim.Adam(net.parameters())
 
     buffer = data[:50]  # Replay buffer
-    train_losses = []
     new_samples = []
     count = 50  # Count number of samples seen so far
 
@@ -121,13 +126,6 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
                     print('[Busybox {}] - Training Loss: {}'.format(count/100, curr_val))
 
                 # Calculate validation error on held out test set
-                    test_results = util.read_from_file('test20.pickle')
-                    for num in range(args.L_min, args.L_max + 1, args.L_step):
-                        new_results = []
-                        for res in test_results[0:num]:
-                            new_results += res[0:args.M]
-                    test_data = parse_pickle_file(new_results)
-                    test_set = setup_data_loaders(data=test_data, batch_size=batch_size, single_set=True)
                     val_losses = []
                     net.eval()
                     ys, yhats, types = [], [], []
