@@ -52,10 +52,10 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
     loss_fn = torch.nn.MSELoss()
     optim = torch.optim.Adam(net.parameters())
 
-    buffer = data[:50] # Replay buffer
+    buffer = data[:50]  # Replay buffer
     train_losses = []
     new_samples = []
-    count = 0 # Count number of samples seen so far
+    count = 50  # Count number of samples seen so far
 
     for i in range(50, len(data)):
         # Cap buffer size at 500
@@ -90,28 +90,25 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
                     loss.backward()
 
                     optim.step()
+                    # Modify to reevaluate train loss on all previous examples, don't average
+                #     train_losses.append(loss.item())
+                #
+                #     if bx == 0 and args.debug:
+                #         for kx in range(0, yhat.shape[0]//2):
+                #             fig = view_points(im[kx, :, :, :].cpu(),
+                #                               points[kx, :, :].cpu().detach().numpy())
+                #             writer.add_figure('features_%d' % kx, fig, global_step=ex)
+                #
+                # train_loss_ex = np.mean(train_losses)
+                # writer.add_scalar('Train-loss/'+fname, train_loss_ex, ex)
 
-                    train_losses.append(loss.item())
-
-                    if bx == 0 and args.debug:
-                        for kx in range(0, yhat.shape[0]//2):
-                            fig = view_points(im[kx, :, :, :].cpu(),
-                                              points[kx, :, :].cpu().detach().numpy())
-                            writer.add_figure('features_%d' % kx, fig, global_step=ex)
-
-                train_loss_ex = np.mean(train_losses)
-                writer.add_scalar('Train-loss/'+fname, train_loss_ex, ex)
-                # Only print for every 5 busyboxes (500 samples)
-                if count % 500 == 0:
-                    print('[Epoch {}] - Training Loss: {}'.format(ex, train_loss_ex))
-
-                # Do this part on a held out test set
-                # if ex % args.val_freq == 0:
-                    val_losses = []
-                    net.eval()
-
+                # Calculate training loss after each busybox is added
+                if count % 100 == 0 and ex == args.n_epochs:
+                    train_losses = []
+                    seen_samples = data[:i]
+                    sample_set = setup_data_loaders(data=seen_samples, batch_size=batch_size, single_set=True)
                     ys, yhats, types = [], [], []
-                    for bx, (k, x, im, y, _) in enumerate(val_set):
+                    for bx, (k, x, im, y, _) in enumerate(sample_set):
                         pol = torch.Tensor([name_lookup[k[0]]])
                         if args.use_cuda:
                             x = x.cuda()
@@ -121,7 +118,7 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
                         yhat, _ = net.forward(pol, x, im)
 
                         loss = loss_fn(yhat, y)
-                        val_losses.append(loss.item())
+                        train_losses.append(loss.item())
 
                         types += k
                         if args.use_cuda:
@@ -130,18 +127,47 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
                         ys += y.numpy().tolist()
                         yhats += yhat.detach().numpy().tolist()
 
-                    curr_val = np.mean(val_losses)
-                    writer.add_scalar('Val-loss/'+fname, curr_val, ex)
-                    print('[Epoch {}] - Validation Loss: {}'.format(ex, curr_val))
-                    # if best epoch so far, save model
-                    if curr_val < best_val:
-                        best_val = curr_val
-                        full_path = fname+'.pt'
-                        torch.save(net.state_dict(), full_path)
+                    curr_val = np.mean(train_losses)
+                    writer.add_scalar('Train-loss/'+fname, curr_val, ex)
+                    print('[Busybox {}] - Training Loss: {}'.format(count/100, curr_val))
 
-                        # save plot of prediction error
-                        if pviz:
-                            viz.plot_y_yhat(ys, yhats, types, ex, fname, title='PolVis')
+                # Do this part on a held out test set
+                # if ex % args.val_freq == 0:
+                #     val_losses = []
+                #     net.eval()
+                #     # Create a fixed validation set
+                #     ys, yhats, types = [], [], []
+                #     for bx, (k, x, im, y, _) in enumerate(val_set):
+                #         pol = torch.Tensor([name_lookup[k[0]]])
+                #         if args.use_cuda:
+                #             x = x.cuda()
+                #             im = im.cuda()
+                #             y = y.cuda()
+                #
+                #         yhat, _ = net.forward(pol, x, im)
+                #
+                #         loss = loss_fn(yhat, y)
+                #         val_losses.append(loss.item())
+                #
+                #         types += k
+                #         if args.use_cuda:
+                #             y = y.cpu()
+                #             yhat = yhat.cpu()
+                #         ys += y.numpy().tolist()
+                #         yhats += yhat.detach().numpy().tolist()
+                #
+                #     curr_val = np.mean(val_losses)
+                #     writer.add_scalar('Val-loss/'+fname, curr_val, ex)
+                #     print('[Epoch {}] - Validation Loss: {}'.format(ex, curr_val))
+                #     # if best epoch so far, save model
+                #     if curr_val < best_val:
+                #         best_val = curr_val
+                #         full_path = fname+'.pt'
+                #         torch.save(net.state_dict(), full_path)
+                #
+                #         # save plot of prediction error
+                #         if pviz:
+                #             viz.plot_y_yhat(ys, yhats, types, ex, fname, title='PolVis')
 
 def get_train_params(args):
     return {'batch_size': args.batch_size,
