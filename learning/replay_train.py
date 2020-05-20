@@ -73,6 +73,7 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
                 buffer.pop(random.randint(0, len(buffer) - 1))
             while len(samples) < 50:
                 samples.append(buffer[random.randint(0, len(buffer) - 1)])
+            # Include whole buffer when training
             buffer.extend(new_samples)
             samples.extend(new_samples)
             train_set, val_set, _ = setup_data_loaders(data=samples, batch_size=batch_size)

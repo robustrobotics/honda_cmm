@@ -58,16 +58,21 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
     loss_fn = torch.nn.MSELoss()
     optim = torch.optim.Adam(net.parameters())
 
+    buffer = data[:50]  # Replay buffer
     new_samples = []
-    count = 0  # Count number of samples seen so far
+    count = 50  # Count number of samples seen so far
 
-    for i in range(0, len(data)):
-        # Cap buffer size at 500
+    for i in range(50, len(data)):
+        # Cap buffer size at 600
         new_samples.append(data[i])
         count += 1
         # Load 50 new samples into the buffer at a time
         if len(new_samples) == 50:
-            train_set, val_set, _ = setup_data_loaders(data=new_samples, batch_size=batch_size)
+            while len(buffer) > 550:
+                buffer.pop(random.randint(0, len(buffer) - 1))
+            # Include whole buffer when training
+            buffer.extend(new_samples)
+            train_set, val_set, _ = setup_data_loaders(data=buffer, batch_size=batch_size)
             new_samples = []
 
             best_val = 1000
