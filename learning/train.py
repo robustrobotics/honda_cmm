@@ -57,7 +57,7 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
 
     loss_fn = torch.nn.MSELoss()
     optim = torch.optim.Adam(net.parameters())
-    print("num entries" + len(results))
+    print("num entries ", len(results))
     best_val = 1000
     # Training loop.
     for ex in range(1, args.n_epochs + 1):
