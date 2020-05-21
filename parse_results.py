@@ -38,6 +38,20 @@ for filename in base_files:
 		base_val_y.append(y)
 		i += 2
 
+reg_x = [*range(5, 51, 5)]
+reg_val_y = []
+reg_files = ['reg50_1.txt', 'reg50_2.txt', 'reg50_3.txt', 'reg50_4.txt', 'reg50_5.txt']
+for filename in reg_files:
+	with open(filename) as f:
+  		lineList = f.readlines()
+	i = 0
+	while i < 118:
+		line = lineList[i][:-1]
+		elem = line.split()
+		y = float(elem[-1])
+		reg_val_y.append(y)
+		i += 13
+
 x = np.array(x)
 y = np.array(val_y).reshape(5,50)
 err_y = np.std(y, axis = 0).ravel()
@@ -53,6 +67,17 @@ bmean_y = np.mean(base_y, axis = 0).ravel()
 plt.plot(x, bmean_y, color='#1B2ACC', label = 'without buffer')
 plt.fill_between(x, bmean_y-berr_y, bmean_y+berr_y,
     alpha=0.2, edgecolor='#1B2ACC', facecolor='#089FFF')
+
+x = np.array(reg_x)
+reg_y = np.array(reg_val_y).reshape(5,10)
+rerr_y = np.std(reg_y, axis = 0).ravel()
+rmean_y = np.mean(reg_y, axis = 0).ravel()
+plt.plot(x, rmean_y, color='#448554', label = 'not continual')
+plt.fill_between(x, rmean_y-rerr_y, rmean_y+rerr_y,
+    alpha=0.2, edgecolor='#448554', facecolor='#80c291')
 plt.legend()
+plt.xlabel("L")
+plt.ylabel("Regret")
+plt.title("Mean Validation Loss")
 # plt.show()
-plt.savefig('validation.png')
+plt.savefig('val.png')

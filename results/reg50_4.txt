@@ -1,0 +1,118 @@
+[Epoch 50] - Validation Loss: 0.000846479348547291
+reading in test20.pickle
+successfully read in test20.pickle
+num entries 1000
+[Epoch 5] - Validation Loss: 0.0006571390360477381
+[Epoch 10] - Validation Loss: 0.0006938305617950391
+[Epoch 15] - Validation Loss: 0.0007395276119495975
+[Epoch 20] - Validation Loss: 0.0007499513740185648
+[Epoch 25] - Validation Loss: 0.0007469626929378137
+[Epoch 30] - Validation Loss: 0.0007759068117593415
+[Epoch 35] - Validation Loss: 0.0007645608078746591
+[Epoch 40] - Validation Loss: 0.0007482994442398194
+[Epoch 45] - Validation Loss: 0.0008103130894596688
+[Epoch 50] - Validation Loss: 0.0007900957520178053
+reading in test20.pickle
+successfully read in test20.pickle
+num entries 1500
+[Epoch 5] - Validation Loss: 0.0006670681446848903
+[Epoch 10] - Validation Loss: 0.0007244419244671008
+[Epoch 15] - Validation Loss: 0.000696422264809371
+[Epoch 20] - Validation Loss: 0.000750471992068924
+[Epoch 25] - Validation Loss: 0.0008331697492394597
+[Epoch 30] - Validation Loss: 0.0007416928288876079
+[Epoch 35] - Validation Loss: 0.0007636574911884964
+[Epoch 40] - Validation Loss: 0.00073662751892698
+[Epoch 45] - Validation Loss: 0.0007730084209470079
+[Epoch 50] - Validation Loss: 0.0007374830820481293
+reading in test20.pickle
+successfully read in test20.pickle
+num entries 2000
+[Epoch 5] - Validation Loss: 0.0006632741260546027
+[Epoch 10] - Validation Loss: 0.0006859298606286757
+[Epoch 15] - Validation Loss: 0.0006686576569336466
+[Epoch 20] - Validation Loss: 0.0006086493824113859
+[Epoch 25] - Validation Loss: 0.0005626407102681697
+[Epoch 30] - Validation Loss: 0.0006125043248175644
+[Epoch 35] - Validation Loss: 0.0006190444597450551
+[Epoch 40] - Validation Loss: 0.0006196569294843357
+[Epoch 45] - Validation Loss: 0.0006279440989601426
+[Epoch 50] - Validation Loss: 0.000595636291836854
+reading in test20.pickle
+successfully read in test20.pickle
+num entries 2500
+[Epoch 5] - Validation Loss: 0.0006496967689599842
+[Epoch 10] - Validation Loss: 0.000661222308917786
+[Epoch 15] - Validation Loss: 0.0006136357675131876
+[Epoch 20] - Validation Loss: 0.0005743989895563573
+[Epoch 25] - Validation Loss: 0.0005429492255643708
+[Epoch 30] - Validation Loss: 0.0005910602616495453
+[Epoch 35] - Validation Loss: 0.00047229059709934517
+[Epoch 40] - Validation Loss: 0.0006062580738216639
+[Epoch 45] - Validation Loss: 0.0005665382013830822
+[Epoch 50] - Validation Loss: 0.0004901943935692543
+reading in test20.pickle
+successfully read in test20.pickle
+num entries 3000
+[Epoch 5] - Validation Loss: 0.0006544949243107112
+[Epoch 10] - Validation Loss: 0.0006820503556809853
+[Epoch 15] - Validation Loss: 0.0006606275459489552
+[Epoch 20] - Validation Loss: 0.00048752869333839043
+[Epoch 25] - Validation Loss: 0.0005425714429293293
+[Epoch 30] - Validation Loss: 0.0005278871016344055
+[Epoch 35] - Validation Loss: 0.0005641747389745433
+[Epoch 40] - Validation Loss: 0.0005132119000336388
+[Epoch 45] - Validation Loss: 0.0006687432171020192
+[Epoch 50] - Validation Loss: 0.0005335814625141211
+reading in test20.pickle
+successfully read in test20.pickle
+num entries 3500
+[Epoch 5] - Validation Loss: 0.0006523598247440531
+[Epoch 10] - Validation Loss: 0.00054852543726156
+[Epoch 15] - Validation Loss: 0.0005090111673780485
+[Epoch 20] - Validation Loss: 0.0005659637565258891
+[Epoch 25] - Validation Loss: 0.0005564250110182911
+[Epoch 30] - Validation Loss: 0.0005474986039189389
+[Epoch 35] - Validation Loss: 0.0005579550277616363
+[Epoch 40] - Validation Loss: 0.0005969488782284315
+[Epoch 45] - Validation Loss: 0.0005770011575805256
+[Epoch 50] - Validation Loss: 0.00042287452815799044
+reading in test20.pickle
+successfully read in test20.pickle
+num entries 4000
+[Epoch 5] - Validation Loss: 0.0006240811784664402
+[Epoch 10] - Validation Loss: 0.00045210518583189697
+[Epoch 15] - Validation Loss: 0.00039660773472860456
+[Epoch 20] - Validation Loss: 0.00034206257514597383
+[Epoch 25] - Validation Loss: 0.00035099652159260587
+[Epoch 30] - Validation Loss: 0.00037509076719288714
+[Epoch 35] - Validation Loss: 0.0003462647910055239
+[Epoch 40] - Validation Loss: 0.000353221092154854
+[Epoch 45] - Validation Loss: 0.0003102512222540099
+[Epoch 50] - Validation Loss: 0.00030201487243175507
+reading in test20.pickle
+successfully read in test20.pickle
+num entries 4500
+[Epoch 5] - Validation Loss: 0.0006432502039388055
+[Epoch 10] - Validation Loss: 0.0004108212873688899
+[Epoch 15] - Validation Loss: 0.00033687701288727113
+[Epoch 20] - Validation Loss: 0.00032084950544231106
+[Epoch 25] - Validation Loss: 0.0003228830353691592
+[Epoch 30] - Validation Loss: 0.00030172483529895545
+[Epoch 35] - Validation Loss: 0.00032756151194917037
+[Epoch 40] - Validation Loss: 0.0003534478553774534
+[Epoch 45] - Validation Loss: 0.00038218393019633367
+[Epoch 50] - Validation Loss: 0.0003599672882046434
+reading in test20.pickle
+successfully read in test20.pickle
+num entries 5000
+[Epoch 5] - Validation Loss: 0.0006240736198378727
+[Epoch 10] - Validation Loss: 0.0006322350483969786
+[Epoch 15] - Validation Loss: 0.0006375447304890258
+[Epoch 20] - Validation Loss: 0.0005151045646925922
+[Epoch 25] - Validation Loss: 0.00034378609252598834
+[Epoch 30] - Validation Loss: 0.00027679583909048235
+[Epoch 35] - Validation Loss: 0.0002508749968910706
+[Epoch 40] - Validation Loss: 0.0002798306197291822
+[Epoch 45] - Validation Loss: 0.0002450183796099736
+[Epoch 50] - Validation Loss: 0.00026087406713486415
