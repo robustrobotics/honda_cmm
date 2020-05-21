@@ -43,6 +43,8 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
             new_results += res[0:args.M]
     test_data = parse_pickle_file(new_results)
     test_set = setup_data_loaders(data=test_data, batch_size=batch_size, single_set=True)
+    train_set, val_set, _ = setup_data_loaders(data=data,
+                                               batch_size=batch_size)
     # Setup Model
     policy_types = ['Prismatic', 'Revolute']
     net = NNPolVis(policy_names=policy_types,
@@ -114,7 +116,7 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
 
             curr_val_error = np.mean(val_losses)
             writer.add_scalar('Val-loss/' + fname, curr_val_error, ex)
-            print('[Busybox {}] - Validation Loss: {}'.format(count / 100, curr_val_error))
+            print('[Epoch {}] - Validation Loss: {}'.format(ex, curr_val_error))
             # if best epoch so far, save model
             # if curr_val < best_val:
             #     best_val = curr_val
