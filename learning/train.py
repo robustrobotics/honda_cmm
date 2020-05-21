@@ -89,7 +89,7 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
 
         train_loss_ex = np.mean(train_losses)
         writer.add_scalar('Train-loss/' + fname, train_loss_ex, ex)
-        print('[Epoch {}] - Training Loss: {}'.format(ex, train_loss_ex))
+        # print('[Epoch {}] - Training Loss: {}'.format(ex, train_loss_ex))
 
         if ex % args.val_freq == 0:
             val_losses = []
