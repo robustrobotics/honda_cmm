@@ -54,5 +54,5 @@ plt.plot(x, bmean_y, color='#1B2ACC', label = 'without buffer')
 plt.fill_between(x, bmean_y-berr_y, bmean_y+berr_y,
     alpha=0.2, edgecolor='#1B2ACC', facecolor='#089FFF')
 plt.legend()
-plt.show()
-# plt.savefig('val_loss.png')
+# plt.show()
+plt.savefig('validation.png')
