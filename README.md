@@ -94,7 +94,7 @@ Argument | Type | Description | Default
 
 ### Plotting Regret Results
 
-To generate regret plots use the module ```make_regret_plots``` with the following arguments:
+To generate regret plots use the module ```utils.make_regret_plots``` with the following arguments:
 
 Argument | Type | Description | Default
 --- | --- | --- | ---

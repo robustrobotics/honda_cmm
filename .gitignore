@@ -123,3 +123,6 @@ models/*.urdf
 
 # tensorboard logs
 /runs*
+
+.dockerignore
+run_tests
