@@ -112,10 +112,6 @@ if __name__ == '__main__':
         '--stochastic',
         action='store_true',
         help='sample from acquistion function')
-    parser.add_argument(
-        '--random-policies',
-        action='store_true',
-        help='use to try random policy classes on random mechanisms')
     parser.add_argument('--mech-types', nargs='+', default=['slider'], type=str)
     args = parser.parse_args()
 

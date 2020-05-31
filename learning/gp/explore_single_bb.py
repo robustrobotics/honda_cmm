@@ -115,7 +115,7 @@ def test_model(sampler, args, gripper=None):
 
 class GPOptimizer(object):
 
-    def __init__(self, urdf_num, bb, image_data, n_samples, beta, gps, random_policies, nn=None):
+    def __init__(self, urdf_num, bb, image_data, n_samples, beta, gps, nn=None):
         """
         Initialize one of these for each BusyBox.
         """
@@ -130,7 +130,7 @@ class GPOptimizer(object):
 
         # Generate random policies.
         for _ in range(n_samples):
-            random_policy = generate_policy(self.mech, random_policies)
+            random_policy = generate_policy(self.mech)
             policy_type = random_policy.type
             policy_tuple = random_policy.get_policy_tuple()
 
@@ -272,7 +272,7 @@ class UCB_Interaction(object):
                     'Revolute': GaussianProcessRegressor(kernel=self.get_kernel('Revolute'), #args.type),
                                                        n_restarts_optimizer=1)}
         self.optim = GPOptimizer(args.urdf_num, self.bb, self.image_data, \
-                        args.n_gp_samples, BETA, self.gps, args.random_policies, nn=self.nn)
+                        args.n_gp_samples, BETA, self.gps, nn=self.nn)
 
     def get_kernel(self, type):#, explore_type):
         noise = 1e-5
@@ -312,10 +312,10 @@ class UCB_Interaction(object):
             WhiteKernel(noise_level=noise,
                         noise_level_bounds=(1e-5, 1e2))
 
-    def sample(self, random_policies):
+    def sample(self):
         # If self.nn is None then make sure each policy type has been
         # attempted at least once
-        if self.nn is None and random_policies:
+        if self.nn is None:
             for policy_class, policy_type in zip([Prismatic, Revolute], \
                                                 ['Prismatic', 'Revolute']):
                 if len(self.xs[policy_type]) < 1:
@@ -518,7 +518,7 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
         # image_data, gripper = setup_env(bb, False, debug, use_gripper)
 
         gripper.reset(mech)
-        x, policy = sampler.sample(args.random_policies)
+        x, policy = sampler.sample()
 
         # execute
         traj = policy.generate_trajectory(pose_handle_base_world, debug=debug)
@@ -638,10 +638,6 @@ if __name__ == '__main__':
         '--debug',
         action='store_true',
         help='use to enter debug mode')
-    parser.add_argument(
-        '--random-policies',
-        action='store_true',
-        help='use to try random policy classes on random mechanisms')
     args = parser.parse_args()
 
     if args.debug:

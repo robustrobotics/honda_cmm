@@ -404,16 +404,12 @@ class Path(Policy):
         super(Path,self).__init__('Path')
 
 # TODO: add other policy_types as they're made
-def generate_policy(mech, random_policies, policy_types=[Revolute, Prismatic]):
-    if not random_policies:
-        policy_type = get_matched_policy_type(mech)
-        if policy_type == 'Revolute':
-            return Revolute._gen(mech)
-        elif policy_type == 'Prismatic':
-            return Prismatic._gen(mech)
-    else:
-        policy_type = np.random.choice(policy_types)
-        return policy_type._gen(mech)
+def generate_policy(mech, policy_types=[Revolute, Prismatic]):
+    policy_type = get_matched_policy_type(mech)
+    if policy_type == 'Revolute':
+        return Revolute._gen(mech)
+    elif policy_type == 'Prismatic':
+        return Prismatic._gen(mech)
 
 def get_matched_policy_type(mech):
     if mech.mechanism_type == 'Door':

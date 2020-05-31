@@ -39,12 +39,12 @@ coverage run --append -m learning.train --batch-size 5 --hdim 5 --n-epochs 3 --v
 echo "===> Evaluating models for $MECH_TYPE"
 
 echo "==> random"
-rm regret_results_noT_random_3N_${MECH_TYPE}.pickle
-coverage run --append -m learning.gp.evaluate_models --n-gp-samples 5 --N 3 --type random --hdim 5 --models-path ${MECH_TYPE}_cpp_random --Ls 1 2 1 --eval-method noT
+rm regret_results_random_3N_${MECH_TYPE}.pickle
+coverage run --append -m learning.gp.evaluate_models --n-gp-samples 5 --N 3 --type random --hdim 5 --models-path ${MECH_TYPE}_cpp_random --Ls 1 2 1
 
 echo "==> gpucb"
-rm regret_results_noT_gpucb_3N_${MECH_TYPE}.pickle
-coverage run --append -m learning.gp.evaluate_models --n-gp-samples 5 --N 3 --type gpucb --hdim 5 --models-path ${MECH_TYPE}_cpp_gpucb --Ls 1 2 1 --eval-method noT
+rm regret_results_gpucb_3N_${MECH_TYPE}.pickle
+coverage run --append -m learning.gp.evaluate_models --n-gp-samples 5 --N 3 --type gpucb --hdim 5 --models-path ${MECH_TYPE}_cpp_gpucb --Ls 1 2 1
 
 echo "===> Making regret plots for $MECH_TYPE"
-coverage run --append -m learning.make_regret_plots2 --types gpucb random --results-path . --noT --nonCPP ${MECH_TYPE}_random_baseline ${MECH_TYPE}_gpucb_baseline
+coverage run --append -m make_regret_plots --types gpucb random --results-path . --nonCPP ${MECH_TYPE}_random_baseline ${MECH_TYPE}_gpucb_baseline

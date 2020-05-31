@@ -20,7 +20,6 @@ Argument | Type | Description | Default
 ```--n-samples``` | bool | number of samples per Busybox in dataset | 1
 ```--mech-types``` | list of strings in ['slider', 'door'] | mechanism types in dataset | 'slider'
 ```--fname``` | string | file path to save dataset to | does not save file if not specified
-```--random-policies``` | bool | if True, generate random policies from any policy class, else only generate policies from the correct policy class | False 
 ```--bb-fname``` | string | if specified, the file path of the results dataset with the desired Busyboxes for this generated dataset, else (None) random Busyboxes are generated for this dataset | None
 
 #### GP-UCB Exploration
@@ -36,7 +35,6 @@ Argument | Type | Description | Default
 ```--mech-types``` | list of strings in ['slider', 'door'] | mechanism types in dataset | 'slider'
 ```--plot``` | bool | if True then visualize GP plots during interaction | False
 ```--n-gp-samples``` | int | the number of samples to use when initializing an optimization seed | 500
-```--random-policies``` | bool | if True, generate random policies from any policy class, else only generate policies from the correct policy class | False 
 
 #### Systematic
 

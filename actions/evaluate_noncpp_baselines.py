@@ -32,7 +32,7 @@ def main(args):
             while regret > SUCCESS_REGRET:
                 mech = bb._mechanisms[0]
                 # generate either a random or model-based policy and goal configuration
-                policy = policies.generate_policy(mech, args.random_policies)
+                policy = policies.generate_policy(mech)
                 pose_handle_world_init = mech.get_handle_pose()
 
                 # calculate trajectory
@@ -94,10 +94,6 @@ if __name__ == '__main__':
         '--plot',
         action='store_true',
         help='use to generate polar plots durin GP-UCB interactions')
-    parser.add_argument(
-        '--random-policies',
-        action='store_true',
-        help='use to try random policy classes on random mechanisms')
     parser.add_argument(
         '--debug',
         action='store_true',

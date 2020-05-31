@@ -23,7 +23,7 @@ def generate_dataset(args, git_hash):
             sys.stdout.write("\rProcessing sample %i/%i for busybox %i/%i" % (j+1, args.n_samples, i+1, args.n_bbs))
             for mech in bb._mechanisms:
                 # generate either a random or model-based policy and goal configuration
-                policy = policies.generate_policy(mech, args.random_policies)
+                policy = policies.generate_policy(mech)
                 pose_handle_world_init = mech.get_handle_pose()
 
                 # calculate trajectory
@@ -104,7 +104,6 @@ if __name__ == '__main__':
     parser.add_argument('--fname', type=str) # give filename if want to save to file
     # if running multiple gens, give then a urdf_num so the correct urdf is read from/written to
     parser.add_argument('--urdf-num', type=int, default=0)
-    parser.add_argument('--random-policies', action='store_true') # if want to only use random policy class on mechanisms
     # desired goal config represented as a percentage of the max config, if unused then random config is generated
     parser.add_argument('--bb-fname', type=str)
     parser.add_argument('--use-gripper', type=bool, default=False)
