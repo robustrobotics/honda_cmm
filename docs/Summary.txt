@@ -1,1 +1,0 @@
-This video contains an overview of the paper "Visual Prediction of Priors for Articulated Object Interaction". It describes the proposed learning setup and the Contextual Prior Prediction method. It also shows the robot experiments described in the paper.

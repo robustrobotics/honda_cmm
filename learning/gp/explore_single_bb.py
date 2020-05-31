@@ -22,7 +22,6 @@ from learning.dataloaders import PolicyDataset, parse_pickle_file
 from gen.generate_policy_data import get_bb_dataset
 from actions.policies import Policy, generate_policy, Revolute, Prismatic, \
                                     get_policy_from_tuple, get_policy_from_x
-from learning.gp.viz_doors import viz_3d_plots
 from learning.gp.viz_polar_plots import viz_circles
 import time
 
