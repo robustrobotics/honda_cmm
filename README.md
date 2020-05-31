@@ -1,4 +1,8 @@
-# Curious Minded Machine - BusyBox Simulation Environment
+# Contextual Prior Prediction
+
+## Paper
+
+This is the code for the method Contextual Prior Prediction, CPP, developed in this [paper](http://people.csail.mit.edu/cmm386/publications/vis_prediction_priors.pdf).
 
 ## Installation
 
@@ -23,7 +27,7 @@ Argument | Type | Description | Default
 ```--n-samples``` | bool | number of samples per Busybox in dataset | 1
 ```--mech-types``` | list of strings in ['slider', 'door'] | mechanism types in dataset | 'slider'
 ```--fname``` | string | file path to save dataset to | does not save file if not specified
-```--bb-fname``` | string | if specified, the file path of the results dataset with the desired Busyboxes for this generated dataset, else (None) random Busyboxes are generated for this dataset | None
+```--bb-fname``` | string | if specified, the file path of the results dataset with the desired Busyboxes for this generated dataset, else random Busyboxes are generated for this dataset | None
 
 #### GP-UCB Exploration
 
@@ -34,7 +38,7 @@ Argument | Type | Description | Default
 ```--L``` | int | number of Busyboxes in generated dataset | required
 ```--M``` | int | number of interactions per Busybox | required
 ```--fname``` | string | file path to save dataset to | does not save file if not specified
-```--bb-fname``` | string | if specified, the file path of the results dataset with the desired Busyboxes for this generated dataset, else (None) random Busyboxes are generated for this dataset | None
+```--bb-fname``` | string | if specified, the file path of the results dataset with the desired Busyboxes for this generated dataset, else random Busyboxes are generated for this dataset | None
 ```--mech-types``` | list of strings in ['slider', 'door'] | mechanism types in dataset | 'slider'
 ```--plot``` | bool | if True then visualize GP plots during interaction | False
 ```--n-gp-samples``` | int | the number of samples to use when initializing an optimization seed | 500
@@ -44,10 +48,11 @@ Argument | Type | Description | Default
 To generate data for a baseline use module ```actions.evaluate_noncpp_baselines``` with the following arguments:
 
 Argument | Type | Description | Default
-```--type``` | ['random', 'gpucb'] | either a random evaluation method, or GP-UCB with a prior mean function of 0 | required
+--- | --- | --- | ---
+```--type``` | 'random' or 'gpucb' | either a random evaluation method, or GP-UCB with a prior mean function of 0 | required
 ```--N``` | int | number of Busyboxes in generated dataset | required
 ```--fname``` | string | file path to save dataset to | does not save file if not specified
-```--bb-fname``` | string | if specified, the file path of the results dataset with the desired Busyboxes for this generated dataset, else (None) random Busyboxes are generated for this dataset | None
+```--bb-fname``` | string | if specified, the file path of the results dataset with the desired Busyboxes for this generated dataset, else random Busyboxes are generated for this dataset | None
 ```--mech-types``` | list of strings in ['slider', 'door'] | mechanism types in dataset | 'slider'
 ```--plot``` | bool | if True then visualize GP plots during interaction | False
 ```--n-gp-samples``` | int | the number of samples to use when initializing an optimization seed | 500
@@ -79,11 +84,11 @@ Argument | Type | Description | Default
 --- | --- | --- | ---
 ```--N``` | int | number of Busyboxes to average over when calculating regrets | required
 ```--T``` | int | number of interactions per Busybox to learn residual reward function | required
-```--models-path``` | string | path to model files. **ALL files ending .pt in this directory will be evaluated** | required
+```--models-path``` | string | path to model files. **ALL files ending in .pt in this directory will be evaluated** | required
 ```--Ls``` | list of 3 ints | [min, max, step] of Ls to evaluate (used when searching for correct model files in models-path) | required
 ```---type``` | string | used to identify these results for regret plotting (eg. random, random_doors, gpucb_sliders, gpucb, etc...). **the string must contain a substring in [random, gpucb, systematic, or active] to select the line plotting color later)**| required
 ```--hdim``` | int | number of hidden units and feature points in given model (needed to load pyTorch model) | 16
-```--bb-fname``` | string | if specified, the file path of the results dataset with the desired Busyboxes for evaluation, else (None) random Busyboxes are generated for this dataset | None
+```--bb-fname``` | string | if specified, the file path of the results dataset with the desired Busyboxes for evaluation, else random Busyboxes are generated for this dataset | None
 ```--plot``` | bool | if True then save visualizations of reward function polar plots, GP samples, and optimization results to ```gp_plots/``` during interaction **(WARNING: this slows down the evaluation quite a bit)**| False
 ```--n-gp-samples``` | int | the number of samples to use when initializing an optimization seed | 500
 
