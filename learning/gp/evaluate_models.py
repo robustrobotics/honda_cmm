@@ -19,47 +19,11 @@ def get_models(L, models_path):
                 models.append(full_path)
     return models
 
-def evaluate_models(n_interactions, n_bbs, args, use_cuda=False):
-    # this determines what BBs are in the evaluated mechanisms
-    mech_types = ['slider', 'door']
-    bb_data = get_bb_dataset(args.bb_fname, n_bbs, mech_types, 1, args.urdf_num)
-
-    all_results = {}
-    for L in range(args.Ls[0], args.Ls[1]+1, args.Ls[2]):
-        models = get_models(L, args.models_path)
-        all_L_results = {}
-        for model in models:
-            all_model_test_regrets = []
-            for ix, bb_result in enumerate(bb_data[:n_bbs]):
-                if args.debug:
-                    print('BusyBox', ix)
-                dataset, gps, regret = create_single_bb_gpucb_dataset(bb_result[0],
-                                                                     model,
-                                                                     args.plot,
-                                                                     args,
-                                                                     ix,
-                                                                     n_interactions=n_interactions,
-                                                                     plot_dir_prefix='L'+str(L),
-                                                                     ret_regret=True)
-                all_model_test_regrets.append(regret)
-                if args.debug:
-                    print('Test Regret   :', regret)
-            if args.debug:
-                print('Results')
-                # print('Average Regret:', np.mean(avg_regrets))
-                print('Final Regret  :', np.mean(all_model_test_regrets))
-            all_L_results[model] = all_model_test_regrets
-        if len(models) > 0:
-            all_results[L] = all_L_results
-    util.write_to_file('regret_results_%s_%dT_%dN.pickle' % (args.type, n_interactions, n_bbs),
-                       all_results,
-                       verbose=True)
-
 # regret_results file the same as above, but instead of lists of regret values
 # for each BB and model, it is a list of the number of steps it took GPUCB to
 # find successful parameters
 
-def evaluate_models_noT(n_bbs, args, use_cuda=False):
+def evaluate_models(n_bbs, args, use_cuda=False):
     bb_data = get_bb_dataset(args.bb_fname, n_bbs, args.mech_types, 1, args.urdf_num)
 
     all_results = {}
@@ -88,7 +52,7 @@ def evaluate_models_noT(n_bbs, args, use_cuda=False):
             all_L_results[model] = all_model_test_steps
         if len(models) > 0:
             all_results[L] = all_L_results
-    util.write_to_file('regret_results_noT_%s_%dN_%s.pickle' % (args.type, n_bbs, args.mech_types[0]),
+    util.write_to_file('regret_results_%s_%dN_%s.pickle' % (args.type, n_bbs, args.mech_types[0]),
                        all_results,
                        verbose=True)
 
@@ -152,16 +116,10 @@ if __name__ == '__main__':
         '--random-policies',
         action='store_true',
         help='use to try random policy classes on random mechanisms')
-    parser.add_argument(
-        '--eval-method',
-        choices=['T', 'noT'])
     parser.add_argument('--mech-types', nargs='+', default=['slider'], type=str)
     args = parser.parse_args()
 
     if args.debug:
         import pdb; pdb.set_trace()
 
-    if args.eval_method == 'T':
-        evaluate_models(args.T, args.N, args)
-    elif args.eval_method == 'noT':
-        evaluate_models_noT(args.N, args)
+    evaluate_models(args.N, args)
