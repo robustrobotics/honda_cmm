@@ -418,7 +418,7 @@ class TestMechs(PlotFunc):
                 delta_yaws[i,j] = policy_tuple.delta_values.delta_yaw
                 delta_pitches[i,j] = policy_tuple.delta_values.delta_pitch
                 sample = util.Result(policy_tuple, mech_tuple, 0.0, 0.0,
-                                        None, None, limits[i], image_data, None, 1.0, None)
+                                        None, None, limits[i], image_data, None)
                 pred_motion = get_pred_motions([sample], model)
                 motions[i,j] = pred_motion[0]
 
@@ -487,8 +487,7 @@ class TestMechPolicies(PlotFunc):
                                          None,
                                          configs[k],
                                          image_data,
-                                         None,
-                                         randomness)
+                                         None)
                     pred_motion = get_pred_motions([sample], model)
                     motions[i, j, k] = pred_motion[0]
 
@@ -570,8 +569,7 @@ class TestMechPoliciesPitchOnly(PlotFunc):
                                          None,
                                          configs[k],
                                          image_data,
-                                         None,
-                                         randomness)
+                                         None)
 
 
                     pred_motion = get_pred_motions([sample], model)
@@ -654,7 +652,7 @@ class TestMechsPitch(PlotFunc):
                 policy_tuple = random_policy.get_policy_tuple()
                 delta_pitches[i,j] = policy_tuple.delta_values.delta_pitch
                 sample = util.Result(policy_tuple, mech_tuple, 0.0, 0.0,
-                                        None, None, config_goal, image_data, None, 1.0, None)
+                                        None, None, config_goal, image_data, None)
                 pred_motion0 = get_pred_motions([sample], model0)
                 pred_motion1 = get_pred_motions([sample], model1)
                 motions[0,i,j] = true_motion

@@ -26,7 +26,7 @@ def main(args):
             print('steps', steps)
         elif args.type == 'random':
             bb = BusyBox.bb_from_result(bb_results[0])
-            image_data, gripper = setup_env(bb, args.viz, args.debug, not args.use_gripper)
+            image_data, gripper = setup_env(bb, args.viz, args.debug)
             regret = float("inf")
             steps = 0
             while regret > SUCCESS_REGRET:
@@ -60,7 +60,6 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--viz', action='store_true')
-    parser.add_argument('--use-gripper', action='store_true')
     parser.add_argument('--fname', type=str)
     parser.add_argument(
         '--n-gp-samples',
@@ -98,10 +97,6 @@ if __name__ == '__main__':
         '--debug',
         action='store_true',
         help='use to enter debug mode')
-    parser.add_argument(
-        '--stochastic',
-        action='store_true',
-        help='sample from acquistion function')
     args = parser.parse_args()
 
     if args.debug:

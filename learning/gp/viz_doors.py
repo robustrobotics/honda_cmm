@@ -41,7 +41,7 @@ def viz_3d_plots(xs,
     configs = np.linspace(-np.pi/2.0, 0, num=n_rows**2-1)
     bb = BusyBox.bb_from_result(bb_result)
     mech = bb._mechanisms[0]
-    setup_env(bb, False, False, True)
+    setup_env(bb, False, False)
     true_rad = mech.get_radius_x()
     max_dist = mech.get_max_net_motion()
 
@@ -105,7 +105,7 @@ def plot_true_motion(args):
         # Setup the BusyBox.
         bb = BusyBox.bb_from_result(bb_result)
         mech = bb._mechanisms[0]
-        image_data, gripper = setup_env(bb, False, False, True)
+        image_data, gripper = setup_env(bb, False, False)
         pose_handle_base_world = mech.get_pose_handle_base_world()
 
         ys = []
@@ -221,9 +221,6 @@ if __name__ == '__main__':
     parser.add_argument(
         '--nn-fname',
         help='path to model files')
-    parser.add_argument(
-        '--use-gripper',
-        help='use to apply foce directly to handles')
     args = parser.parse_args()
 
     if args.debug:

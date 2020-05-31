@@ -105,13 +105,6 @@ if __name__ == '__main__':
         nargs=3,
         type=int,
         help='min max step of Ls')
-    parser.add_argument(
-        '--use-gripper',
-        action='store_true')
-    parser.add_argument(
-        '--stochastic',
-        action='store_true',
-        help='sample from acquistion function')
     parser.add_argument('--mech-types', nargs='+', default=['slider'], type=str)
     args = parser.parse_args()
 

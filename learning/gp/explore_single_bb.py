@@ -97,9 +97,8 @@ def test_model(sampler, args, gripper=None):
     # Execute the policy and observe the true motion.
     debug = False
     viz = False
-    use_gripper = False
     if gripper is None:
-        _, gripper = setup_env(sampler.bb, viz, debug, use_gripper)
+        _, gripper = setup_env(sampler.bb, viz, debug)
     else:
         gripper.reset(sampler.mech)
     pose_handle_base_world = sampler.mech.get_pose_handle_base_world()
@@ -135,7 +134,7 @@ class GPOptimizer(object):
             policy_tuple = random_policy.get_policy_tuple()
 
             results = [util.Result(policy_tuple, None, 0.0, None, None, None, \
-                                    image_data, None, None)]
+                                    image_data, None)]
             self.sample_policies.append(results)
 
             if self.nn is not None:
@@ -449,11 +448,10 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
     dataset = []
     viz = False
     debug = False
-    use_gripper = False
     # interact with BB
     bb = BusyBox.bb_from_result(bb_result, urdf_num=args.urdf_num)
     mech = bb._mechanisms[0]
-    image_data, gripper = setup_env(bb, viz, debug, use_gripper)
+    image_data, gripper = setup_env(bb, viz, debug)
 
     pose_handle_base_world = mech.get_pose_handle_base_world()
     sampler = UCB_Interaction(bb, image_data, plot, args, nn_fname=nn_fname)
@@ -515,7 +513,7 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
                 return dataset, sampler.gps, ix
 
         # sample a policy
-        # image_data, gripper = setup_env(bb, False, debug, use_gripper)
+        # image_data, gripper = setup_env(bb, False, debug)
 
         gripper.reset(mech)
         x, policy = sampler.sample()
@@ -525,7 +523,7 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
         c_motion, motion, handle_pose_final = gripper.execute_trajectory(traj, mech, policy.type, False)
         result = util.Result(policy.get_policy_tuple(), mech.get_mechanism_tuple(),
                              motion, c_motion, handle_pose_final, handle_pose_final,
-                             image_data, None, True)
+                             image_data, None)
         dataset.append(result)
 
         # update GP

@@ -28,7 +28,7 @@ def viz_models(args):
             # get image data
             bb = BusyBox.bb_from_result(bb_result)
             mech = bb._mechanisms[0]
-            image_data, gripper = setup_env(bb, False, False, args.use_gripper)
+            image_data, gripper = setup_env(bb, False, False)
 
             # generate plots
             viz_circles(image_data, mech, nn=nn, bb_i=ix)
@@ -61,9 +61,6 @@ if __name__ == '__main__':
     parser.add_argument(
         '--models-path',
         help='path to model files')
-    parser.add_argument(
-        '--use-gripper',
-        help='use to apply foce directly to handles')
     args = parser.parse_args()
 
     if args.debug:

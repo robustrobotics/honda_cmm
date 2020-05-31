@@ -17,7 +17,7 @@ def generate_dataset(args, git_hash):
     results = []
     for (i, bb_results) in enumerate(bb_dataset):
         bb = BusyBox.bb_from_result(bb_results[0])
-        image_data, gripper = setup_env(bb, args.viz, args.debug, not args.use_gripper)
+        image_data, gripper = setup_env(bb, args.viz, args.debug)
         bb_results = []
         for j in range(args.n_samples):
             sys.stdout.write("\rProcessing sample %i/%i for busybox %i/%i" % (j+1, args.n_samples, i+1, args.n_bbs))
@@ -38,7 +38,7 @@ def generate_dataset(args, git_hash):
                 mechanism_params = mech.get_mechanism_tuple()
                 result = util.Result(policy_params, mechanism_params, net_motion, \
                             cumu_motion, pose_handle_world_init, pose_handle_world_final, \
-                            image_data, git_hash, not args.use_gripper)
+                            image_data, git_hash)
                 bb_results.append(result)
 
                 gripper.reset(mech)
@@ -63,9 +63,9 @@ def get_bb_dataset(bb_fname, n_bbs, mech_types, max_mech, urdf_num):
                                                     mech_types=mech_classes,
                                                     urdf_tag=urdf_num)
             mechanism_params = bb._mechanisms[0].get_mechanism_tuple()
-            image_data, gripper = setup_env(bb, False, False, True)
+            image_data, gripper = setup_env(bb, False, False)
             bb_dataset.append([util.Result(None, mechanism_params, None, None, None,
-                                None, image_data, None, None)])
+                                None, image_data, None)])
         print('BusyBoxes created.')
     else:
         # Load in a file with predetermined BusyBoxes.
@@ -81,7 +81,7 @@ def get_true_ys(X_pred, mech, policy_params):
         policy = policies.get_policy_from_x(mech, x, policy_params)
         width, height = 0.6, 0.6
         bb = BusyBox.get_busybox(width, height, [mech])
-        _, gripper = setup_env(bb, viz, debug, True)
+        _, gripper = setup_env(bb, viz, debug)
 
         # calculate trajectory
         pose_handle_base_world = mech.get_pose_handle_base_world()
@@ -106,7 +106,6 @@ if __name__ == '__main__':
     parser.add_argument('--urdf-num', type=int, default=0)
     # desired goal config represented as a percentage of the max config, if unused then random config is generated
     parser.add_argument('--bb-fname', type=str)
-    parser.add_argument('--use-gripper', type=bool, default=False)
     args = parser.parse_args()
 
     if args.debug:

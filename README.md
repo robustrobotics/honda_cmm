@@ -2,7 +2,10 @@
 
 ## Installation
 
-TODO
+This package uses Python3. See ```requirements.txt``` for all dependencies. They can be installed with
+```
+pip3 install -r requirements.txt
+```
 
 ## Usage
 
@@ -36,13 +39,18 @@ Argument | Type | Description | Default
 ```--plot``` | bool | if True then visualize GP plots during interaction | False
 ```--n-gp-samples``` | int | the number of samples to use when initializing an optimization seed | 500
 
-#### Systematic
+#### Non-CPP Baselines
 
-TODO
+To generate data for a baseline use module ```actions.evaluate_noncpp_baselines``` with the following arguments:
 
-#### Active Exploration (Oudeyer Method)
-
-TODO
+Argument | Type | Description | Default
+```--type``` | ['random', 'gpucb'] | either a random evaluation method, or GP-UCB with a prior mean function of 0 | required
+```--N``` | int | number of Busyboxes in generated dataset | required
+```--fname``` | string | file path to save dataset to | does not save file if not specified
+```--bb-fname``` | string | if specified, the file path of the results dataset with the desired Busyboxes for this generated dataset, else (None) random Busyboxes are generated for this dataset | None
+```--mech-types``` | list of strings in ['slider', 'door'] | mechanism types in dataset | 'slider'
+```--plot``` | bool | if True then visualize GP plots during interaction | False
+```--n-gp-samples``` | int | the number of samples to use when initializing an optimization seed | 500
 
 ### Training
 
@@ -69,8 +77,8 @@ To evaluate models use the module ```learning.gp.evaluate_models``` with the fol
 
 Argument | Type | Description | Default
 --- | --- | --- | ---
-```--T``` | int | number of Busyboxes to average over when calculating regrets | required
-```--N``` | int | number of interactions per Busybox to learn residual reward function | required
+```--N``` | int | number of Busyboxes to average over when calculating regrets | required
+```--T``` | int | number of interactions per Busybox to learn residual reward function | required
 ```--models-path``` | string | path to model files. **ALL files ending .pt in this directory will be evaluated** | required
 ```--Ls``` | list of 3 ints | [min, max, step] of Ls to evaluate (used when searching for correct model files in models-path) | required
 ```---type``` | string | used to identify these results for regret plotting (eg. random, random_doors, gpucb_sliders, gpucb, etc...). **the string must contain a substring in [random, gpucb, systematic, or active] to select the line plotting color later)**| required

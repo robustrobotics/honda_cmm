@@ -31,7 +31,7 @@ def execute_systematic(args):
             bb = BusyBox.generate_random_busybox(max_mech=1, mech_types=[Slider], urdf_tag=args.urdf_num, debug=args.debug)
         mech = bb._mechanisms[0]
         mech_range = mech.range/2
-        _, gripper = setup_env(bb, args.viz, args.debug, args.use_gripper)
+        _, gripper = setup_env(bb, args.viz, args.debug)
         pos = mech.get_pose_handle_base_world().p
         orn = [0., 0., 0., 1.]
         policies = calc_systematic_policies(pos, orn, args.T)
@@ -72,7 +72,6 @@ if __name__ == '__main__':
     parser.add_argument('--urdf-num', type=int, default=0)
     parser.add_argument('--bb-fname', type=str)
     parser.add_argument('--fname', type=str)
-    parser.add_argument('--use-gripper', action='store_true')
     args = parser.parse_args()
 
     if args.debug:
