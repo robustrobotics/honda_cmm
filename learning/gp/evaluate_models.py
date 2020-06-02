@@ -14,7 +14,8 @@ def get_models(L, models_path):
     models = []
     for root, subdir, files in all_files:
         for file in files:
-            if (file[-3:] == '.pt') and ('_'+str(L)+'L_' in file):
+            # Change 50 depending on model name
+            if (file[-3:] == '.pt') and ('_'+str(50)+'L_' in file):
                 full_path = root+'/'+file
                 models.append(full_path)
     return models
@@ -84,11 +85,12 @@ def evaluate_models_noT(n_bbs, args, use_cuda=False):
                     print('Test Steps   :', steps)
             if args.debug:
                 print('Results')
-                # print('Average Regret:', np.mean(avg_regrets))
+                print('Average Regret:', np.mean(avg_regrets))
                 print('Final Avg Steps  :', np.mean(all_model_test_steps))
             all_L_results[model] = all_model_test_steps
         if len(models) > 0:
             all_results[L] = all_L_results
+    print(all_results)
     util.write_to_file('regret_results_noT_%s_%dN.pickle' % (args.type, n_bbs),
                        all_results,
                        verbose=True)
