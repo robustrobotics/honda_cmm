@@ -90,8 +90,8 @@ def evaluate_models_noT(n_bbs, args, use_cuda=False):
             all_L_results[model] = all_model_test_steps
         if len(models) > 0:
             all_results[L] = all_L_results
-            print("L: " + str(len(all_L_results)))
-    print(len(all_results))
+            print("Avg Steps: " + str(np.mean(all_model_test_steps)))
+    print("Num Results: " + str(len(all_results)))
     util.write_to_file('regret_results_noT_%s_%dN.pickle' % (args.type, n_bbs),
                        all_results,
                        verbose=True)
