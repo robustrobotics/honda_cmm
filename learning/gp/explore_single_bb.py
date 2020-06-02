@@ -299,7 +299,7 @@ class UCB_Interaction(object):
                                                n_restarts_optimizer=1),
                     'Revolute': GaussianProcessRegressor(kernel=self.get_kernel('Revolute', 'random'),
                                                        n_restarts_optimizer=1)}
-        self.optim = GPOptimizer(args.urdf_num, self.bb, self.image_data, \
+        self.optim = GPOptimizer(args.urdf_num, self.bb, self.image_data,
                         args.n_gp_samples, BETA, self.gps, args.random_policies, nn=self.nn)
 
     def get_kernel(self, type, explore_type):
