@@ -80,6 +80,7 @@ Argument | Type | Description | Default
 ```--bb-fname``` | string | if specified, the file path of the results dataset with the desired Busyboxes for evaluation, else (None) random Busyboxes are generated for this dataset | None
 ```--plot``` | bool | if True then save visualizations of reward function polar plots, GP samples, and optimization results to ```gp_plots/``` during interaction **(WARNING: this slows down the evaluation quite a bit)**| False
 ```--n-gp-samples``` | int | the number of samples to use when initializing an optimization seed | 500
+```--eval-method``` | string | `T` or `noT` | None
 
 ### Plotting Regret Results
 
