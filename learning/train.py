@@ -7,6 +7,7 @@ import learning.viz as viz
 from collections import namedtuple
 from utils import util
 import os
+import random
 import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
 from actions.policies import Policy
@@ -25,7 +26,7 @@ def view_points(img, points):
     axes.imshow(np.transpose(npimg, (1, 2, 0)))
     cmap = plt.get_cmap('viridis')
 
-    for ix in range(0, points.shape[0]):
+    for ix in range(0, points.sxhape[0]):
         axes.scatter((points[ix, 0]+1)/2.0*w, (points[ix, 1]+1)/2.0*h,
                      s=5, c=[cmap(ix/points.shape[0])])
 
@@ -35,16 +36,21 @@ def view_points(img, points):
 def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
     # Load data
     data = parse_pickle_file(results)
-
+    test_results = util.read_from_file('test20.pickle')
+    for num in range(args.L_min, args.L_max + 1, args.L_step):
+        new_results = []
+        for res in test_results[0:num]:
+            new_results += res[0:args.M]
+    test_data = parse_pickle_file(new_results)
+    test_set = setup_data_loaders(data=test_data, batch_size=batch_size, single_set=True)
     train_set, val_set, _ = setup_data_loaders(data=data,
                                                batch_size=batch_size)
-
     # Setup Model
     policy_types = ['Prismatic', 'Revolute']
     net = NNPolVis(policy_names=policy_types,
                    policy_dims=Policy.get_param_dims(policy_types),
                    hdim=hdim,
-                   im_h=53,  # 154, Note thiese aren't important for the SpatialAutoencoder
+                   im_h=53,  # 154, Note these aren't important for the SpatialAutoencoder
                    im_w=115,  # 205,
                    image_encoder=args.image_encoder)
 
@@ -53,10 +59,10 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
 
     loss_fn = torch.nn.MSELoss()
     optim = torch.optim.Adam(net.parameters())
-
+    print("num entries ", len(results))
     best_val = 1000
     # Training loop.
-    for ex in range(1, args.n_epochs+1):
+    for ex in range(1, args.n_epochs + 1):
         train_losses = []
         net.train()
         for bx, (k, x, im, y, _) in enumerate(train_set):
@@ -76,21 +82,20 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
             train_losses.append(loss.item())
 
             if bx == 0 and args.debug:
-                for kx in range(0, yhat.shape[0]//2):
+                for kx in range(0, yhat.shape[0] // 2):
                     fig = view_points(im[kx, :, :, :].cpu(),
                                       points[kx, :, :].cpu().detach().numpy())
                     writer.add_figure('features_%d' % kx, fig, global_step=ex)
 
         train_loss_ex = np.mean(train_losses)
-        writer.add_scalar('Train-loss/'+fname, train_loss_ex, ex)
-        print('[Epoch {}] - Training Loss: {}'.format(ex, train_loss_ex))
+        writer.add_scalar('Train-loss/' + fname, train_loss_ex, ex)
+        # print('[Epoch {}] - Training Loss: {}'.format(ex, train_loss_ex))
 
         if ex % args.val_freq == 0:
             val_losses = []
             net.eval()
-
             ys, yhats, types = [], [], []
-            for bx, (k, x, im, y, _) in enumerate(val_set):
+            for bx, (k, x, im, y, _) in enumerate(test_set):
                 pol = torch.Tensor([name_lookup[k[0]]])
                 if args.use_cuda:
                     x = x.cuda()
@@ -109,18 +114,18 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
                 ys += y.numpy().tolist()
                 yhats += yhat.detach().numpy().tolist()
 
-            curr_val = np.mean(val_losses)
-            writer.add_scalar('Val-loss/'+fname, curr_val, ex)
-            print('[Epoch {}] - Validation Loss: {}'.format(ex, curr_val))
+            curr_val_error = np.mean(val_losses)
+            writer.add_scalar('Val-loss/' + fname, curr_val_error, ex)
+            print('[Epoch {}] - Validation Loss: {}'.format(ex, curr_val_error))
             # if best epoch so far, save model
-            if curr_val < best_val:
-                best_val = curr_val
-                full_path = fname+'.pt'
+            if curr_val_error < best_val:
+                best_val = curr_val_error
+                full_path = fname + '.pt'
                 torch.save(net.state_dict(), full_path)
-
-                # save plot of prediction error
-                if pviz:
-                    viz.plot_y_yhat(ys, yhats, types, ex, fname, title='PolVis')
+            #
+            #     # save plot of prediction error
+            #     if pviz:
+            #         viz.plot_y_yhat(ys, yhats, types, ex, fname, title='PolVis')
 
 def get_train_params(args):
     return {'batch_size': args.batch_size,
