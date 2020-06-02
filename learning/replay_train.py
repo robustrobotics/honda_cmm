@@ -79,7 +79,6 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
             train_set, val_set, _ = setup_data_loaders(data=samples, batch_size=batch_size)
             new_samples = []
 
-            best_val = 1000
             # Training loop.
             for ex in range(1, args.n_epochs+1):
                 net.train()
@@ -152,15 +151,15 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
                     curr_val_error = np.mean(val_losses)
                     writer.add_scalar('Val-loss/'+fname, curr_val_error, ex)
                     print('[Busybox {}] - Validation Loss: {}'.format(count/100, curr_val_error))
-                #     # if best epoch so far, save model
-                #     if curr_val < best_val:
-                #         best_val = curr_val
-                #         full_path = fname+'.pt'
-                #         torch.save(net.state_dict(), full_path)
-                #
-                #         # save plot of prediction error
-                #         if pviz:
-                #             viz.plot_y_yhat(ys, yhats, types, ex, fname, title='PolVis')
+
+                    # save model for every 5 busyboxes
+                    if count % 500 == 0:
+                        full_path = fname+count+'.pt'
+                        torch.save(net.state_dict(), full_path)
+
+                        # save plot of prediction error
+                        if pviz:
+                            viz.plot_y_yhat(ys, yhats, types, ex, fname, title='PolVis')
 
 def get_train_params(args):
     return {'batch_size': args.batch_size,
