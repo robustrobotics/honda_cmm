@@ -117,10 +117,10 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
                 best_val = curr_val
                 full_path = fname+'.pt'
                 torch.save(net.state_dict(), full_path)
-            #
-            #     # save plot of prediction error
-            #     if pviz:
-            #         viz.plot_y_yhat(ys, yhats, types, ex, fname, title='PolVis')
+
+                # save plot of prediction error
+                if pviz:
+                    viz.plot_y_yhat(ys, yhats, types, ex, fname, title='PolVis')
 
 def get_train_params(args):
     return {'batch_size': args.batch_size,

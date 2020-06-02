@@ -1,49 +1,63 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-x = [*range(0, 50, 1)]
-train_y = []
-val_y = []
-files = ['results/results50_1.txt', 'results/results50_2.txt', 'results/results50_3.txt', 'results/results50_4.txt',
-         'results/results50_5.txt']
-for file in files:
-    with open(file) as f:
-        lineList = f.readlines()
-    i = 0
-    while i < 100:
-        line = lineList[i][:-1]
-        elem = line.split()
-        y = float(elem[-1])
-        train_y.append(y)
-        line = lineList[i + 1][:-1]
-        elem = line.split()
-        y = float(elem[-1])
-        val_y.append(y)
-        i += 2
-
-base_train_y = []
-base_val_y = []
-base_files = ['results/results_b1.txt', 'results/results_b2.txt', 'results/results_b3.txt', 'results/results_b4.txt',
-              'results/results_b5.txt']
-for filename in base_files:
-    with open(filename) as f:
-        lineList = f.readlines()
-    i = 0
-    while i < 100:
-        line = lineList[i][:-1]
-        elem = line.split()
-        y = float(elem[-1])
-        base_train_y.append(y)
-        line = lineList[i + 1][:-1]
-        elem = line.split()
-        y = float(elem[-1])
-        base_val_y.append(y)
-        i += 2
+# x = [*range(0, 50, 1)]
+# train_y = []
+# val_y = []
+# files = ['results/results50_1.txt', 'results/results50_2.txt', 'results/results50_3.txt', 'results/results50_4.txt',
+#          'results/results50_5.txt']
+# for file in files:
+#     with open(file) as f:
+#         lineList = f.readlines()
+#     i = 0
+#     while i < 100:
+#         line = lineList[i][:-1]
+#         elem = line.split()
+#         y = float(elem[-1])
+#         train_y.append(y)
+#         line = lineList[i + 1][:-1]
+#         elem = line.split()
+#         y = float(elem[-1])
+#         val_y.append(y)
+#         i += 2
+#
+# base_train_y = []
+# base_val_y = []
+# base_files = ['results/results_b1.txt', 'results/results_b2.txt', 'results/results_b3.txt', 'results/results_b4.txt',
+#               'results/results_b5.txt']
+# for filename in base_files:
+#     with open(filename) as f:
+#         lineList = f.readlines()
+#     i = 0
+#     while i < 100:
+#         line = lineList[i][:-1]
+#         elem = line.split()
+#         y = float(elem[-1])
+#         base_train_y.append(y)
+#         line = lineList[i + 1][:-1]
+#         elem = line.split()
+#         y = float(elem[-1])
+#         base_val_y.append(y)
+#         i += 2
+#
+# reg_x = [*range(5, 51, 5)]
+# reg_val_y = []
+# reg_files = ['results/reg50_1.txt', 'results/reg50_2.txt', 'results/reg50_3.txt', 'results/reg50_4.txt',
+#              'results/reg50_5.txt']
+# for filename in reg_files:
+#     with open(filename) as f:
+#         lineList = f.readlines()
+#     i = 0
+#     while i < 118:
+#         line = lineList[i][:-1]
+#         elem = line.split()
+#         y = float(elem[-1])
+#         reg_val_y.append(y)
+#         i += 13
 
 reg_x = [*range(5, 51, 5)]
 reg_val_y = []
-reg_files = ['results/reg50_1.txt', 'results/reg50_2.txt', 'results/reg50_3.txt', 'results/reg50_4.txt',
-             'results/reg50_5.txt']
+reg_files = ['gpsteps1.txt']
 for filename in reg_files:
     with open(filename) as f:
         lineList = f.readlines()
