@@ -154,7 +154,7 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
 
                     # save model for every 5 busyboxes
                     if count % 500 == 0:
-                        full_path = fname+count+'.pt'
+                        full_path = fname+str(count)+'.pt'
                         torch.save(net.state_dict(), full_path)
 
                         # save plot of prediction error
