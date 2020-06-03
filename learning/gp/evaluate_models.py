@@ -14,7 +14,7 @@ def get_models(L, models_path):
     models = []
     for root, subdir, files in all_files:
         for file in files:
-            if (file[-3:] == '.pt') and ('_'+str(L)+'L_' in file):
+            if (file[-3:] == '.pt') and ('_'+str(50)+'L_' in file):
                 full_path = root+'/'+file
                 models.append(full_path)
     return models
