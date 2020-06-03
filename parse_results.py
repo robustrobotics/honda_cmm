@@ -69,6 +69,20 @@ for filename in gp_files:
         gp_val_y.append(y)
         i += 1
 
+r_x = [*range(5, 51, 5)]
+r_val_y = []
+r_files = ['results/gpsteps1.txt']
+for filename in r_files:
+    with open(filename) as f:
+        lineList = f.readlines()
+    i = 0
+    while i < 30:
+        line = lineList[i]
+        elem = line.split()
+        y = float(elem[-1])
+        r_val_y.append(y)
+        i += 1
+
 # x = np.array(x)
 # y = np.array(val_y).reshape(5, 50)
 # err_y = np.std(y, axis=0).ravel()
@@ -100,6 +114,15 @@ mean_y = np.mean(y, axis=0).ravel()
 plt.plot(x, mean_y, color='#b53b33', label='with buffer')
 plt.fill_between(x, mean_y - err_y, mean_y + err_y,
                  alpha=0.5, edgecolor='#b53b33', facecolor='#ed908a')
+
+x = np.array(r_x)
+reg_y = np.array(r_val_y).reshape(5, 10)
+rerr_y = np.std(reg_y, axis=0).ravel()
+rmean_y = np.mean(reg_y, axis=0).ravel()
+plt.plot(x, rmean_y, color='#448554', label='not continual')
+plt.fill_between(x, rmean_y - rerr_y, rmean_y + rerr_y,
+                 alpha=0.2, edgecolor='#448554', facecolor='#80c291')
+
 plt.legend()
 plt.xlabel("L")
 plt.ylabel("Mean Interactions")
