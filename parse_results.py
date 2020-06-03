@@ -71,7 +71,7 @@ for filename in gp_files:
 
 r_x = [*range(5, 51, 5)]
 r_val_y = []
-r_files = ['results/gpsteps1.txt']
+r_files = ['results/regsteps1.txt']
 for filename in r_files:
     with open(filename) as f:
         lineList = f.readlines()
@@ -116,7 +116,7 @@ plt.fill_between(x, mean_y - err_y, mean_y + err_y,
                  alpha=0.5, edgecolor='#b53b33', facecolor='#ed908a')
 
 x = np.array(r_x)
-reg_y = np.array(r_val_y).reshape(5, 10)
+reg_y = np.array(r_val_y).reshape(3, 10)
 rerr_y = np.std(reg_y, axis=0).ravel()
 rmean_y = np.mean(reg_y, axis=0).ravel()
 plt.plot(x, rmean_y, color='#448554', label='not continual')

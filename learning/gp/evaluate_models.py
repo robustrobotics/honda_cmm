@@ -88,7 +88,7 @@ def evaluate_models_noT(n_bbs, args, use_cuda=False):
                 print('Final Avg Steps  :', np.mean(all_model_test_steps))
             all_L_results[model] = all_model_test_steps
             print("Avg Steps: " + str(np.mean(all_model_test_steps)))
-            print("L: " + str(L))
+            print("Model: " + str(model))
         if len(models) > 0:
             all_results[L] = all_L_results
     print("Num Results: " + str(len(all_results)))
