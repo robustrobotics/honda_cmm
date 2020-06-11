@@ -62,7 +62,7 @@ for filename in gp_files:
     with open(filename) as f:
         lineList = f.readlines()
     i = 0
-    while i < 30:
+    while i < 40:
         line = lineList[i]
         elem = line.split()
         y = float(elem[-1])
@@ -108,7 +108,7 @@ for filename in r_files:
 #                  alpha=0.2, edgecolor='#448554', facecolor='#80c291')
 
 x = np.array(gp_x)
-y = np.array(gp_val_y).reshape(3, 10)
+y = np.array(gp_val_y).reshape(4, 10)
 err_y = np.std(y, axis=0).ravel()
 mean_y = np.mean(y, axis=0).ravel()
 plt.plot(x, mean_y, color='#b53b33', label='with buffer')

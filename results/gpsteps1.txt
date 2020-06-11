@@ -28,3 +28,13 @@ Avg Steps: 10.4
 Avg Steps: 8.6
 Avg Steps: 8.6
 Avg Steps: 7.2
+Avg Steps: 27.4
+Avg Steps: 33.0
+Avg Steps: 27.6
+Avg Steps: 27.8
+Avg Steps: 29.0
+Avg Steps: 22.8
+Avg Steps: 29.2
+Avg Steps: 17.2
+Avg Steps: 25.2
+Avg Steps: 26.0
