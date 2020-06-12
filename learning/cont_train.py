@@ -186,7 +186,6 @@ def get_train_params(args):
             'hdim': args.hdim,
             'n_epochs': args.n_epochs,
             'val_freq': args.val_freq,
-            'data-fname': args.data_fname,
             'L_min': args.L_min,
             'L_max': args.L_max,
             'L_step': args.L_step,
