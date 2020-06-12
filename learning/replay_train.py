@@ -76,7 +76,7 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
             # Include whole buffer when training
             buffer.extend(new_samples)
             samples.extend(new_samples)
-            train_set, val_set, _ = setup_data_loaders(data=samples, batch_size=batch_size)
+            train_set, val_set, _ = setup_data_loaders(data=buffer, batch_size=batch_size)
             new_samples = []
 
             # Training loop.

@@ -279,7 +279,7 @@ class GPOptimizer(object):
 
 class UCB_Interaction(object):
 
-    def __init__(self, bb, image_data, plot, args, nn_fname=''):
+    def __init__(self, bb, image_data, plot, args, nn_fname='', nn = None):
         # Pretrained Kernel (for Sliders)
         # kernel = ConstantKernel(0.005, constant_value_bounds=(0.005, 0.005)) * RBF(length_scale=(0.247, 0.084, 0.0592), length_scale_bounds=(0.0592, 0.247)) + WhiteKernel(noise_level=1e-5, noise_level_bounds=(1e-5, 1e2))
         # Pretrained Kernel (for Doors)
@@ -289,9 +289,10 @@ class UCB_Interaction(object):
                                         {'Prismatic': [], 'Revolute': []}
 
         self.plot = plot
-        self.nn = None
+        self.nn = nn
         if nn_fname != '':
             self.nn = util.load_model(nn_fname, args.hdim, use_cuda=False)
+        self.nn.eval()
         self.bb = bb
         self.image_data = image_data
         self.mech = self.bb._mechanisms[0]
@@ -450,7 +451,7 @@ def viz_gp(gp, result, num, bb, nn=None):
     # plt.savefig('gp_estimates_tuned_%d.png' % num)
 '''
 
-def create_gpucb_dataset(n_interactions, n_bbs, args):
+def create_gpucb_dataset(n_interactions, n_bbs, args, nn = None):
     """
     :param n_bbs: The number of BusyBoxes to include in the dataset.
     :param n_interactions: The number of interactions per BusyBox.
@@ -479,20 +480,18 @@ def create_gpucb_dataset(n_interactions, n_bbs, args):
                                                               args,
                                                               ix,
                                                               n_interactions=n_interactions,
-                                                              plot_dir_prefix=args.plot_dir)
+                                                              plot_dir_prefix=args.plot_dir, nn=nn)
         dataset.append(single_dataset)
-        #regrets.append(r)
         print('Interacted with BusyBox %d.' % ix)
-        #print('Regret:', np.mean(regrets))
-
+    return dataset
     # Save the dataset.
-    if args.fname != '':
-        with open(args.fname, 'wb') as handle:
-            pickle.dump(dataset, handle)
+    # if args.fname != '':
+    #     with open(args.fname, 'wb') as handle:
+    #         pickle.dump(dataset, handle)
 
 def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
                                    n_interactions=None, plot_dir_prefix='',
-                                   ret_regret=False, success_regret=None):
+                                   ret_regret=False, success_regret=None, nn=None):
     use_cuda = False
     dataset = []
     viz = False
@@ -504,7 +503,7 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
     image_data, gripper = setup_env(bb, viz, debug, use_gripper)
 
     pose_handle_base_world = mech.get_pose_handle_base_world()
-    sampler = UCB_Interaction(bb, image_data, plot, args, nn_fname=nn_fname)
+    sampler = UCB_Interaction(bb, image_data, plot, args, nn_fname=nn_fname, nn=nn)
     for ix in itertools.count():
         gripper.reset(mech)
         if args.debug:
