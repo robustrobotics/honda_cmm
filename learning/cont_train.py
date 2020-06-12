@@ -64,8 +64,12 @@ def train_eval(args, hdim, batch_size, pviz, fname, writer):
     # Get initial 500 samples (5 busyboxes with 100 interactions each)
     train_args = Namespace(n_gp_samples=500, bb_fname='', mech_types=['slider'], plot=False, urdf_num=0,
                            fname='', nn_fname='', plot_dir='', debug=False, random_policies=False, stochastic=False)
-    data = create_gpucb_dataset(100, 5, train_args, net)
+    dataset = create_gpucb_dataset(100, 5, train_args, net)
     net.train()
+    data = []
+    # Append samples from the dataset to data
+    for i in range(len(dataset)):
+        data.extend(dataset[i])
     buffer = data[:50]  # Replay buffer
     new_samples = []
     count = 50  # Count number of samples seen so far
@@ -74,18 +78,21 @@ def train_eval(args, hdim, batch_size, pviz, fname, writer):
     for i in range(4):   # CHANGE to a variable
         # Get 500 new samples (5 busyboxes with 100 interactions each)
         train_args = Namespace(n_gp_samples=500, bb_fname='', mech_types=['slider'], plot=False, urdf_num=0,
-                           fname='', nn_fname='', plot_dir='', debug=False, random_policies=False, stochastic=False)
-        new_data = create_gpucb_dataset(100, 5, train_args, net)
+                               fname='', nn_fname='', plot_dir='', debug=False, random_policies=False, stochastic=False)
+        new_dataset = create_gpucb_dataset(100, 5, train_args, net)
         net.train()
+        new_data = []
+        for j in range(len(new_dataset)):
+            new_data.extend(new_dataset[j])
         data.extend(new_data)
 
         for i in range(50, len(data)):
-            # Cap buffer size at 600
+            # Cap buffer size at 1000
             new_samples.append(data[i])
             count += 1
-            # Load 50 new samples into the buffer at a time
-            if len(new_samples) == 50:
-                while len(buffer) > 550:
+            # Load 100 new samples into the buffer at a time
+            if len(new_samples) == 100:
+                while len(buffer) > 900:
                     buffer.pop(random.randint(0, len(buffer) - 1))
                 # Include whole buffer when training
                 buffer.extend(new_samples)
