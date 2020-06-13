@@ -70,12 +70,11 @@ def train_eval(args, hdim, batch_size, pviz, fname, writer):
     # Append samples from the dataset to data
     for i in range(len(dataset)):
         data.extend(parse_pickle_file(dataset[i]))
-    buffer = data[:50]  # Replay buffer
+    buffer = []  # Replay buffer
     new_samples = []
-    count = 50  # Count number of samples seen so far
-    data = data[50:]  # Remove samples in replay buffer
+    count = 0  # Count number of samples seen so far
 
-    for i in range(4):   # CHANGE to a variable
+    for k in range(4):   # CHANGE to a variable
         # Get 500 new samples (5 busyboxes with 100 interactions each)
         train_args = Namespace(n_gp_samples=500, bb_fname='', mech_types=['slider'], plot=False, urdf_num=0,
                                fname='', nn_fname='', plot_dir='', debug=False, random_policies=False, stochastic=False)
@@ -83,8 +82,8 @@ def train_eval(args, hdim, batch_size, pviz, fname, writer):
         net.train()
         for j in range(len(new_dataset)):
             data.extend(parse_pickle_file(new_dataset[j]))
-
-        for i in range(50, len(data)):
+        print('data length: ' + str(len(data)))
+        for i in range(len(data)):
             # Cap buffer size at 1000
             new_samples.append(data[i])
             count += 1
@@ -99,6 +98,7 @@ def train_eval(args, hdim, batch_size, pviz, fname, writer):
 
                 # Training loop.
                 for ex in range(1, args.n_epochs+1):
+                    print('training...')
                     net.train()
                     for bx, (k, x, im, y, _) in enumerate(train_set):
                         pol = name_lookup[k[0]]
