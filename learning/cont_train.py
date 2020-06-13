@@ -69,11 +69,11 @@ def train_eval(args, hdim, batch_size, pviz, fname, writer):
     data = []
     # Append samples from the dataset to data
     for i in range(len(dataset)):
-        data.extend(dataset[i])
+        data.extend(parse_pickle_file(dataset[i]))
     buffer = data[:50]  # Replay buffer
     new_samples = []
     count = 50  # Count number of samples seen so far
-    data = data[50:] # Remove samples in replay buffer
+    data = data[50:]  # Remove samples in replay buffer
 
     for i in range(4):   # CHANGE to a variable
         # Get 500 new samples (5 busyboxes with 100 interactions each)
@@ -81,10 +81,8 @@ def train_eval(args, hdim, batch_size, pviz, fname, writer):
                                fname='', nn_fname='', plot_dir='', debug=False, random_policies=False, stochastic=False)
         new_dataset = create_gpucb_dataset(100, 5, train_args, net)
         net.train()
-        new_data = []
         for j in range(len(new_dataset)):
-            new_data.extend(new_dataset[j])
-        data.extend(new_data)
+            data.extend(parse_pickle_file(new_dataset[j]))
 
         for i in range(50, len(data)):
             # Cap buffer size at 1000
