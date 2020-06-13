@@ -74,7 +74,7 @@ def train_eval(args, hdim, batch_size, pviz, fname, writer):
     new_samples = []
     count = 0  # Count number of samples seen so far
 
-    for k in range(4):   # CHANGE to a variable
+    for k in range(10):   # CHANGE to a variable
         # Get 500 new samples (5 busyboxes with 100 interactions each)
         train_args = Namespace(n_gp_samples=500, bb_fname='', mech_types=['slider'], plot=False, urdf_num=0,
                                fname='', nn_fname='', plot_dir='', debug=False, random_policies=False, stochastic=False)
@@ -87,9 +87,9 @@ def train_eval(args, hdim, batch_size, pviz, fname, writer):
             # Cap buffer size at 1000
             new_samples.append(data[i])
             count += 1
-            # Load 100 new samples into the buffer at a time
-            if len(new_samples) == 100:
-                while len(buffer) > 900:
+            # Load 50 new samples into the buffer at a time
+            if len(new_samples) == 50:
+                while len(buffer) > 950:
                     buffer.pop(random.randint(0, len(buffer) - 1))
                 # Include whole buffer when training
                 buffer.extend(new_samples)
