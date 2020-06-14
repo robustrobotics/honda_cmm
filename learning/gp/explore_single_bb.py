@@ -516,7 +516,7 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
             regret, start_x, stop_x, policy_type = test_model(sampler, args, gripper=gripper)
             gripper.reset(mech)
 
-            print('Current regret', regret)
+            # print('Current regret', regret)
             opt_points = (policy_type, [(start_x, 'g'), (stop_x, 'r')])
             sample_points = {'Prismatic': [(sample, 'k') for sample in sampler.xs['Prismatic']],
                             'Revolute': [(sample, 'k') for sample in sampler.xs['Revolute']]}
