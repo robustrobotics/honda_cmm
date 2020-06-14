@@ -2,18 +2,18 @@
 <robot  name="busybox" >
  <link  name="base_link" >
   <inertial >
-   <origin  rpy="0 0 0"  xyz="0 0 0" />
+   <origin  xyz="0 0 0"  rpy="0 0 0" />
    <mass  value="0" />
-   <inertia  ixz="0"  iyz="0"  ixy="0"  ixx="0.001"  izz="0.001"  iyy="0.001" />
+   <inertia  izz="0.001"  iyz="0"  ixz="0"  ixx="0.001"  iyy="0.001"  ixy="0" />
   </inertial>
   <collision >
-   <origin  rpy="0 0 0"  xyz="0 0 0" />
+   <origin  xyz="0 0 0"  rpy="0 0 0" />
    <geometry >
     <box  size="0.6 0.3 0.1" />
    </geometry>
   </collision>
   <visual >
-   <origin  rpy="0 0 0"  xyz="0 0 0" />
+   <origin  xyz="0 0 0"  rpy="0 0 0" />
    <geometry >
     <box  size="0.6 0.3 0.1" />
    </geometry>
@@ -24,18 +24,18 @@
  </link>
  <link  name="back_link" >
   <inertial >
-   <origin  rpy="0 0 0"  xyz="0 0 0" />
+   <origin  xyz="0 0 0"  rpy="0 0 0" />
    <mass  value="0.5" />
-   <inertia  ixz="0"  iyz="0"  ixy="0"  ixx="0.001"  izz="0.001"  iyy="0.001" />
+   <inertia  izz="0.001"  iyz="0"  ixz="0"  ixx="0.001"  iyy="0.001"  ixy="0" />
   </inertial>
   <collision >
-   <origin  rpy="0 0 0"  xyz="0 0 0" />
+   <origin  xyz="0 0 0"  rpy="0 0 0" />
    <geometry >
     <box  size="0.6 0.05 0.6" />
    </geometry>
   </collision>
   <visual >
-   <origin  rpy="0 0 0"  xyz="0 0 0" />
+   <origin  xyz="0 0 0"  rpy="0 0 0" />
    <geometry >
     <box  size="0.6 0.05 0.6" />
    </geometry>
@@ -44,66 +44,66 @@
    </material>
   </visual>
  </link>
- <joint  name="fixed_backboard"  type="fixed" >
+ <joint  type="fixed"  name="fixed_backboard" >
   <parent  link="base_link" />
   <child  link="back_link" />
-  <origin  rpy="0 0 0"  xyz="0 0 0.35" />
+  <origin  xyz="0 0 0.35"  rpy="0 0 0" />
  </joint>
- <link  name="slider_13_handle" >
+ <link  name="slider_2_handle" >
   <inertial >
-   <origin  rpy="0 0 0"  xyz="0 0 0" />
+   <origin  xyz="0 0 0"  rpy="0 0 0" />
    <mass  value="0.1" />
-   <inertia  ixz="0"  iyz="0"  ixy="0"  ixx="0.001"  izz="0.001"  iyy="0.001" />
+   <inertia  izz="0.001"  iyz="0"  ixz="0"  ixx="0.001"  iyy="0.001"  ixy="0" />
   </inertial>
   <collision >
-   <origin  rpy="0 0 0"  xyz="0 0 0" />
+   <origin  xyz="0 0 0"  rpy="0 0 0" />
    <geometry >
     <cylinder  radius="0.02"  length="0.05" />
    </geometry>
   </collision>
   <visual >
-   <origin  rpy="0 0 0"  xyz="0 0 0" />
+   <origin  xyz="0 0 0"  rpy="0 0 0" />
    <geometry >
     <cylinder  radius="0.02"  length="0.05" />
    </geometry>
-   <material  name="slider_13_color" >
+   <material  name="slider_2_color" >
     <color  rgba="1.0 0.0 0.0 1.0" />
    </material>
   </visual>
  </link>
- <link  name="slider_13_track" >
+ <link  name="slider_2_track" >
   <inertial >
-   <origin  rpy="0 0 0"  xyz="0 0 0" />
+   <origin  xyz="0 0 0"  rpy="0 0 0" />
    <mass  value="0.1" />
-   <inertia  ixz="0"  iyz="0"  ixy="0"  ixx="0.001"  izz="0.001"  iyy="0.001" />
+   <inertia  izz="0.001"  iyz="0"  ixz="0"  ixx="0.001"  iyy="0.001"  ixy="0" />
   </inertial>
   <collision >
-   <origin  rpy="0 0 0"  xyz="0 0 0" />
+   <origin  xyz="0 0 0"  rpy="0 0 0" />
    <geometry >
-    <box  size="0.4959613416395672 0.005 0.02" />
+    <box  size="0.10743110160895926 0.005 0.02" />
    </geometry>
   </collision>
   <visual >
-   <origin  rpy="0 0 0"  xyz="0 0 0" />
+   <origin  xyz="0 0 0"  rpy="0 0 0" />
    <geometry >
-    <box  size="0.4959613416395672 0.005 0.02" />
+    <box  size="0.10743110160895926 0.005 0.02" />
    </geometry>
    <material  name="slider_track_color" >
     <color  rgba="0.6 0.6 0.6 1.0" />
    </material>
   </visual>
  </link>
- <joint  name="slider_13_joint"  type="prismatic" >
+ <joint  type="prismatic"  name="slider_2_joint" >
   <parent  link="back_link" />
-  <child  link="slider_13_handle" />
-  <axis  xyz="-0.9488228370213238 0.31580884083066213 0" />
-  <origin  rpy="1.57 0 0"  xyz="-0.0318636095201309 0.05 -0.15412396644716406" />
-  <limit  lower="-0.2479806708197836"  upper="0.2479806708197836"  effort="UNNAMED_10"  velocity="UNNAMED_11" />
+  <child  link="slider_2_handle" />
+  <axis  xyz="-0.45640013771751753 0.8897746424187594 0" />
+  <origin  xyz="0.011738085164543666 0.05 0.024457010836680226"  rpy="1.57 0 0" />
+  <limit  lower="-0.05371555080447963"  upper="0.05371555080447963"  velocity="UNNAMED_2"  effort="UNNAMED_3" />
   <dynamics  damping="1.0"  friction="1.0" />
  </joint>
- <joint  name="slider_13_track_joint"  type="fixed" >
+ <joint  type="fixed"  name="slider_2_track_joint" >
   <parent  link="back_link" />
-  <child  link="slider_13_track" />
-  <origin  rpy="0 -2.8202836526317685 0"  xyz="-0.0318636095201309 0.025 -0.15412396644716406" />
+  <child  link="slider_2_track" />
+  <origin  xyz="0.011738085164543666 0.025 0.024457010836680226"  rpy="0 -2.044741493916277 0" />
  </joint>
 </robot>

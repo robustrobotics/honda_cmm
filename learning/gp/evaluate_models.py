@@ -9,15 +9,21 @@ from gen.generate_policy_data import get_bb_dataset
 
 SUCCESS_REGRET = 0.05
 
+
 def get_models(L, models_path):
     all_files = os.walk(models_path)
     models = []
     for root, subdir, files in all_files:
         for file in files:
             if (file[-3:] == '.pt') and ('_100M' in file):   # Model to fit file names
-                full_path = root+'/'+file
-                models.append(full_path)
+                start = file.find('_100M')
+                num = int(file[start + 5:-3])
+                wanted = [500, 1500, 3000, 5000, 7500, 10500, 14000, 18000, 22500, 27500]
+                if num in wanted:
+                    full_path = root+'/'+file
+                    models.append(full_path)
     return models
+
 
 def evaluate_models(n_interactions, n_bbs, args, use_cuda=False):
     # this determines what BBs are in the evaluated mechanisms
@@ -58,6 +64,7 @@ def evaluate_models(n_interactions, n_bbs, args, use_cuda=False):
 # regret_results file the same as above, but instead of lists of regret values
 # for each BB and model, it is a list of the number of steps it took GPUCB to
 # find successful parameters
+
 
 def evaluate_models_noT(n_bbs, args, use_cuda=False):
     mech_types = ['slider', 'door']

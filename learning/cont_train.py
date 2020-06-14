@@ -83,7 +83,7 @@ def train_eval(args, hdim, batch_size, pviz, fname, writer):
         for j in range(len(new_dataset)):
             data.extend(parse_pickle_file(new_dataset[j]))
         print('data length: ' + str(len(data)))
-        for i in range(len(data)):
+        for i in range(len(data)):   # FIX THIS LINE: while count < len(data)?
             # Cap buffer size at 1000
             new_samples.append(data[i])
             count += 1
