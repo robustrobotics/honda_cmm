@@ -63,19 +63,15 @@ def train_eval(args, hdim, batch_size, pviz, results, fname, writer):
     count = 50  # Count number of samples seen so far
 
     for i in range(50, len(data)):
-        # Cap buffer size at 500
+        # Cap buffer size at 1200
         new_samples.append(data[i])
         count += 1
         # Load 50 new samples into the buffer at a time
         if len(new_samples) == 50:
-            samples = []
-            while len(buffer) > 450:
+            while len(buffer) > 1150:
                 buffer.pop(random.randint(0, len(buffer) - 1))
-            while len(samples) < 50:
-                samples.append(buffer[random.randint(0, len(buffer) - 1)])
             # Include whole buffer when training
             buffer.extend(new_samples)
-            samples.extend(new_samples)
             train_set, val_set, _ = setup_data_loaders(data=buffer, batch_size=batch_size)
             new_samples = []
 
