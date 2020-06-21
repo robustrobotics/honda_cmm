@@ -12,7 +12,7 @@ Generate a dataset with 100 sliders, 100 interactions each:
 
 ```buildoutcfg
 python3 -m learning.gp.explore_single_bb --L 100 --M 100 --mech-types slider --fname train100.pickle
-/./mc cp honda_cmm/train100.pickle honda_cmm/continual/gptrain100
+/./mc cp train100.pickle honda_cmm/continual/gptrain100
 ```
 
 Train a model using Contextual Prior Prediction (CPP)
