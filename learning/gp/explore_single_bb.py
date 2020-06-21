@@ -482,11 +482,11 @@ def create_gpucb_dataset(n_interactions, n_bbs, args, nn = None):
                                                               plot_dir_prefix=args.plot_dir, nn=nn)
         dataset.append(single_dataset)
         print('Interacted with BusyBox %d.' % ix)
-    return dataset
+    # return dataset
     # Save the dataset.
-    # if args.fname != '':
-    #     with open(args.fname, 'wb') as handle:
-    #         pickle.dump(dataset, handle)
+    if args.fname != '':
+        with open(args.fname, 'wb') as handle:
+            pickle.dump(dataset, handle)
 
 def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
                                    n_interactions=None, plot_dir_prefix='',

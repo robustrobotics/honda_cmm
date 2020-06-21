@@ -35,6 +35,7 @@ python3 -m learning.replay_train --batch-size 16 --hdim 16 --data-fname dataset.
 
 Train a model using continual learning with continual exploration
 - Use same batch and buffer size as above
+- Comment out lines 487-489 of `explore_single_bb.py` and uncomment line 485 to prevent all generated data from being saved
 - Also test on `test20.pickle`
 ```buildoutcfg
 python3 -m learning.cont_train --batch-size 16 --hdim 16 --save-dir cstream_models --n-epochs 50 --L-min 5 --L-max 5
