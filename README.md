@@ -6,6 +6,47 @@ TODO
 
 ## Usage
 
+### To-Do List 
+
+Generate a dataset with 100 sliders, 100 interactions each:
+
+```buildoutcfg
+python3 -m learning.gp.explore_single_bb --L 100 --M 100 --mech-types slider --fname train100.pickle
+/./mc cp honda_cmm/train100.pickle honda_cmm/continual/gptrain100
+```
+
+Train a model using Contextual Prior Prediction (CPP)
+
+```buildoutcfg
+/./mc cp honda_cmm/continual/gptrain100 dataset.pickle
+python3 -m learning.train --batch-size 16 --hdim 16 --data-fname dataset.pickle --save-dir cpp_models --n-epochs 50 --L-min 5 --L-max 50 --L-step 5
+/./mc cp -r cpp_models/ honda_cmm/continual/test_train_models/cpp_models
+```
+
+Train a model using continual learning on pre-generated dataset
+- Consider modifying batch and buffer size in `replay_train.py`
+- Test the following commands on `test20.pickle` first
+
+```buildoutcfg
+/./mc cp honda_cmm/continual/gptrain100 dataset.pickle
+python3 -m learning.replay_train --batch-size 16 --hdim 16 --data-fname dataset.pickle --save-dir precont_models --n-epochs 50 --L-min 100 --L-max 100
+/./mc cp -r precont_models/ honda_cmm/continual/test_train_models/precont_models
+```
+
+Train a model using continual learning with continual exploration
+- Use same batch and buffer size as above
+- Also test on `test20.pickle`
+```buildoutcfg
+python3 -m learning.cont_train --batch-size 16 --hdim 16 --save-dir cstream_models --n-epochs 50 --L-min 5 --L-max 5
+/./mc cp -r cstream_models/ honda_cmm/continual/test_train_models/cstream_models
+```
+
+Evaluate each of the models 
+```buildoutcfg
+/./mc cp -r honda_cmm/continual/test_train_models/cpp_models cppmodels/
+python3 -m learning.gp.evaluate_models --T 50 --N 50 --models-path cppmodels --Ls 5 50 5 --type gpucb --hdim 16 --eval-method noT
+```
+
 ### Generating Datasets
 
 #### Random Exploration

@@ -279,7 +279,7 @@ class GPOptimizer(object):
 
 class UCB_Interaction(object):
 
-    def __init__(self, bb, image_data, plot, args, nn_fname='', nn = None):
+    def __init__(self, bb, image_data, plot, args, nn_fname='', nn=None):
         # Pretrained Kernel (for Sliders)
         # kernel = ConstantKernel(0.005, constant_value_bounds=(0.005, 0.005)) * RBF(length_scale=(0.247, 0.084, 0.0592), length_scale_bounds=(0.0592, 0.247)) + WhiteKernel(noise_level=1e-5, noise_level_bounds=(1e-5, 1e2))
         # Pretrained Kernel (for Doors)
@@ -292,7 +292,6 @@ class UCB_Interaction(object):
         self.nn = nn
         if nn_fname != '':
             self.nn = util.load_model(nn_fname, args.hdim, use_cuda=False)
-        self.nn.eval()
         self.bb = bb
         self.image_data = image_data
         self.mech = self.bb._mechanisms[0]
