@@ -210,6 +210,11 @@ def imshow(image_data, show=True):
         input('ENTER to close plot')
     return img
 
+def imsave(image_data, fname):
+    img = np.reshape(image_data.rgbPixels, [image_data.height, image_data.width, 3])
+    plt.imshow(img)
+    plt.savefig(fname)
+    
 ### Sampling Helper Function
 # TODO: want the prob of bin 0 to go to 0 as the slope increases (currently doesn't do that)
 def discrete_sampler(range_vals, slope, n_bins=10):

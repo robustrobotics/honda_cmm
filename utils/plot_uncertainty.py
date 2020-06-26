@@ -7,7 +7,7 @@ from learning.modules.image_encoder_spatialsoftmax import ImageEncoder as Spatia
 from learning.modules.image_encoder import ImageEncoder as CNNEncoder
 from learning.models.nn_disp_pol_vis import DistanceRegressor
 from learning.dataloaders import setup_data_loaders, parse_pickle_file, PolicyDataset
-from learning.models.nn_with_kernel import FeatureExtractor, DistanceGP
+from learning.models.nn_with_kernel import FeatureExtractor, DistanceGP, ProductDistanceGP
 import gpytorch
 from gpytorch.kernels import GridInterpolationKernel, ScaleKernel, RBFKernel
 from utils.util import load_model, read_from_file
@@ -100,8 +100,8 @@ if __name__ == '__main__':
 
     # Load the GP and Feature Extractor.
     gp_state, train_xs, train_ys, mu, std = torch.load(args.gp_path)
-    likelihood = gpytorch.likelihoods.GaussianLikelihood(noise_constraint=gpytorch.constraints.Interval(1e-8, 6.25e-6))
-    gp = DistanceGP(train_x=train_xs,
+    likelihood = gpytorch.likelihoods.GaussianLikelihood(noise_constraint=gpytorch.constraints.Interval(1e-8, 1.e-6))
+    gp = ProductDistanceGP(train_x=train_xs,
                     train_y=train_ys,
                     likelihood=likelihood)
     extractor = FeatureExtractor(pretrained_nn_path=args.pretrained_nn)
@@ -117,7 +117,7 @@ if __name__ == '__main__':
     #raw_results = read_from_file('100_eval_doors.pickle')
     #val_results = [bb[::] for bb in raw_results]
     #val_results = [item for sublist in val_results for item in sublist]
-    val_results = [bb[::] for bb in raw_results[82:]]
+    val_results = [bb[::] for bb in raw_results[80:]]
     val_results = [item for sublist in val_results for item in sublist]
     val_data = parse_pickle_file(val_results)
     val_set  = setup_data_loaders(data=val_data, batch_size=16, single_set=True)
@@ -125,6 +125,7 @@ if __name__ == '__main__':
     val_x = (val_x - mu)/std
     
     gp.eval()
+    #gp.set_train_data(train_xs[::10,:], train_ys[::10], strict=False)
     likelihood.eval()
     print('Val Predictions')
     with gpytorch.settings.max_preconditioner_size(200), gpytorch.settings.max_cg_iterations(10000), gpytorch.settings.fast_computations(log_prob=False, solves=False, covar_root_decomposition=False):

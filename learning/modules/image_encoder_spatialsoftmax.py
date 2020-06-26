@@ -33,6 +33,21 @@ class ImageEncoder(nn.Module):
         self.sm = nn.Softmax(dim=1)
         self.temp = nn.Parameter(torch.tensor(1.0))
 
+    def get_features(self, img):
+        img = img[:, :, 1:, 1:]
+        bs, c, h, w = img.shape
+
+        img = self.pad(img)
+        x = F.relu(self.conv1(img))
+        x = self.pad(x)
+        x = self.conv2(x)
+
+        # Do a spatial softmax.
+        bs, c, h, w = x.shape
+        features = self.sm(x.view(bs*c, -1)/self.temp)
+
+        return features.view(bs, c*h*w) 
+
     def forward(self, img):
         img = img[:, :, 1:, 1:]
         bs, c, h, w = img.shape
@@ -53,7 +68,7 @@ class ImageEncoder(nn.Module):
         # Do a spatial softmax.
         bs, c, h, w = x.shape
         features = self.sm(x.view(bs*c, -1)/self.temp)
-
+        
         # Get expected feature points.
         pfeatures = features.view([-1, h, w])
 

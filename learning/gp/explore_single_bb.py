@@ -26,12 +26,12 @@ from learning.gp.viz_doors import viz_3d_plots
 from learning.gp.viz_polar_plots import viz_circles
 import time
 import gpytorch
-from learning.models.nn_with_kernel import FeatureExtractor, DistanceGP
+from learning.models.nn_with_kernel import FeatureExtractor, DistanceGP, ProductDistanceGP
 from learning.dataloaders import setup_data_loaders, parse_pickle_file
 from utils.plot_uncertainty import get_callback
 
 
-BETA = 4
+BETA = 2
 
 # takes in a policy and returns and optimization x and the variable bounds
 def get_x_and_bounds_from_tuple(policy_params):
@@ -382,8 +382,8 @@ class UCB_Interaction(object):
     def load_learned_kernel(self, nn_fname, gp_fname):
         print('Loading a learned kernel.')
         gp_state, train_xs, train_ys, mu, std = torch.load(gp_fname)
-        likelihood = gpytorch.likelihoods.GaussianLikelihood(noise_constraint=gpytorch.constraints.Interval(1e-8, 6.25e-6))
-        gp = DistanceGP(train_x=train_xs,
+        likelihood = gpytorch.likelihoods.GaussianLikelihood(noise_constraint=gpytorch.constraints.Interval(1e-8, 1e-6))
+        gp = ProductDistanceGP(train_x=train_xs,
                         train_y=train_ys,
                         likelihood=likelihood)
         extractor = FeatureExtractor(pretrained_nn_path=nn_fname)
@@ -396,8 +396,8 @@ class UCB_Interaction(object):
             'gp': gp.cuda(),
             'likelihood': likelihood.cuda(),
             'extractor': extractor.cuda(),
-            'mu': mu.cuda(),
-            'std': std.cuda(),
+            'mu': 0.,#mu.cuda(),
+            'std': 1.,#std.cuda(),
             'train_xs': train_xs,
             'train_ys': train_ys
         }
@@ -595,6 +595,7 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
     viz = False
     debug = False
     use_gripper = False
+    regrets = []
     # interact with BB
     bb = BusyBox.bb_from_result(bb_result, urdf_num=args.urdf_num)
     mech = bb._mechanisms[0]
@@ -606,54 +607,27 @@ def create_single_bb_gpucb_dataset(bb_result, nn_fname, plot, args, bb_i,
         gripper.reset(sampler.mech)
         if args.debug:
             sys.stdout.write('\rProcessing sample %i' % ix)
-        # if we are done sampling n_interactions OR we need to get regrNoner
-        # each interaction
-        if ((not n_interactions is None) and ix==n_interactions) or \
-            (not success_regret is None):
+        
+        # Always evaluate at each step.
+        regret, start_x, stop_x, policy_type = test_model(sampler, args, gripper=None)
+        gripper.reset(mech)
+        print('Best x:', stop_x)
+        print('Current regret', regret)
+        opt_points = (policy_type, [(start_x, 'g'), (stop_x, 'r')])
+        sample_points = {'Prismatic': [(sample, 'k') for sample in sampler.xs['Prismatic']],
+                        'Revolute': [(sample, 'k') for sample in sampler.xs['Revolute']]}
+        regrets.append(regret)
 
-            regret, start_x, stop_x, policy_type = test_model(sampler, args, gripper=None)
-            gripper.reset(mech)
-            print('Best x:', stop_x)
-            print('Current regret', regret)
-            opt_points = (policy_type, [(start_x, 'g'), (stop_x, 'r')])
-            sample_points = {'Prismatic': [(sample, 'k') for sample in sampler.xs['Prismatic']],
-                            'Revolute': [(sample, 'k') for sample in sampler.xs['Revolute']]}
-
-            # if done sampling n_interactions
-            if (not n_interactions is None) and ix==n_interactions:
-                if plot:
-                    viz_circles(util.GP_PLOT,
-                                image_data,
-                                mech,
-                                BETA,
-                                sample_points=sample_points,
-                                opt_points=opt_points,
-                                gps=sampler.gps,
-                                nn=sampler.nn,
-                                bb_i=bb_i,
-                                plot_dir_prefix=plot_dir_prefix)
-                    plt.show()
-                    input('Enter to close')
-                    plt.close()
-                if ret_regret:
-                    return dataset, sampler.gps, regret
-                else:
-                    return dataset, sampler.gps
-            # if got successful interaction or timeout
-            elif (not success_regret is None) and \
-                            ((regret < success_regret) or (ix >= 100)):
-                if plot:
-                    viz_circles(util.GP_PLOT,
-                                image_data,
-                                mech,
-                                BETA,
-                                sample_points=sample_points,
-                                opt_points=opt_points,
-                                gps=sampler.gps,
-                                nn=sampler.nn,
-                                bb_i=bb_i,
-                                plot_dir_prefix=plot_dir_prefix)
-                return dataset, sampler.gps, ix
+        # if done sampling n_interactions
+        if (not n_interactions is None) and ix==n_interactions:
+            if ret_regret:
+                return dataset, sampler.gps, regrets
+            else:
+                return dataset, sampler.gps
+        # if got successful interaction or timeout
+        elif (not success_regret is None) and \
+                        ((regret < success_regret) or (ix >= 100)):
+            return dataset, sampler.gps, ix
 
         # sample a policy
         image_data, gripper = setup_env(bb, False, debug, use_gripper)

@@ -78,6 +78,7 @@ class PolicyDataset(Dataset):
         self.items = items
 
         self.tensors = [torch.tensor(item['params']) for item in items]
+        self.mechs = [torch.tensor(item['mechs']) for item in items]
         self.ys = [torch.tensor([item['y']]) for item in items]
 
         downsample = transforms.Compose([transforms.ToPILImage(),
@@ -98,7 +99,7 @@ class PolicyDataset(Dataset):
         # imshow(torchvision.utils.make_grid(self.downsampled_images[0:10]))
 
     def __getitem__(self, index):
-        return self.items[index]['type'], self.tensors[index], self.images[index], self.ys[index], self.downsampled_images[index]
+        return self.items[index]['type'], self.tensors[index], self.images[index], self.ys[index], self.mechs[index]#self.downsampled_images[index]
 
     def __len__(self):
         return len(self.items)
@@ -119,9 +120,17 @@ def parse_pickle_file(results):
             if entry.policy_params.param_data[param].varied:
                 policy_params.append(entry.policy_params.params[param])
 
+        mech_params = [0., 0., 0.]
+        mech_params[0] = entry.mechanism_params.params.door_size[0]
+        if entry.mechanism_params.params.flipped == 1:
+            mech_params[1] = 1.
+        else:
+            mech_params[2] = 1.
+
         parsed_data.append({
             'type': entry.policy_params.type,
             'params': policy_params,
+            'mechs': mech_params,
             'image': entry.image_data,
             'y': entry.net_motion,
         })
@@ -150,8 +159,8 @@ def setup_data_loaders(data, batch_size=128, use_cuda=True, small_train=0, singl
     if single_set:
         set = PolicyDataset(data)
         loader = torch.utils.data.DataLoader(dataset=set,
-                                                   batch_sampler=CustomSampler(set.items, batch_size),
-                                                   **kwargs)
+                                             batch_sampler=CustomSampler(set.items, batch_size),
+                                             **kwargs)
         return loader
     else:
         # Create datasplits.

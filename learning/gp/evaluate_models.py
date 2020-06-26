@@ -47,16 +47,16 @@ def evaluate_models(n_interactions, n_bbs, args, use_cuda=False):
                 all_model_test_regrets.append(regret)
                 if args.debug:
                     print('Test Regret   :', regret)
+            
+                all_L_results[model] = all_model_test_regrets
+                if len(models) > 0:
+                    all_results[L] = all_L_results
+                util.write_to_file('regret_results_%s_%dT_%dN.pickle' % (args.type, n_interactions, n_bbs),
+                                all_results,
+                                verbose=True)
             if args.debug:
                 print('Results')
-                # print('Average Regret:', np.mean(avg_regrets))
                 print('Final Regret  :', np.mean(all_model_test_regrets))
-            all_L_results[model] = all_model_test_regrets
-        if len(models) > 0:
-            all_results[L] = all_L_results
-    util.write_to_file('regret_results_%s_%dT_%dN.pickle' % (args.type, n_interactions, n_bbs),
-                       all_results,
-                       verbose=True)
 
 # regret_results file the same as above, but instead of lists of regret values
 # for each BB and model, it is a list of the number of steps it took GPUCB to
