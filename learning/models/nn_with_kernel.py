@@ -8,7 +8,7 @@ from learning.modules.image_encoder import ImageEncoder as CNNEncoder
 from learning.models.nn_disp_pol_vis import DistanceRegressor
 from learning.dataloaders import setup_data_loaders, parse_pickle_file
 import gpytorch
-from gpytorch.kernels import ScaleKernel, RBFKernel
+from gpytorch.kernels import ScaleKernel, RBFKernel, MaternKernel
 from gpytorch.constraints import Interval, GreaterThan
 from gpytorch.variational import CholeskyVariationalDistribution
 from gpytorch.variational import VariationalStrategy
@@ -26,10 +26,10 @@ class FeatureExtractor(nn.Module):
         kernel_size, padding = 3, 1
 
 
-        hidden_nonlin, final_nonlin = nn.ReLU, nn.Tanh
-        self.pol_net = nn.Sequential(*[nn.Linear(pol_dim, pol_h_dim), hidden_nonlin(), nn.Dropout(pol_dropout),
-                                       nn.Linear(pol_h_dim, pol_h_dim), hidden_nonlin(), nn.Dropout(pol_dropout),
-                                       nn.Linear(pol_h_dim, gp_pol_dim), final_nonlin()])
+        hidden_nonlin, final_nonlin = nn.ReLU, nn.ReLU
+        self.pol_net = nn.Sequential(*[#nn.Linear(pol_dim, pol_h_dim), hidden_nonlin(), nn.Dropout(pol_dropout),
+                                       #nn.Linear(pol_h_dim, pol_h_dim), hidden_nonlin(), nn.Dropout(pol_dropout),
+                                       nn.Linear(pol_dim, gp_pol_dim), final_nonlin()])
 
         if mech_encoding == 'params':
             self.im_net = nn.Sequential(*[nn.Linear(im_dim, im_h_dim), hidden_nonlin(), nn.Dropout(im_dropout),
@@ -57,7 +57,7 @@ class FeatureExtractor(nn.Module):
         else:
             im = mech
         
-        theta = self.pol_net(theta)
+        #theta = self.pol_net(theta)
         im = self.im_net(im)
         
         x = torch.cat([theta, im], dim=1)
@@ -84,7 +84,7 @@ class ProductDistanceGP(gpytorch.models.ExactGP):
 
         self.mean_module = gpytorch.means.ZeroMean()
         self.covar_module = ScaleKernel(RBFKernel(ard_num_dims=gp_pol_dims+gp_im_dims), 
-                                                  #lengthscale_constraint=Interval(1.e-6, 1.0)), # 1.e-6, .25
+                                                  #lengthscale_constraint=Interval([0., 0., 0., 0., 0., 0.], [0.2, 0.01, 0.2, 1., 1., 1.])), # 1.e-6, .25
                                         outputscale_constraint=Interval(0.01, 1.e-1)) # 0.01, 1.e-1 # 0.0225, 0.1 
         #self.covar_module = ScaleKernel(RBFKernel(ard_num_dims=gp_pol_dims+gp_im_dims))
 
@@ -147,24 +147,28 @@ def remove_duplicates(results):
             for pol in added:
                 if np.linalg.norm(pol-policy_params) < 0.05:
                     duplicate = True
-            if not duplicate:
+            if not duplicate:# and entry.net_motion > 0.03:
                 added.append(policy_params)
                 valid[-1].append(entry)
             else:
                 found += 1
+                
+        print(len(valid[-1]))
     print('Duplicates Found:', found)
     return valid
 
 
 def train_exact_gp(args, train_set, val_set):
-    gp_pol_dim, gp_im_dim = 2, 2
+    gp_pol_dim, gp_im_dim = 3, 3
 
     # Extract features for this dataset and normalize them.
     print('Extracting Features')
     extractor = FeatureExtractor(mech_encoding=args.mech_type,
                                  gp_im_dim=gp_im_dim,
                                  gp_pol_dim=gp_pol_dim,
-                                 pol_dropout=0.1,
+                                 pol_dropout=0.,
+                                 pol_h_dim=16,
+                                 im_h_dim=8,
                                  im_dropout=0.1).cuda()
 
     # train_x, train_y = extract_feature_dataset(train_set, extractor, use_cuda=CUDA, mech_encoding=args.mech_type)
@@ -176,7 +180,7 @@ def train_exact_gp(args, train_set, val_set):
     print('Data Size:', len(train_set.dataset))
     
     #likelihood = gpytorch.likelihoods.GaussianLikelihood(noise_constraint=Interval(1e-8, 6.25e-6)).cuda()
-    likelihood = gpytorch.likelihoods.GaussianLikelihood(noise_constraint=GreaterThan(1e-7)).cuda()#,
+    likelihood = gpytorch.likelihoods.GaussianLikelihood(noise_constraint=Interval(1e-8, 1e-4)).cuda()#,
                                                          #noise_prior=gpytorch.priors.NormalPrior(loc=torch.zeros(1), scale=torch.ones(1)*1e-5)).cuda()
     gp = ProductDistanceGP(train_x=torch.ones(len(train_set.dataset), gp_pol_dim+gp_im_dim).cuda(),
                            train_y=torch.ones(len(train_set.dataset)).cuda(),
@@ -216,20 +220,29 @@ def train_exact_gp(args, train_set, val_set):
 
             if tx % 100 == 0:
                 print(tx, loss.item(), gp.likelihood.noise.item(), gp.covar_module.base_kernel.lengthscale, gp.covar_module.outputscale.item())
-                #gp.eval()
-                #likelihood.eval()
-                #output = gp(val_x)
-                #val_loss = val_loss_fn(output.mean, val_y)
-                #output = gp(train_xs)
-                #train_loss = val_loss_fn(output.mean, train_y)
-                #print('Train Loss:', train_loss.item())
-                #print('Val Loss:', val_loss.item())
-                #gp.train()
-                #likelihood.train()
+
+            if tx % 500 == 0:
+                gp.eval()
+                likelihood.eval()
+                for _, val_theta, val_im, val_y, val_mech in val_set:
+                    val_theta = val_theta.cuda()
+                    val_im = val_im.cuda()
+                    val_y = val_y.squeeze().cuda()
+                    val_mech = val_mech.cuda()
+                val_z = extractor(val_im, val_mech, val_theta)
+                val_output = gp(val_z)
+                train_output = gp(z)
+                print(val_output.mean[0:5], val_y[0:5])
+                val_loss = val_loss_fn(val_output.mean, val_y)
+                train_loss = val_loss_fn(train_output.mean, y)
+                print('Train Loss:', np.sqrt(train_loss.item()))
+                print('Val Loss:', np.sqrt(val_loss.item()))
+                gp.train()
+                likelihood.train()
                 
-                #if loss.item() < best:
-            
-            # if tx % 50 == 0 and loss.item() < best:
+            if tx % 200 == 0:
+                torch.save((extractor.state_dict(), gp.state_dict(), z, y), args.save_path)
+                        
             #     print('Saving to', args.save_path)
             #     torch.save((gp.state_dict(), train_xs, train_y, mu, std), args.save_path)
             #     best = loss.item()
@@ -314,7 +327,7 @@ CUDA = True
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--save-path', default='')
-    parser.add_argument('--pretrained-nn', type=str, required=True)
+    #parser.add_argument('--pretrained-nn', type=str, required=True)
     parser.add_argument('--L', required=True, type=int)
     parser.add_argument('--mech-type', required=True, choices=['params', 'img'])
     parser.add_argument('--gp-type', required=True, choices=['exact', 'approx'])
@@ -325,13 +338,13 @@ if __name__ == '__main__':
     raw_results = read_from_file('/home/mnosew/workspace/honda_cmm/data/doors_gpucb_100L_100M_set0.pickle')
     results = [bb[::] for bb in raw_results[:args.L]]  
     results = remove_duplicates(results)
-    results = [item for sublist in results for item in sublist][::2]
+    results = [item for sublist in results for item in sublist[0::4]]
     data = parse_pickle_file(results)
     
     val_results = [bb[::] for bb in raw_results[81:]]
     val_results = [item for sublist in val_results for item in sublist]
     val_data = parse_pickle_file(val_results)
-    val_set = setup_data_loaders(data=val_data, batch_size=1, single_set=True)
+    val_set = setup_data_loaders(data=val_data, batch_size=len(val_data), single_set=True)
 
     if args.gp_type == 'exact':
         train_set = setup_data_loaders(data=data, batch_size=len(data), single_set=True)

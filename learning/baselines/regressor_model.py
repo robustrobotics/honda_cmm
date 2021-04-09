@@ -10,7 +10,7 @@ from learning.baselines.datagen import setup_data_loaders
 
 
 class FeatureExtractor(nn.Module):
-    def __init__(self, im_dim=3, im_h_dim=64, im_dropout=0.):
+    def __init__(self, im_dim=3, im_h_dim=8, im_dropout=0.):
         super(FeatureExtractor, self).__init__()
         self.c, self.h, self.w = 3, 59, 58
         kernel_size, padding = 3, 1
@@ -54,7 +54,8 @@ def evaluate(extractor, dataset, use_cuda):
 def train_exact_gp(args, train_set, val_set, use_cuda):
     # Setup the feature regressor.
     print('Extracting Features')
-    extractor = FeatureExtractor(im_dropout=0.1)
+    extractor = FeatureExtractor(im_dropout=0.1,
+                                 im_h_dim=16)
     if use_cuda:
         extractor = extractor.cuda()
 

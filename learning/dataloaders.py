@@ -157,9 +157,10 @@ def setup_data_loaders(data, batch_size=128, use_cuda=True, small_train=0, singl
 
 
     if single_set:
-        set = PolicyDataset(data)
-        loader = torch.utils.data.DataLoader(dataset=set,
-                                             batch_sampler=CustomSampler(set.items, batch_size),
+        dataset = PolicyDataset(data)
+        print('DataSet:', len(dataset))
+        loader = torch.utils.data.DataLoader(dataset=dataset,
+                                             batch_sampler=CustomSampler(dataset.items, batch_size),
                                              **kwargs)
         return loader
     else:
@@ -171,7 +172,7 @@ def setup_data_loaders(data, batch_size=128, use_cuda=True, small_train=0, singl
         #if small_train > 0:
         #    train_data = train_data[:small_train]
 
-        # TODO: Populate dataset objects
+        # Populate dataset objects
 
         train_set = PolicyDataset(train_data)
         val_set = PolicyDataset(val_data)

@@ -1,35 +1,35 @@
-from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import RBF, WhiteKernel, ConstantKernel
-import numpy as np
+import argparse
+import gpytorch
+import itertools
 import matplotlib.pyplot as plt
+import numpy as np
+import operator
+import os
+import pickle
+import sys
+import time
+import torch
+import torch.nn.functional as F
+
+from argparse import Namespace
+from collections import OrderedDict
 from matplotlib import cm
 from mpl_toolkits.mplot3d import Axes3D
-import torch.nn.functional as F
-from collections import OrderedDict
-import pickle
-import os
-import sys
-import argparse
-from argparse import Namespace
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import RBF, WhiteKernel, ConstantKernel
 from scipy.optimize import minimize
-import itertools
-from utils import util
-from utils.setup_pybullet import setup_env
-from gen.generator_busybox import BusyBox
-import operator
-import torch
-from learning.dataloaders import PolicyDataset, parse_pickle_file
-from gen.generate_policy_data import get_bb_dataset
+
 from actions.policies import Policy, generate_policy, Revolute, Prismatic, \
-                                    get_policy_from_tuple, get_policy_from_x
+                             get_policy_from_tuple, get_policy_from_x
+from gen.generate_policy_data import get_bb_dataset
+from gen.generator_busybox import BusyBox
+from learning.dataloaders import PolicyDataset, parse_pickle_file, setup_data_loaders
 from learning.gp.viz_doors import viz_3d_plots
 from learning.gp.viz_polar_plots import viz_circles
-import time
-import gpytorch
-from learning.models.nn_with_kernel import FeatureExtractor, DistanceGP, ProductDistanceGP
-from learning.dataloaders import setup_data_loaders, parse_pickle_file
+from learning.models.nn_with_kernel import FeatureExtractor, ProductDistanceGP
+from utils import util
 from utils.plot_uncertainty import get_callback
-
+from utils.setup_pybullet import setup_env
 
 BETA = 2
 
@@ -317,7 +317,7 @@ class GPOptimizer(object):
         min_val, stop_policy, x_final = float("inf"), None, None
         # TODO: Change this back to 10.
         for policy_params_max, max_disp in policies[-10:]:
-            print('New Pol')
+            #print('New Pol')
             x0, bounds = get_x_and_bounds_from_tuple(policy_params_max)
             opt_res = minimize(fun=self._objective_func, x0=x0,
                                 args=(policy_params_max.type, ucb, images),
@@ -328,7 +328,7 @@ class GPOptimizer(object):
                                                             }, bounds=bounds)
 
             val = opt_res['fun']
-            print(val)
+            #print(val)
             if val <= min_val:
                 x_final = opt_res['x']
                 # TODO: Remove this is just for debugging.
@@ -369,9 +369,9 @@ class UCB_Interaction(object):
         self.mech = self.bb._mechanisms[0]
         self.im_id = 0 
         if gp_fname == '':
-            self.gps = {'Prismatic': GaussianProcessRegressor(kernel=self.get_kernel('Prismatic', args.type),
+            self.gps = {'Prismatic': GaussianProcessRegressor(kernel=self.get_kernel('Prismatic', 'gpucb'),
                                                    n_restarts_optimizer=1),
-                        'Revolute': GaussianProcessRegressor(kernel=self.get_kernel('Revolute', args.type),
+                        'Revolute': GaussianProcessRegressor(kernel=self.get_kernel('Revolute', 'gpucb'),
                                                            n_restarts_optimizer=1)}
         else:
             self.gps = {}
@@ -489,6 +489,7 @@ class UCB_Interaction(object):
             self.ys[policy_type].append([result.net_motion - nn_pred])
         
         self.moves[policy_type].append([result.net_motion])
+        self.gps[policy_type].fit(np.array(self.xs[policy_type]), np.array(self.ys[policy_type]))
 
     def update_learned_kernel(self, result, x):
         # TODO: Update the trained GP.

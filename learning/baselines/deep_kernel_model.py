@@ -13,7 +13,7 @@ from learning.baselines.datagen import setup_data_loaders
 
 
 class FeatureExtractor(nn.Module):
-    def __init__(self, im_dim=3, im_h_dim=64, im_dropout=0., gp_im_dim=2):
+    def __init__(self, im_dim=3, im_h_dim=8, im_dropout=0., gp_im_dim=2):
         super(FeatureExtractor, self).__init__()
         self.c, self.h, self.w = 3, 59, 58
         kernel_size, padding = 3, 1
@@ -45,9 +45,9 @@ class ProductDistanceGP(gpytorch.models.ExactGP):
 
         self.mean_module = gpytorch.means.ZeroMean()
         self.covar_module = ScaleKernel(RBFKernel(ard_num_dims=gp_im_dims), 
-                                                  #lengthscale_constraint=Interval(1.e-6, 1.0)), # 1.e-6, .25
-                                        outputscale_constraint=Interval(0.01, 1.e-1)) # 0.01, 1.e-1 # 0.0225, 0.1 
-        #self.covar_module = ScaleKernel(RBFKernel(ard_num_dims=gp_pol_dims+gp_im_dims))
+                                                 #lengthscale_constraint=Interval(1.e-6, 1.0)), # 1.e-6, .25
+                                       outputscale_constraint=Interval(0.01, 1.e-1)) # 0.01, 1.e-1 # 0.0225, 0.1 
+        #self.covar_module = ScaleKernel(RBFKernel(ard_num_dims=gp_im_dims))
 
     def forward(self, x):
         # The standardization shouldn't change at test time.
@@ -81,14 +81,14 @@ def train_exact_gp(args, train_set, val_set, use_cuda):
     # Setup the feature extractor.
     print('Extracting Features')
     extractor = FeatureExtractor(gp_im_dim=gp_im_dim,
-                                 im_dropout=0.1)
+                                 im_dropout=0.1,
+                                 im_h_dim=16)
     if use_cuda:
         extractor = extractor.cuda()
     
     # Setup the GP components.
-    #likelihood = gpytorch.likelihoods.GaussianLikelihood(noise_constraint=Interval(1e-8, 6.25e-6)).cuda()
-    likelihood = gpytorch.likelihoods.GaussianLikelihood(noise_constraint=GreaterThan(1e-7))#,
-                                                         #noise_prior=gpytorch.priors.NormalPrior(loc=torch.zeros(1), scale=torch.ones(1)*1e-5)).cuda()
+    likelihood = gpytorch.likelihoods.GaussianLikelihood(noise_constraint=Interval(1e-8, 1e-4)).cuda()
+    #likelihood = gpytorch.likelihoods.GaussianLikelihood(noise_constraint=GreaterThan(1e-7)),
     if use_cuda:
         likelihood = likelihood.cuda()
     
@@ -115,31 +115,32 @@ def train_exact_gp(args, train_set, val_set, use_cuda):
 
     # Training loop.
     best = 1000
-    with gpytorch.settings.max_preconditioner_size(200), gpytorch.settings.max_cg_iterations(10000), gpytorch.settings.fast_computations(log_prob=False, solves=False, covar_root_decomposition=False):
-        for im, y in train_set:
-            y = y.squeeze()
-            if use_cuda:
-                im = im.cuda()
-                y = y.cuda()
+    #with gpytorch.settings.max_preconditioner_size(200), gpytorch.settings.max_cg_iterations(10000), gpytorch.settings.fast_computations(log_prob=False, solves=False, covar_root_decomposition=False):
+    for im, y in train_set:
+        y = y.squeeze()
+        if use_cuda:
+            im = im.cuda()
+            y = y.cuda()
 
-        
-        for tx in range(50000):
-            optimizer.zero_grad()            
+    
+    for tx in range(50000):
+        optimizer.zero_grad()            
 
-            z = extractor(im)
-            gp.set_train_data(inputs=z, targets=y)
-            output = gp(z)
+        z = extractor(im)
+        gp.set_train_data(inputs=z, targets=y)
+        output = gp(z)
 
-            loss = -mll(output, y)
-            loss.backward()
-            optimizer.step()
+        loss = -mll(output, y)
+        loss.backward()
+        optimizer.step()
 
-            if tx % 100 == 0:
-                print(tx, loss.item(), gp.likelihood.noise.item(), gp.covar_module.base_kernel.lengthscale, gp.covar_module.outputscale.item())
-                train_rmse = evaluate_gp(gp, extractor, train_set, use_cuda)
-                val_rmse = evaluate_gp(gp, extractor, val_set, use_cuda)
-                print('Train RMSE:', train_rmse)
-                print('Val RMSE:', val_rmse)
+        if tx % 100 == 0:
+            #print(list(extractor).)
+            print(tx, loss.item(), gp.likelihood.noise.item(), gp.covar_module.base_kernel.lengthscale.detach(), gp.covar_module.outputscale.item())
+            train_rmse = evaluate_gp(gp, extractor, train_set, use_cuda)
+            val_rmse = evaluate_gp(gp, extractor, val_set, use_cuda)
+            print('Train RMSE:', train_rmse)
+            print('Val RMSE:', val_rmse)
 
                             
             # if tx % 50 == 0 and loss.item() < best:
@@ -179,7 +180,6 @@ def train_exact_gp(args, train_set, val_set, use_cuda):
     #           train_y[ix])
 
 
-CUDA = False
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--save-path', default='')

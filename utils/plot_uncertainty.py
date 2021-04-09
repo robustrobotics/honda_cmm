@@ -7,7 +7,7 @@ from learning.modules.image_encoder_spatialsoftmax import ImageEncoder as Spatia
 from learning.modules.image_encoder import ImageEncoder as CNNEncoder
 from learning.models.nn_disp_pol_vis import DistanceRegressor
 from learning.dataloaders import setup_data_loaders, parse_pickle_file, PolicyDataset
-from learning.models.nn_with_kernel import FeatureExtractor, DistanceGP, ProductDistanceGP
+from learning.models.nn_with_kernel import FeatureExtractor, ProductDistanceGP
 import gpytorch
 from gpytorch.kernels import GridInterpolationKernel, ScaleKernel, RBFKernel
 from utils.util import load_model, read_from_file
