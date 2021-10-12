@@ -4,7 +4,7 @@ aabbtree==2.3.1
 catkin-pkg==0.4.12
 gitpython
 git+git://github.com/hauptmech/odio_urdf.git#egg=odio_urdf
-opencv-python-headless==4.1.0.25
+opencv-python-headless==4.2.0.32
 torch==1.1.0
 torchvision==0.3.0
 tensorboard==1.14.0
